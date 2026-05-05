@@ -116,7 +116,7 @@ defmodule Concept.Pages.Page do
     uuid_primary_key :id
     attribute :workspace_id, :uuid, allow_nil?: false, public?: true
     attribute :parent_page_id, :uuid, allow_nil?: true, public?: true
-    attribute :title, :string, default: "", public?: true
+    attribute :title, :string, default: "", public?: true, constraints: [allow_empty?: true]
     attribute :icon_emoji, :string, default: "📄", public?: true
 
     attribute :cover_color, :atom,

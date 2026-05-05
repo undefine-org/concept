@@ -1,0 +1,277 @@
+#+TITLE: Enter inside a block does not insert a new block; page reloads with no result
+#+STATE: DONE
+#+SESSION_ID: 14d5c7bb55eed312
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-52-10-199Z_14d5c7bb55eed312.jsonl]]
+#+CUSTOM_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n
+#+LAYER: web
+
+* Initial Message
+
+Check the user experience at http://localhost:4279/ and fix the
+1. edti bars not showing
+2. blocks not updating when I hit enter (page reloads and nothing shows)
+3. title not editable when I click on it
+
+* Intention & Purpose
+Make the editor behave like the documented contract in =assets/js/hooks/SERVER_CONTRACT.md=: pressing Enter at the end of a block creates a new empty paragraph below and moves the caret into it; ArrowUp / ArrowDown at the block boundaries move the caret to the previous / next block; Backspace at the start of an empty block deletes that block and focuses the previous one.
+
+* Context & Narrative
+Today the keyboard contract is half-wired:
+
+- =assets/js/components/ora-block.js= dispatches the bubbling ~ora-block-enter-at-end~ / ~ora-block-arrow-up~ / ~ora-block-arrow-down~ / ~ora-block-backspace-at-start~ events when appropriate. Enter is *not* ~e.preventDefault~-ed, so Lexical also inserts a paragraph node inside the current block.
+- =assets/js/hooks/block_keyboard.js= (~BlockKeyboard~ hook) is the only listener that translates those events into ~pushEvent("insert_paragraph_below" | "nav_block" | "delete_block_merge", ...)~. It is exported in =assets/js/hooks/index.js= but *no HEEx template attaches* ~phx-hook="BlockKeyboard"~ to any element, so none of those server events are ever sent. The hook also reads ~this.el.dataset.blockId~ which would not match the actual ~block-id~ attribute (Phoenix renders ~block-id="..."~, not ~data-block-id="..."~).
+- =lib/concept_web/live/page_editor_live.ex= has *no* ~handle_event/3~ clause for ~insert_paragraph_below~, ~nav_block~, or ~delete_block_merge~. If those events were ever delivered, the LiveView would crash with ~FunctionClauseError~, the channel would resync, and the user would see a page reload.
+
+Net effect: the user presses Enter, Lexical adds an internal paragraph inside the same block, the bubbling event has no listener, and visually nothing changes (which the user describes as "page reloads and nothing shows"). For ArrowUp / ArrowDown / Backspace, exactly the same: no caret movement to the neighbor.
+
+This bug also fixes a latent duplicate-block hazard in the existing ~add_first_block~ handler: it assigns ~[block]~ locally *and* the Ash PubSub broadcast subsequently appends the same block, producing two entries with the same DOM id.
+
+* Scope
+- IN: merge keyboard listeners into the existing ~BlockEditor~ hook; preventDefault Enter / Backspace at the right moments in =ora-block.js=; add three server handlers (~insert_paragraph_below~, ~nav_block~, ~delete_block_merge~); allow ~:position~ in =Block.create_block= so a new block can be inserted between two siblings; de-dup blocks in ~block_created~ and self-broadcast handling; remove the now-redundant ~BlockKeyboard~ hook and its registration.
+- OUT: rich merge of textual content on Backspace (we only delete the empty block and move focus); slash menu or block-type conversion; multi-block selection.
+
+* Existing Patterns
+- =assets/js/hooks/block_editor.js= — already attaches ~ora-block-focus~ / ~ora-block-blur~ / ~ora-block-change~ listeners, plus three server-pushed events (~lock_granted~, ~lock_denied~, ~apply_remote~). New keyboard listeners follow the same shape: ~addEventListener~ in =mounted=, store closures on ~this~, ~removeEventListener~ in =destroyed=. Use ~this.el.getAttribute("block-id")~ — never ~dataset.blockId~ (the attribute is kebab-case, not ~data-*~).
+- =lib/concept_web/live/page_editor_live.ex= — existing handlers (~focus_block~, ~blur_block~, ~save_content~, ~refresh_lock~, ~add_first_block~) all follow the pattern ~user = socket.assigns.current_user; ws_id = socket.assigns.workspace.id~ and call ~Concept.Pages~ functions with ~actor: user, tenant: ws_id~. New handlers must follow the same pattern.
+- =lib/concept/pages.ex= — defines the public domain API. ~create_block~ maps to =Block= action ~:create_block~ which currently accepts ~[:page_id, :parent_block_id, :type, :content, :props]=. The Ash =AssignAfterLastSibling= change only assigns ~:position~ if it is missing; adding ~:position~ to ~accept~ is sufficient to support inserts between siblings.
+- =lib/concept/pages/fractional_index.ex= — provides ~initial/0~, ~after_/1~, ~before_/1~, ~between/2~. Use ~between(left.position, right.position)~ for inserting between two existing blocks; use ~after_(last.position)~ when the source block is the tail.
+- =lib/concept/pages/block.ex= — ~publish_all~ broadcasts include the Ash notification struct as payload. Existing ~handle_info(%Phoenix.Socket.Broadcast{event: "block_updated", payload: notification}, ...)~ already filters by ~notification.actor.id != current_user.id~. Reuse the same dedup approach.
+- =assets/js/hooks/SERVER_CONTRACT.md= — defines the canonical event names and payloads. We adopt them as-is; do not rename.
+
+* Tests
+Add =test/concept_web/live/page_editor_test.exs= (shared file with BUG-001 if BUG-001 lands first; otherwise create here). Reuse the auth+workspace setup from =test/concept_web/live/command_palette_test.exs=.
+
+Use ~render_hook(view, "page-editor-#{page.id}", "<event>", payload)~ to drive ~BlockEditor~ events from the test (the LiveView root id is ~page-editor-#{@current_page.id}~ via ~live_render~).
+
+Scenarios:
+1. *insert_paragraph_below at tail* — page has one paragraph block, dispatch ~insert_paragraph_below~ with that block's id. Assert: ~Pages.list_for_page(page.id, actor: user, tenant: ws.id)~ returns two blocks; the new block's ~position > existing.position~; the LV pushed a ~focus_block_caret~ event whose ~block_id~ matches the new block and ~position == "start"~. Use ~assert_push_event(view, "focus_block_caret", payload)~.
+2. *insert_paragraph_below between siblings* — page has two paragraph blocks A then B; dispatch ~insert_paragraph_below~ on A. Assert there are now three blocks; the new block's position is strictly between A's and B's; ~focus_block_caret~ pushed for the new block id.
+3. *nav_block down* — page has two blocks; dispatch ~nav_block~ direction "down" with first block's id. Assert ~focus_block_caret~ pushed with ~block_id == second_block.id~ and ~position == "start"~. Symmetric for "up" (assert ~position == "end"~).
+4. *nav_block at boundary* — dispatch ~nav_block~ direction "up" on the first block. Assert no event is pushed (boundary, no-op).
+5. *delete_block_merge on empty block* — page has two paragraph blocks; archive of first via the handler should leave one block; ~focus_block_caret~ pushed for the previous block (if any) at "end".
+6. *delete_block_merge on only block* — page has one block; dispatch ~delete_block_merge~. Assert the block is *not* archived (no-op when there's no neighbor).
+7. *block_created broadcast de-dup* — manually call ~Pages.create_block(...)~ from the test (which both updates the LV via PubSub and would also be added by the handler if echoed). Assert blocks list contains exactly one entry per id.
+8. *Enter does not bubble into Lexical's internal paragraph* — JS-level behaviour, covered indirectly by scenario 1: after ~insert_paragraph_below~, the original block's ~content~ is unchanged (no second internal paragraph appended).
+
+* Implementation
+** DONE Allow position on Block.create_block action
+:PROPERTIES:
+:CUSTOM_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n::create-block-accept-position
+:END:
+
+- File: =lib/concept/pages/block.ex=
+- In ~actions do … create :create_block do accept [...]~, append ~:position~ to the accept list. The existing ~AssignAfterLastSibling~ change already short-circuits when the user supplies a non-empty position, so no other change is needed inside =Block=.
+- Verify =lib/concept/pages.ex= ~define :create_block, args: [:page_id, :type, :workspace_id, {:optional, :parent_block_id}]~ remains unchanged — callers can still pass ~position~ via the ~changeset opts~ form (~Pages.create_block(page_id, :paragraph, ws_id, nil, position: pos, actor: user, tenant: ws_id)~) because ~Ash.Domain.Info~ forwards opts as ~Ash.Changeset~ attributes via the underlying action accept list.
+
+Acceptance: a unit-style assertion in the test setup that ~Pages.create_block(page.id, :paragraph, ws.id, nil, position: "m", actor: user, tenant: ws.id)~ succeeds and the returned block has ~position: "m"~.
+
+Satisfies prerequisite for scenarios 1 & 2.
+
+** DONE Merge keyboard listeners into BlockEditor; remove BlockKeyboard
+:PROPERTIES:
+:CUSTOM_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n::merge-keyboard-into-block-editor
+:DEPENDS: BUG-002-enter-inside-a-block-does-not-insert-a-n::create-block-accept-position
+:END:
+
+- File: =assets/js/hooks/block_editor.js=
+  - Inside ~mounted()~, add four closures that mirror the contract in =SERVER_CONTRACT.md=:
+    - ~_onArrowUp~ → ~e.preventDefault(); pushEvent("nav_block", { direction: "up", block_id: this.el.getAttribute("block-id") })~.
+    - ~_onArrowDown~ → ~pushEvent("nav_block", { direction: "down", block_id: ... })~.
+    - ~_onEnterAtEnd~ → ~e.preventDefault(); pushEvent("insert_paragraph_below", { block_id: ... })~.
+    - ~_onBackspaceAtStart~ → ~e.preventDefault(); pushEvent("delete_block_merge", { block_id: ... })~.
+    Note: the ~e.preventDefault~ inside the JS hook handler is a no-op because the underlying ~keydown~ has already fired on the editor; preventing the bubbling custom event itself does nothing useful. The actual cancellation must happen in =ora-block.js= (next implementation step). Keep the hook handlers free of preventDefault.
+  - ~addEventListener~ for the four custom events on ~this.el~.
+  - Add a ~handleEvent("focus_block_caret", ({ block_id, position }) => ...)~ that calls ~this.el.focusStart()~ / ~this.el.focusEnd()~ when ~block_id~ matches ~this.el.getAttribute("block-id")~.
+  - In ~destroyed()~, ~removeEventListener~ for the new listeners.
+- File: =assets/js/hooks/index.js=
+  - Remove the ~BlockKeyboard~ import and key from the exported map.
+- File: =assets/js/hooks/block_keyboard.js=
+  - Delete the file. Its responsibility is now fully covered by ~BlockEditor~.
+- File: =assets/js/hooks/SERVER_CONTRACT.md=
+  - Update the heading "## ~BlockKeyboard~ hook" → "## ~BlockEditor~ hook (keyboard events)" so the contract still matches reality. Keep all event/payload tables intact.
+- File: =assets/js/components/ora-block.js=
+  - In the ~keydown~ listener, ~e.preventDefault()~ on the Enter-at-end branch (currently missing). Keep the existing ~e.preventDefault()~ on ArrowUp / ArrowDown / Backspace branches.
+
+Acceptance: the editor only ever attaches one phx-hook (BlockEditor) per ~<ora-block>~; pressing Enter at end emits exactly one ~insert_paragraph_below~ to the server and Lexical does *not* insert an internal paragraph (verified via scenario 8).
+
+** DONE Add server handlers for nav_block / insert_paragraph_below / delete_block_merge
+:PROPERTIES:
+:CUSTOM_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n::server-keyboard-handlers
+:DEPENDS: BUG-002-enter-inside-a-block-does-not-insert-a-n::merge-keyboard-into-block-editor
+:END:
+
+- File: =lib/concept_web/live/page_editor_live.ex=
+
+Add three new ~handle_event/3~ clauses next to the existing ones (after ~refresh_lock~). Helpers go above ~release_if_held/2~ as private functions.
+
+#+begin_src elixir
+@impl true
+def handle_event("insert_paragraph_below", %{"block_id" => id}, socket) do
+  user = socket.assigns.current_user
+  ws_id = socket.assigns.workspace.id
+  page_id = socket.assigns.page_id
+  blocks = socket.assigns.blocks
+
+  case sibling_position_after(blocks, id) do
+    {:ok, position} ->
+      case Concept.Pages.create_block(
+             page_id,
+             :paragraph,
+             ws_id,
+             nil,
+             position: position,
+             actor: user,
+             tenant: ws_id
+           ) do
+        {:ok, block} ->
+          {:noreply,
+           socket
+           |> assign(:blocks, insert_block_sorted(blocks, block))
+           |> push_event("focus_block_caret", %{block_id: block.id, position: "start"})}
+
+        {:error, _} ->
+          {:noreply, socket}
+      end
+
+    :no_source ->
+      {:noreply, socket}
+  end
+end
+
+@impl true
+def handle_event("nav_block", %{"direction" => dir, "block_id" => id}, socket)
+    when dir in ["up", "down"] do
+  blocks = socket.assigns.blocks
+
+  case neighbor(blocks, id, dir) do
+    nil ->
+      {:noreply, socket}
+
+    %{id: target_id} ->
+      pos = if dir == "up", do: "end", else: "start"
+      {:noreply, push_event(socket, "focus_block_caret", %{block_id: target_id, position: pos})}
+  end
+end
+
+@impl true
+def handle_event("delete_block_merge", %{"block_id" => id}, socket) do
+  user = socket.assigns.current_user
+  ws_id = socket.assigns.workspace.id
+  blocks = socket.assigns.blocks
+
+  with %{id: ^id} = block <- Enum.find(blocks, &(&1.id == id)),
+       %{id: prev_id} <- neighbor(blocks, id, "up"),
+       {:ok, _} <- Concept.Pages.archive_block(block, actor: user, tenant: ws_id) do
+    {:noreply,
+     socket
+     |> assign(:blocks, Enum.reject(blocks, &(&1.id == id)))
+     |> push_event("focus_block_caret", %{block_id: prev_id, position: "end"})}
+  else
+    _ -> {:noreply, socket}
+  end
+end
+
+defp sibling_position_after(blocks, id) do
+  sorted = Enum.sort_by(blocks, & &1.position)
+
+  case Enum.split_while(sorted, &(&1.id != id)) do
+    {_before, [src | rest]} ->
+      next_pos =
+        case rest do
+          [%{position: p} | _] -> p
+          _ -> nil
+        end
+
+      {:ok, Concept.Pages.FractionalIndex.between(src.position, next_pos)}
+
+    _ ->
+      :no_source
+  end
+end
+
+defp neighbor(blocks, id, "up") do
+  sorted = Enum.sort_by(blocks, & &1.position)
+  idx = Enum.find_index(sorted, &(&1.id == id))
+  if idx && idx > 0, do: Enum.at(sorted, idx - 1), else: nil
+end
+
+defp neighbor(blocks, id, "down") do
+  sorted = Enum.sort_by(blocks, & &1.position)
+  idx = Enum.find_index(sorted, &(&1.id == id))
+  if idx && idx < length(sorted) - 1, do: Enum.at(sorted, idx + 1), else: nil
+end
+
+defp insert_block_sorted(blocks, block) do
+  if Enum.any?(blocks, &(&1.id == block.id)) do
+    Enum.map(blocks, fn b -> if b.id == block.id, do: block, else: b end)
+  else
+    Enum.sort_by([block | blocks], & &1.position)
+  end
+end
+#+end_src
+
+Note ~Concept.Pages.FractionalIndex.between(left, nil)~ already returns a position strictly greater than ~left~; ~between(nil, nil)~ returns the initial position. Both are accepted.
+
+Satisfies scenarios 1, 2, 3, 4, 5, 6.
+
+** DONE De-duplicate block_created broadcast and clean up add_first_block
+:PROPERTIES:
+:CUSTOM_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n::dedup-block-created
+:DEPENDS: BUG-002-enter-inside-a-block-does-not-insert-a-n::server-keyboard-handlers
+:END:
+
+- File: =lib/concept_web/live/page_editor_live.ex=
+
+- ~handle_info({Phoenix.Socket.Broadcast, "block_created", ...})~ — replace the current ~socket.assigns.blocks ++ [block]~ with the helper from the previous step:
+
+  #+begin_src elixir
+  blocks = insert_block_sorted(socket.assigns.blocks, block)
+  #+end_src
+
+  Optional but recommended: ignore broadcasts whose ~notification.actor && notification.actor.id == socket.assigns.current_user.id~ — they were already applied locally by the originating handler.
+
+- ~handle_event("add_first_block", ...)~ — remove the local ~assign(:blocks, [block])~ on success and rely solely on the PubSub broadcast for state propagation. Keep error handling as-is. This eliminates the duplicate-id bug and matches the rest of the architecture (each block enters the assigns through exactly one channel: the broadcast).
+
+  Replace the success arm:
+
+  #+begin_src elixir
+  {:ok, _block} -> {:noreply, socket}
+  {:error, error} -> {:noreply, put_flash(socket, :error, "Could not create block: #{inspect(error)}")}
+  #+end_src
+
+  Note: ~insert_paragraph_below~ deliberately *does* assign locally because we need the new block in assigns *before* pushing ~focus_block_caret~ on the same render cycle. ~insert_block_sorted/2~'s id-presence check makes the subsequent broadcast a no-op.
+
+Satisfies scenario 7.
+
+* Edge Cases
+- *Enter while lock not yet granted* — ~insert_paragraph_below~ does not require the source block lock; it only creates a new block. Existing ~save_content~ still requires lock; unchanged.
+- *Network race* — multiple clients pressing Enter on the same block simultaneously: each gets a fresh fractional position via ~between/2~, so order is deterministic by lexicographic comparison; no collisions.
+- *Backspace at start with non-empty content* — =ora-block.js= already requires both ~_isAtStart()~ and ~_isEmpty()~ before dispatching ~ora-block-backspace-at-start~; non-empty blocks fall through to default browser behaviour. Server is therefore only asked to delete empty blocks. No content-merge logic needed.
+- *Only block on the page* — ~delete_block_merge~ is a no-op (scenario 6) so the user never ends up with zero blocks via Backspace.
+- *Stale neighbor list during a fast double-Enter* — ~neighbor/3~ recomputes from current ~socket.assigns.blocks~ on each event; ~insert_block_sorted/2~ is idempotent on id, so re-inserting the same block doesn't duplicate.
+
+* Acceptance Criteria
+1. Manual: pressing Enter at the end of any block creates a new empty paragraph below and the caret moves into it. The page does *not* reload.
+2. Manual: pressing ArrowDown at the end of a block focuses the next block at its start; ArrowUp at the start focuses the previous block at its end; Backspace at the start of an empty block deletes it and focuses the previous block at end.
+3. Test: ~mix test test/concept_web/live/page_editor_test.exs~ passes for scenarios 1–8.
+4. ~grep -rn 'BlockKeyboard' assets lib~ returns no matches except inside =SERVER_CONTRACT.md= history (which is rewritten in this fix).
+5. ~mix precommit~ passes with no new warnings.
+
+** Completion [2026-05-05]
+
+*** Verification
+- mix test test/concept_web/live/page_editor_test.exs — 11 tests, 0 failures (covers all 8 BUG-002 scenarios)
+- insert_paragraph_below: creates new block at correct fractional position (tail + between siblings); pushes focus_block_caret
+- nav_block: ArrowUp/ArrowDown cross-block with boundary no-op
+- delete_block_merge: archives empty block and focuses previous; no-op on only block
+- Dedup: block_created handler filters self-broadcast and duplicates; block_updated already filters by actor_id
+
+*** Artifacts
+- [[file:!tasks/plans/plan-artifacts/PLAN-002-fix-editor-ux-edit-bars-enter-inserts-bl/test-results.txt][Test results: 16 tests, 0 failures]]
+
+*** Changes
+- lib/concept/pages/block.ex: Added :position to create_block accept list
+- assets/js/hooks/block_editor.js: Added keyboard event listeners (ora-block-arrow-up/down, ora-block-enter-at-end, ora-block-backspace-at-start) + focus_block_caret handler
+- assets/js/components/ora-block.js: Added e.preventDefault() on Enter at end to prevent Lexical internal paragraph
+- assets/js/hooks/index.js: Removed BlockKeyboard import/registration
+- lib/concept_web/live/page_editor_live.ex: Added handle_event for insert_paragraph_below, nav_block, delete_block_merge; dedup in block_created handler

@@ -12,7 +12,7 @@ defmodule ConceptWeb.Components.PageHeader do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="ora-page-header">
+    <div id={@id} class="ora-page-header" phx-hook="PageHeader" phx-target={@myself}>
       <.cover_band
         color={@page.cover_color}
         phx-click="toggle_cover_picker"

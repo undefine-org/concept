@@ -1,0 +1,10 @@
+     └─ test/concept_web/live/page_editor_test.exs:100:5: ConceptWeb.PageEditorTest."test insert_paragraph_below creates new block at tail"/1
+     └─ test/concept_web/live/page_editor_test.exs:101:62: ConceptWeb.PageEditorTest."test insert_paragraph_below creates new block at tail"/1
+     └─ test/concept_web/live/page_editor_test.exs:125:5: ConceptWeb.PageEditorTest."test nav_block down focuses next block"/1
+     └─ test/concept_web/live/page_editor_test.exs:131:62: ConceptWeb.PageEditorTest."test nav_block down focuses next block"/1
+     └─ test/concept_web/live/page_editor_test.exs:139:5: ConceptWeb.PageEditorTest."test nav_block up focuses previous block"/1
+     └─ test/concept_web/live/page_editor_test.exs:145:62: ConceptWeb.PageEditorTest."test nav_block up focuses previous block"/1
+     └─ test/concept_web/live/page_editor_test.exs:171:5: ConceptWeb.PageEditorTest."test delete_block_merge archives empty block and focuses previous"/1
+     └─ test/concept_web/live/page_editor_test.exs:172:62: ConceptWeb.PageEditorTest."test delete_block_merge archives empty block and focuses previous"/1
+Finished in 3.3 seconds (0.00s async, 3.3s sync)
+16 tests, 0 failures

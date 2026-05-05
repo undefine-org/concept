@@ -1,0 +1,125 @@
+#+TITLE: Fix Editor UX: Edit Bars, Enter Inserts Block, Editable Title
+#+STATE: DONE
+#+SESSION_ID: 14d5c7bb55eed312
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-52-10-199Z_14d5c7bb55eed312.jsonl]]
+#+CUSTOM_ID: PLAN-002-fix-editor-ux-edit-bars-enter-inserts-bl
+#+LAYER: web
+
+* Initial Message
+
+Check the user experience at http://localhost:4279/ and fix the
+1. edti bars not showing
+2. blocks not updating when I hit enter (page reloads and nothing shows)
+3. title not editable when I click on it
+
+* Context
+
+Three independently-reproducible UX bugs in the page editor at =http://localhost:4279/w/:slug/p/:id=:
+
+1. *Edit bars not showing* — Lit components ~<ora-block-handle>~ (hover "+/⋮⋮") and ~<ora-format-toolbar>~ (selection bubble) are registered as custom elements but never rendered in any HEEx template. ([[id:BUG-001-edit-bars-block-handle-format-toolbar-do]])
+
+2. *Enter doesn't insert a new block, page appears to reload* — the ~BlockKeyboard~ JS hook is exported but never attached to a DOM element, the server has no ~handle_event~ for ~insert_paragraph_below~ / ~nav_block~ / ~delete_block_merge~, and ~<ora-block>~ does not ~preventDefault~ on Enter so Lexical inserts an internal paragraph. The user sees no visible new block; intermittent crashes plus the duplicate-id risk in ~add_first_block~ produce the "page reloads" symptom. ([[id:BUG-002-enter-inside-a-block-does-not-insert-a-n]])
+
+3. *Title not editable on click* — =WorkspaceLive= renders a plain ~<h1>~ instead of using the existing ~ConceptWeb.Components.PageHeader~ live component (which already implements emoji/cover/contenteditable title). The Ash PubSub handler in =WorkspaceLive= also matches the wrong message shape so renames never refresh the sidebar or browser tab title. ([[id:BUG-003-page-title-is-not-editable-rename-does-n]])
+
+Approach: each bug is a pure wiring/refactor with high information-density. Prefer reusing existing modules (~PageHeader~ live component, ~FractionalIndex~, ~Pages.create_block~, ~BlockEditor~ hook) over creating new ones. Tests live under =test/concept_web/live/= using the auth/setup pattern from =command_palette_test.exs=.
+
+* Linked items
+
+- [[id:BUG-001-edit-bars-block-handle-format-toolbar-do]] — wire ~<ora-block-handle>~ + ~<ora-format-toolbar>~
+- [[id:BUG-002-enter-inside-a-block-does-not-insert-a-n]] — Enter inserts new block; nav + delete contracts
+- [[id:BUG-003-page-title-is-not-editable-rename-does-n]] — wire ~PageHeader~ live component; fix workspace pubsub
+
+* Verification
+
+After each item lands run:
+
+- =mix precommit= — formatter, compile-with-warnings-as-errors, type checks (must pass clean).
+- =mix test test/concept_web/live/page_editor_test.exs= — covers BUG-001 and BUG-002.
+- =mix test test/concept_web/live/page_header_test.exs= — covers BUG-003.
+
+End-to-end manual smoke:
+1. Sign in, open a page.
+2. Hover a block → "+/⋮⋮" handle visible. Select text → bold/italic toolbar bubble visible. *(BUG-001)*
+3. Press Enter at end of a block → new empty block below, caret moves into it; no page reload. ArrowUp/ArrowDown crosses block boundaries; Backspace at start of empty block deletes it. *(BUG-002)*
+4. Click title → cursor enters; type a new title; press Enter or click out → sidebar tree and browser tab update. Open a second tab on the same page → title updates within ~1 s. *(BUG-003)*
+
+* Execution Manifest
+** wave-1 :wave:
+- [[id:BUG-001-edit-bars-block-handle-format-toolbar-do::wrap-text-block-row]] Wrap text blocks in handle row + render handle component
+- [[id:BUG-002-enter-inside-a-block-does-not-insert-a-n::create-block-accept-position]] Allow position on Block.create_block action
+- [[id:BUG-003-page-title-is-not-editable-rename-does-n::wire-page-header-component]] Wire PageHeader live_component into WorkspaceLive
+** wave-2 :wave:
+- [[id:BUG-001-edit-bars-block-handle-format-toolbar-do::render-format-toolbar]] Render single format-toolbar instance + container relative positioning
+- [[id:BUG-002-enter-inside-a-block-does-not-insert-a-n::merge-keyboard-into-block-editor]] Merge keyboard listeners into BlockEditor; remove BlockKeyboard
+- [[id:BUG-003-page-title-is-not-editable-rename-does-n::fix-workspace-page-broadcasts]] Fix WorkspaceLive page broadcast handlers
+** wave-3 :wave:
+- [[id:BUG-001-edit-bars-block-handle-format-toolbar-do::row-layout-css]] Add CSS for ora-block-row layout and handle hover reveal
+- [[id:BUG-002-enter-inside-a-block-does-not-insert-a-n::server-keyboard-handlers]] Add server handlers for nav_block / insert_paragraph_below / delete_block_merge
+** wave-4 :wave:
+- [[id:BUG-002-enter-inside-a-block-does-not-insert-a-n::dedup-block-created]] De-duplicate block_created broadcast and clean up add_first_block
+** File-level DAG
+*** Nodes
+- `BUG-001-edit-bars-block-handle-format-toolbar-do` Wrap text blocks in handle row + render handle component [ITEM]
+- `BUG-002-enter-inside-a-block-does-not-insert-a-n` Allow position on Block.create_block action [ITEM]
+- `BUG-003-page-title-is-not-editable-rename-does-n` Wire PageHeader live_component into WorkspaceLive [ITEM]
+*** Edges
+- None.
+** Subfeature-level DAG
+*** Nodes
+- `BUG-001-edit-bars-block-handle-format-toolbar-do::wrap-text-block-row` Wrap text blocks in handle row + render handle component [ITEM]
+- `BUG-001-edit-bars-block-handle-format-toolbar-do::render-format-toolbar` Render single format-toolbar instance + container relative positioning [ITEM]
+- `BUG-001-edit-bars-block-handle-format-toolbar-do::row-layout-css` Add CSS for ora-block-row layout and handle hover reveal [ITEM]
+- `BUG-002-enter-inside-a-block-does-not-insert-a-n::create-block-accept-position` Allow position on Block.create_block action [ITEM]
+- `BUG-002-enter-inside-a-block-does-not-insert-a-n::merge-keyboard-into-block-editor` Merge keyboard listeners into BlockEditor; remove BlockKeyboard [ITEM]
+- `BUG-002-enter-inside-a-block-does-not-insert-a-n::server-keyboard-handlers` Add server handlers for nav_block / insert_paragraph_below / delete_block_merge [ITEM]
+- `BUG-002-enter-inside-a-block-does-not-insert-a-n::dedup-block-created` De-duplicate block_created broadcast and clean up add_first_block [ITEM]
+- `BUG-003-page-title-is-not-editable-rename-does-n::wire-page-header-component` Wire PageHeader live_component into WorkspaceLive [ITEM]
+- `BUG-003-page-title-is-not-editable-rename-does-n::fix-workspace-page-broadcasts` Fix WorkspaceLive page broadcast handlers [ITEM]
+*** Edges
+- `BUG-001-edit-bars-block-handle-format-toolbar-do::render-format-toolbar` depends on `BUG-001-edit-bars-block-handle-format-toolbar-do::wrap-text-block-row`
+- `BUG-001-edit-bars-block-handle-format-toolbar-do::row-layout-css` depends on `BUG-001-edit-bars-block-handle-format-toolbar-do::render-format-toolbar`
+- `BUG-002-enter-inside-a-block-does-not-insert-a-n::merge-keyboard-into-block-editor` depends on `BUG-002-enter-inside-a-block-does-not-insert-a-n::create-block-accept-position`
+- `BUG-002-enter-inside-a-block-does-not-insert-a-n::server-keyboard-handlers` depends on `BUG-002-enter-inside-a-block-does-not-insert-a-n::merge-keyboard-into-block-editor`
+- `BUG-002-enter-inside-a-block-does-not-insert-a-n::dedup-block-created` depends on `BUG-002-enter-inside-a-block-does-not-insert-a-n::server-keyboard-handlers`
+- `BUG-003-page-title-is-not-editable-rename-does-n::fix-workspace-page-broadcasts` depends on `BUG-003-page-title-is-not-editable-rename-does-n::wire-page-header-component`
+
+** Completion [2026-05-05]
+
+*** Summary
+All three UX bugs fixed and verified:
+
+1. **Edit bars (BUG-001)** — <ora-block-handle> renders inside each text block row with group-hover opacity reveal. <ora-format-toolbar> renders once as sibling of block list inside relative container. CSS rules for .ora-block-row flex layout.
+
+2. **Enter inserts new block (BUG-002)** — Keyboard listeners merged into BlockEditor hook (removed unused BlockKeyboard). Enter at end now preventDefault on Lexical and pushes insert_paragraph_below. Server creates paragraph with correct fractional position between siblings or after tail. ArrowUp/ArrowDown nav_block cross-block. Backspace delete_block_merge archives empty block and focuses previous. Dedup in block_created broadcast handler.
+
+3. **Editable title (BUG-003)** — WorkspaceLive now renders existing PageHeader live_component (contenteditable title, emoji picker, cover band). Dead :ash_pubsub handler replaced with correct Phoenix.Socket.Broadcast pattern matching for page_created/updated/archived/restored, updating sidebar tree, page_title assign (browser tab), and current_page.
+
+*** Verification
+- mix compile — passes (pre-existing warnings only)
+- mix test — 34 tests, 0 failures
+- mix test test/concept_web/live/page_editor_test.exs — 11 tests, 0 failures
+- mix test test/concept_web/live/page_header_test.exs — 5 tests, 0 failures
+- grep -n ":ash_pubsub" lib/concept_web/live/workspace_live.ex — returns no matches
+
+*** Artifacts
+- [[file:!tasks/plans/plan-artifacts/PLAN-002-fix-editor-ux-edit-bars-enter-inserts-bl/test-results.txt][Test results]]
+
+*** Files Changed
+- lib/concept_web/components/block_render.ex (handle row wrapper)
+- lib/concept_web/live/page_editor_live.ex (format-toolbar + keyboard handlers + dedup)
+- lib/concept_web/live/workspace_live.ex (PageHeader component + pubsub fix)
+- lib/concept_web/components/page_header.ex (added id/phx-hook/phx-target)
+- lib/concept/pages/block.ex (position accept + archive fix)
+- lib/concept/pages/page.ex (allow_empty? title)
+- assets/js/hooks/block_editor.js (keyboard listeners + focus_block_caret)
+- assets/js/components/ora-block.js (preventDefault on Enter)
+- assets/js/hooks/index.js (removed BlockKeyboard)
+- assets/css/app.css (.ora-block-row rules)
+- test/concept_web/live/page_editor_test.exs (new, 11 tests)
+- test/concept_web/live/page_header_test.exs (new, 5 tests)
+
+*** Linked Items
+- [[id:BUG-001-edit-bars-block-handle-format-toolbar-do][BUG-001]] — DONE
+- [[id:BUG-002-enter-inside-a-block-does-not-insert-a-n][BUG-002]] — DONE
+- [[id:BUG-003-page-title-is-not-editable-rename-does-n][BUG-003]] — DONE

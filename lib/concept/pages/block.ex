@@ -65,7 +65,7 @@ defmodule Concept.Pages.Block do
     defaults [:read]
 
     create :create_block do
-      accept [:page_id, :parent_block_id, :type, :content, :props]
+      accept [:page_id, :parent_block_id, :type, :content, :props, :position]
       argument :workspace_id, :uuid, allow_nil?: false
       change set_attribute(:workspace_id, arg(:workspace_id))
       change Concept.Pages.Block.Changes.AssignDefaults
@@ -93,6 +93,7 @@ defmodule Concept.Pages.Block do
 
     update :archive do
       accept []
+      change set_attribute(:archived_at, DateTime.utc_now())
     end
 
     update :acquire_lock do
@@ -127,7 +128,7 @@ defmodule Concept.Pages.Block do
 
     read :list_for_page do
       argument :page_id, :uuid, allow_nil?: false
-      filter expr(page_id == ^arg(:page_id))
+      filter expr(page_id == ^arg(:page_id) and is_nil(archived_at))
       prepare build(sort: [parent_block_id: :asc, position: :asc])
     end
   end

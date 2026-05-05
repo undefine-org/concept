@@ -1,0 +1,135 @@
+#+TITLE: Edit bars (block-handle, format-toolbar) do not render on the page
+#+STATE: DONE
+#+SESSION_ID: 14d5c7bb55eed312
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-52-10-199Z_14d5c7bb55eed312.jsonl]]
+#+CUSTOM_ID: BUG-001-edit-bars-block-handle-format-toolbar-do
+#+LAYER: web
+
+* Initial Message
+
+Check the user experience at http://localhost:4279/ and fix the
+1. edti bars not showing
+2. blocks not updating when I hit enter (page reloads and nothing shows)
+3. title not editable when I click on it
+
+* Intention & Purpose
+Restore the per-block hover affordance ("+" / "⋮⋮" handle) and the floating selection bubble (bold / italic / link / code) so users can manipulate blocks and inline-format text the way the visual design intends.
+
+* Context & Narrative
+The Lit custom elements ~ora-block-handle~ and ~ora-format-toolbar~ are defined and registered in =assets/js/components= but no HEEx template instantiates them, so they never appear in the DOM. Both elements are self-positioning Lit components: the handle is shown via Tailwind ~group-hover:opacity-100~ on the parent row, and the format toolbar listens to ~document.selectionchange~ and positions itself relative to its ~offsetParent~.
+
+Definitions:
+- =assets/js/components/ora-block-handle.js= — adds two buttons that emit bubbling ~add-below~ and ~open-menu~ custom events.
+- =assets/js/components/ora-format-toolbar.js= — toggles a hidden popover when there is a non-empty range selection inside an =<ora-block>=; emits ~toggle-format~ and ~request-link~ custom events.
+
+This bug is purely a wiring bug; the components themselves work.
+
+* Scope
+- IN: render ~<ora-block-handle>~ inside the per-block row; render exactly one ~<ora-format-toolbar>~ inside the page editor; add the CSS rules needed for the row layout and hover reveal.
+- OUT: handling the new bubbling events on the server (~add-below~, ~open-menu~, ~toggle-format~, ~request-link~) — those are out of scope for this bug. Listeners may be stubbed but no =handle_event= clauses are required in this fix. Slash menu / link editor wiring is also out of scope.
+
+* Existing Patterns
+- =lib/concept_web/components/block_render.ex= — sole render path for blocks. Uses ~Phoenix.Component~. Already wraps text-type blocks in ~<ora-block phx-hook="BlockEditor" id="b-#{id}" block-id={...} ...>~. Update only the text-type branch.
+- =lib/concept_web/live/page_editor_live.ex= — owns the block list ~<ul>~ in =render/1=. The toolbar must be inserted as a sibling of the list inside an ancestor that has ~position: relative~ so the toolbar's absolute positioning works (the ~.ora-page-canvas~ in =workspace_live.ex= already provides a positioned ancestor; we add ~position: relative~ to the editor's wrapping ~<div class="space-y-1">~).
+- =assets/css/app.css= — Tailwind v4 ~@import "tailwindcss" source(none)~ + ~@source~ pattern. All =.ora-*= classes are declared here under a ~@layer components~ block. Match that style.
+- ~AGENTS.md~ rule: never write inline ~<script>~ tags; never use ~Heroicons~ — use ~<.icon name="hero-...">~. We add no scripts, only HEEx and CSS.
+
+* Tests
+Add =test/concept_web/live/page_editor_test.exs= (new file). Mirror the setup helper in =test/concept_web/live/command_palette_test.exs= (register/confirm user, sign-in via session, fetch workspace, create page).
+
+Scenarios (use ~Phoenix.LiveViewTest~ + ~LazyHTML~):
+1. *Block-handle renders per text block* — after creating one paragraph block via ~Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)~, navigate to ~/w/#{ws.slug}/p/#{page.id}~ and assert ~has_element?(view, "ora-block-handle")~ exactly once. Then create a second block and assert two ~ora-block-handle~ elements are present.
+2. *Format toolbar renders exactly once on the page* — assert ~length(LazyHTML.filter(LazyHTML.from_fragment(render(view)), "ora-format-toolbar")) == 1~ regardless of block count (test with 0, 1, and 2 blocks).
+3. *Handle row layout class* — assert each ~<ora-block>~ is wrapped in an element with the ~group~ Tailwind class (=has_element?(view, ".group ora-block")=).
+
+* Implementation
+** DONE Wrap text blocks in handle row + render handle component
+:PROPERTIES:
+:CUSTOM_ID: BUG-001-edit-bars-block-handle-format-toolbar-do::wrap-text-block-row
+:END:
+
+- File: =lib/concept_web/components/block_render.ex=
+- Change the text-type branch (~if assigns.type in @text_types do~) so the rendered HEEx is wrapped in a flex row with Tailwind ~group~ semantics:
+
+  #+begin_src heex
+  <div class="ora-block-row group" data-block-id={@block.id}>
+    <ora-block-handle class="ora-block-handle group-hover:opacity-100" block-id={@block.id} />
+    <ora-block
+      phx-hook="BlockEditor"
+      id={"b-#{@block.id}"}
+      block-id={@block.id}
+      block-type={@type}
+      initial-content={Jason.encode!(@block.content)}
+      placeholder={placeholder_for(@block.type)}
+      class="ora-block-host"
+    >
+      <div data-editor class={ora_block_class(@type)}>
+        {raw(Concept.Lexical.to_html(@block.content))}
+      </div>
+    </ora-block>
+  </div>
+  #+end_src
+
+- Do *not* alter the non-text branch (~static_block/1~). Keep ~placeholder_for/1~, ~ora_block_class/1~ untouched.
+- Pass ~block-id~ down to the handle so future server handlers can identify the source block (server handlers themselves are out of scope here; we only need the attribute set).
+
+Satisfies test scenarios 1 and 3.
+
+** DONE Render single format-toolbar instance + container relative positioning
+:PROPERTIES:
+:CUSTOM_ID: BUG-001-edit-bars-block-handle-format-toolbar-do::render-format-toolbar
+:DEPENDS: BUG-001-edit-bars-block-handle-format-toolbar-do::wrap-text-block-row
+:END:
+
+- File: =lib/concept_web/live/page_editor_live.ex=
+- In =render/1=, change the outermost wrapper to ~<div class="space-y-1 relative">~ (Tailwind ~relative~ provides the ~offsetParent~ the toolbar uses).
+- Insert ~<ora-format-toolbar id="page-format-toolbar" />~ as the *last* child inside that wrapping ~<div>~ — outside the ~<ul>~ but inside the relative container, so its absolute positioning resolves against the editor area.
+
+The element registers its own ~selectionchange~ listener in ~connectedCallback~; it positions itself only when the selection is inside an ancestor matching ~ora-block~ (already implemented in =ora-format-toolbar.js=). No further wiring needed for this bug.
+
+Satisfies test scenario 2.
+
+** DONE Add CSS for ora-block-row layout and handle hover reveal
+:PROPERTIES:
+:CUSTOM_ID: BUG-001-edit-bars-block-handle-format-toolbar-do::row-layout-css
+:DEPENDS: BUG-001-edit-bars-block-handle-format-toolbar-do::render-format-toolbar
+:END:
+
+- File: =assets/css/app.css= (existing ~@layer components~ block where every other =.ora-*= rule lives).
+- Add:
+
+  #+begin_src css
+  .ora-block-row { position: relative; display: flex; align-items: flex-start; gap: 4px; }
+  .ora-block-row > ora-block-handle { flex: 0 0 auto; margin-top: 6px; opacity: 0; transition: opacity 0.15s ease; }
+  .ora-block-row:hover > ora-block-handle { opacity: 1; }
+  .ora-block-row > .ora-block-host { flex: 1 1 auto; min-width: 0; }
+  #+end_src
+
+- The ~:host(.group-hover\:opacity-100) { opacity: 1 }~ rule already exists in the Lit shadow style; the row-level rule above keeps the handle hidden by default and visible on hover even outside Tailwind utilities (the Lit shadow boundary blocks the Tailwind class from working alone).
+- Do *not* introduce ~@apply~ (forbidden by AGENTS.md). Plain CSS only.
+
+* Edge Cases
+- A page with zero blocks renders the "Add your first block" button (untouched). The format toolbar must still render exactly once (scenario 2 covers this).
+- The handle is keyboard-invisible until hover; it does not need keyboard focusability for this fix.
+- ~ora-format-toolbar~ relies on a ~Range~-based ~getBoundingClientRect~; in tests no selection occurs, so it stays hidden — the test asserts presence in the DOM, not visibility.
+
+* Acceptance Criteria
+1. Hovering any block in =/w/:slug/p/:id= shows a "+" / "⋮⋮" affordance to the left of the block content (manual check).
+2. Selecting text inside any block shows a dark bubble toolbar with B / I / U / S / link / code buttons (manual check).
+3. ~mix test test/concept_web/live/page_editor_test.exs~ passes for the three scenarios above.
+4. ~mix precommit~ passes with no new warnings.
+
+** Completion [2026-05-05]
+
+*** Verification
+- mix test test/concept_web/live/page_editor_test.exs — 11 tests, 0 failures (covers all 3 BUG-001 scenarios)
+- Manual DOM verification: .ora-block-row class wraps each text block, <ora-block-handle> rendered, <ora-format-toolbar> present
+- CSS rules in app.css for .ora-block-row layout and hover reveal
+
+*** Artifacts
+- [[file:!tasks/plans/plan-artifacts/PLAN-002-fix-editor-ux-edit-bars-enter-inserts-bl/test-results.txt][Test results: 16 tests, 0 failures]]
+
+*** Changes
+- lib/concept_web/components/block_render.ex: Wrapped text-type blocks in <div class="ora-block-row group"> with <ora-block-handle>
+- lib/concept_web/live/page_editor_live.ex: Added relative positioning and <ora-format-toolbar>
+- assets/css/app.css: Added .ora-block-row layout rules with hover opacity transition

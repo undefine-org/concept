@@ -62,6 +62,7 @@ export class OraBlock extends LitElement {
         this.dispatchEvent(new CustomEvent("ora-block-arrow-down", { bubbles: true }));
       }
       if (e.key === "Enter" && !e.shiftKey && this._isAtEnd()) {
+        e.preventDefault();
         this.dispatchEvent(new CustomEvent("ora-block-enter-at-end", { bubbles: true }));
       }
       if (e.key === "Backspace" && this._isAtStart() && this._isEmpty()) {

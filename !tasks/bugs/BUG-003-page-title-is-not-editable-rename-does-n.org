@@ -1,0 +1,188 @@
+#+TITLE: Page title is not editable; rename does not propagate to tab and sidebar
+#+STATE: DONE
+#+SESSION_ID: 14d5c7bb55eed312
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-52-10-199Z_14d5c7bb55eed312.jsonl]]
+#+CUSTOM_ID: BUG-003-page-title-is-not-editable-rename-does-n
+#+LAYER: web
+
+* Initial Message
+
+Check the user experience at http://localhost:4279/ and fix the
+1. edti bars not showing
+2. blocks not updating when I hit enter (page reloads and nothing shows)
+3. title not editable when I click on it
+
+* Intention & Purpose
+Restore in-place editing of the page title (and the emoji + cover-band affordance attached to it), and propagate a rename so the browser tab title and sidebar tree reflect the new value immediately.
+
+* Context & Narrative
+A live component already exists that does *all* of this — emoji picker, cover-band, ~contenteditable~ title — at =lib/concept_web/components/page_header.ex=. It depends on ~ContentEditable~ hook (=assets/js/hooks/content_editable.js=) which is registered in =assets/js/hooks/index.js=. The hook ~pushEventTo~'s ~save_title~ to the live component on blur or Enter; the component calls ~Concept.Pages.rename_page/2~ and re-renders.
+
+The component is *not used*. =lib/concept_web/live/workspace_live.ex= (around line ~318–325) instead inlines a plain ~<h1 class="text-4xl font-bold mb-4">~ that just prints the title text. Clicking it does nothing because there is no ~contenteditable~ attribute and no hook.
+
+Separately, the workspace LiveView's ~handle_info~ for Ash PubSub events uses the wrong message shape:
+
+#+begin_src elixir
+def handle_info({:ash_pubsub, event, _payload}, socket)
+    when event in ["page_created", "page_updated", "page_archived", "page_restored"] do
+#+end_src
+
+Ash.Notifier.PubSub configured with ~module: ConceptWeb.Endpoint~ broadcasts ~%Phoenix.Socket.Broadcast{event: "page_updated", payload: %Ash.Notifier.Notification{}}~. ~PageEditorLive~ already pattern-matches that shape correctly. ~WorkspaceLive~'s clause never fires. Net effect: even if the title were editable, the sidebar tree and ~page_title~ assign (browser tab) would not update for the editor or any other connected client.
+
+* Scope
+- IN: replace the inline ~<h1>~ with the existing ~PageHeader~ live component; fix ~WorkspaceLive~'s Ash PubSub handler to match the actual broadcast shape; update ~current_page~, ~page_title~, and ~pages~ assigns when the broadcast carries ~page_updated~ / ~page_created~ / ~page_archived~ / ~page_restored~ for our workspace.
+- OUT: redesigning the header (it already exists and is used as-is); changing the title editing UX (Enter blurs and saves — already implemented in the hook); cover image upload; emoji search beyond the existing component.
+
+* Existing Patterns
+- =lib/concept_web/components/page_header.ex= — ~Phoenix.LiveComponent~ with assigns ~@page~ and ~@current_user~. Renders the cover band (~ConceptWeb.Components.CoverBand.cover_band/1~), an emoji picker button, and the ~contenteditable~ ~<h1 id="page-title-#{@page.id}" class="ora-page-title" contenteditable="true" phx-hook="ContentEditable" phx-target={@myself} data-placeholder="Untitled">~. Has handlers ~toggle_emoji_picker~, ~toggle_cover_picker~, ~set_emoji~, ~set_cover_color~, ~save_title~. All four call ~Concept.Pages.{rename_page,set_icon,set_cover_color}~ with ~actor: user, tenant: page.workspace_id~.
+- =assets/js/hooks/content_editable.js= — ~pushEventTo(this.el, "save_title", { value: this.el.innerText })~ on blur; Enter triggers blur. Already wired and registered.
+- =assets/css/app.css= — ~.ora-page-header~, ~.ora-page-title~, ~.ora-page-emoji-btn~, ~.ora-cover-*~ classes already exist for the component.
+- =lib/concept_web/live/workspace_live.ex= — already maintains ~@workspace~, ~@current_user~, ~@current_page~, ~@page_title~ (assign, used for browser tab via root layout), ~@pages~ (sidebar tree). Already subscribes to ~workspace:#{ws.id}:pages~. The existing ~handle_info~ for ~%Phoenix.Socket.Broadcast{event: "presence_diff"}~ is the correct format we should mirror.
+- =lib/concept_web/live/page_editor_live.ex= — already pattern-matches ~%Phoenix.Socket.Broadcast{event: "block_updated", payload: notification}~. Mirror that style for page broadcasts in WorkspaceLive.
+
+* Tests
+Add =test/concept_web/live/page_header_test.exs=. Reuse setup helper from =test/concept_web/live/command_palette_test.exs= (register/confirm user, sign in, build conn, fetch workspace, create page).
+
+Scenarios:
+1. *Title element is contenteditable* — load ~/w/#{ws.slug}/p/#{page.id}~. Assert ~has_element?(view, "h1#page-title-#{page.id}[contenteditable=\"true\"]")~. Assert ~has_element?(view, "[phx-hook=\"ContentEditable\"]")~ inside the page-header region.
+2. *save_title updates the page* — find the live component via ~element(view, "#page-header-#{page.id}")~ and trigger ~render_hook(elem, "save_title", %{"value" => "Renamed"})~. Reload page from DB: ~assert {:ok, %{title: "Renamed"}} = Pages.get_page(page.id, actor: user, tenant: ws.id)~.
+3. *Renamed title propagates to sidebar tree* — after scenario 2, the rendered HTML for the same view contains "Renamed" inside the sidebar list (~has_element?(view, "[data-page-id=\"#{page.id}\"]", "Renamed")~ — keep the assertion robust to existing sidebar markup; if the sidebar uses a different selector, adjust to match. Use ~render(view) =~ "Renamed"~ as a final fallback assertion).
+4. *Renamed title propagates to browser tab title* — assign ~@page_title~ should be "Renamed". Browser tab title is set via the root layout's ~<.live_title>~ which reads ~assigns[:page_title]~. Assert ~render(view) =~ "<title>~ block contains "Renamed" *or* directly assert socket assigns by re-fetching ~%{page_title: "Renamed"}~ via ~:sys.get_state(view.pid)~ if the layout assertion is brittle.
+5. *Empty title falls back to "Untitled" placeholder* — set title to ~""~ via ~save_title~ with ~value: ""~. Assert ~has_element?(view, "h1#page-title-#{page.id}", "")~ (the title element is present but empty); placeholder is rendered via the existing CSS rule ~.ora-page-title:empty::before { content: attr(data-placeholder); }~.
+
+* Implementation
+** DONE Wire PageHeader live_component into WorkspaceLive
+:PROPERTIES:
+:CUSTOM_ID: BUG-003-page-title-is-not-editable-rename-does-n::wire-page-header-component
+:END:
+
+- File: =lib/concept_web/live/workspace_live.ex=
+- In =render/1=, inside the ~<%= else %>~ branch where ~@current_page~ is non-nil, replace the existing block:
+
+  #+begin_src heex
+  <div class="ora-page-canvas">
+    <.presence_bar users={@presence_users} />
+    <h1 class="text-4xl font-bold mb-4">
+      {@current_page.icon_emoji || "📄"}
+      {if @current_page.title == "" || is_nil(@current_page.title), do: "Untitled", else: @current_page.title}
+    </h1>
+    {live_render(@socket, ConceptWeb.PageEditorLive, ...)}
+  </div>
+  #+end_src
+
+  with:
+
+  #+begin_src heex
+  <div class="ora-page-canvas">
+    <.presence_bar users={@presence_users} />
+    <.live_component
+      module={ConceptWeb.Components.PageHeader}
+      id={"page-header-#{@current_page.id}"}
+      page={@current_page}
+      current_user={@current_user}
+    />
+    {live_render(@socket, ConceptWeb.PageEditorLive,
+      id: "page-editor-#{@current_page.id}",
+      session: %{
+        "workspace_id" => @workspace.id,
+        "page_id" => @current_page.id,
+        "user_id" => @current_user.id,
+        "user_email" => @current_user.email
+      }
+    )}
+  </div>
+  #+end_src
+
+- Do not move ~<.presence_bar>~ inside ~PageHeader~ (out of scope for this bug). It stays as a sibling.
+- The component already styles itself; no changes to =app.css= required.
+
+Satisfies scenario 1.
+
+** DONE Fix WorkspaceLive page broadcast handlers
+:PROPERTIES:
+:CUSTOM_ID: BUG-003-page-title-is-not-editable-rename-does-n::fix-workspace-page-broadcasts
+:DEPENDS: BUG-003-page-title-is-not-editable-rename-does-n::wire-page-header-component
+:END:
+
+- File: =lib/concept_web/live/workspace_live.ex=
+- *Delete* the existing dead clause:
+
+  #+begin_src elixir
+  def handle_info({:ash_pubsub, event, _payload}, socket)
+      when event in ["page_created", "page_updated", "page_archived", "page_restored"] do
+    ...
+  end
+  #+end_src
+
+- Add the correct ~%Phoenix.Socket.Broadcast{}~ handlers, modelled on the presence_diff clause already in this file:
+
+  #+begin_src elixir
+  @impl true
+  def handle_info(
+        %Phoenix.Socket.Broadcast{event: event, payload: notification},
+        socket
+      )
+      when event in ["page_created", "page_updated", "page_archived", "page_restored"] do
+    ws = socket.assigns.workspace
+    user = socket.assigns.current_user
+
+    socket =
+      case Pages.list_tree(actor: user, tenant: ws.id) do
+        {:ok, pages} -> assign(socket, :pages, pages)
+        _ -> socket
+      end
+
+    socket =
+      case {event, notification, socket.assigns[:current_page]} do
+        {"page_updated", %{data: %{id: id} = page}, %{id: id}} ->
+          socket
+          |> assign(:current_page, page)
+          |> assign(:page_title, page.title)
+
+        {"page_archived", %{data: %{id: id}}, %{id: id}} ->
+          socket
+          |> assign(:current_page, nil)
+          |> assign(:page_title, ws.name)
+          |> push_patch(to: ~p"/w/#{ws.slug}")
+
+        _ ->
+          socket
+      end
+
+    {:noreply, socket}
+  end
+  #+end_src
+
+- Keep the broader =handle_info(_, socket), do: {:noreply, socket}= catch-all that already exists at the bottom of the module (or add one if missing) so unrelated broadcasts (block_*) routed to this LV are silently ignored.
+
+Satisfies scenarios 3 and 4. Scenario 2 is satisfied by the existing component implementation; the test merely exercises it.
+
+* Edge Cases
+- *Same user editing in two tabs* — the broadcast notification's ~actor.id == current_user.id~. We do *not* filter by self for page broadcasts because the ~PageHeader~ component already updates *its own* ~@page~ assign via ~save_title~; the parent WorkspaceLive needs the broadcast to refresh sidebar/tab title regardless of origin.
+- *Renaming a non-current page from the sidebar* — only sidebar refresh applies; ~current_page~ branch falls through to ~_~.
+- *Title set to whitespace or only emoji* — the existing ~Pages.rename_page~ accepts any string; the placeholder CSS handles empty via ~:empty~. No additional sanitisation in this fix.
+- *Concurrent rename + delete* — if a peer archives the page while we are typing, the ~page_archived~ branch redirects us to the workspace root.
+
+* Acceptance Criteria
+1. Manual: clicking the title at =/w/:slug/p/:id= places the cursor inside it; typing edits in place; pressing Enter (or clicking out) saves; the new title appears in the browser tab and in the sidebar tree without a page reload.
+2. Manual: editing the title in one browser tab updates a second tab viewing the same page within ~1 s (LiveView channel delivery time).
+3. Test: ~mix test test/concept_web/live/page_header_test.exs~ passes for scenarios 1–5.
+4. ~grep -n ":ash_pubsub" lib/concept_web/live/workspace_live.ex~ returns no matches.
+5. ~mix precommit~ passes with no new warnings.
+
+** Completion [2026-05-05]
+
+*** Verification
+- mix test test/concept_web/live/page_header_test.exs — 5 tests, 0 failures (covers all 5 BUG-003 scenarios)
+- Title element is contenteditable with phx-hook="ContentEditable"
+- save_title updates page in DB and propagates to rendered output
+- Empty title falls back to "Untitled" placeholder via CSS ::before
+- PageHeader live_component renders with proper id
+
+*** Artifacts
+- [[file:!tasks/plans/plan-artifacts/PLAN-002-fix-editor-ux-edit-bars-enter-inserts-bl/test-results.txt][Test results: 16 tests, 0 failures]]
+
+*** Changes
+- lib/concept_web/live/workspace_live.ex: Replaced inline <h1> with <.live_component module={ConceptWeb.Components.PageHeader}>; deleted dead :ash_pubsub clause; added correct %Phoenix.Socket.Broadcast handler for page_created/updated/archived/restored
+- lib/concept_web/components/page_header.ex: Added id={@id}, phx-hook, phx-target to root div
+- lib/concept/pages/page.ex: Added allow_empty?: true constraint to title attribute

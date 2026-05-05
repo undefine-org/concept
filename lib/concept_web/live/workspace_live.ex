@@ -51,7 +51,8 @@ defmodule ConceptWeb.WorkspaceLive do
            pages: pages,
            current_page: nil,
            page_title: ws.name,
-           show_palette: false
+           show_palette: false,
+           presence_users: []
          )}
 
       {:error, _} ->
@@ -79,7 +80,8 @@ defmodule ConceptWeb.WorkspaceLive do
                pages: pages,
                current_page: page,
                page_title: page.title,
-               show_palette: false
+               show_palette: false,
+               presence_users: []
              )}
 
           _ ->
@@ -101,18 +103,6 @@ defmodule ConceptWeb.WorkspaceLive do
     case Accounts.Workspace.by_slug(slug, actor: user) do
       {:ok, ws} when not is_nil(ws) -> {:ok, ws}
       _ -> {:error, :not_found}
-    end
-  end
-
-  @impl true
-  def handle_info({:ash_pubsub, event, _payload}, socket)
-      when event in ["page_created", "page_updated", "page_archived", "page_restored"] do
-    ws = socket.assigns.workspace
-    user = socket.assigns.current_user
-
-    case Pages.list_tree(actor: user, tenant: ws.id) do
-      {:ok, pages} -> {:noreply, assign(socket, :pages, pages)}
-      {:error, _} -> {:noreply, put_flash(socket, :error, "Failed to refresh pages")}
     end
   end
 
@@ -139,6 +129,41 @@ defmodule ConceptWeb.WorkspaceLive do
   def handle_info({:palette_navigate, page_id}, socket) do
     slug = socket.assigns.workspace.slug
     {:noreply, push_navigate(socket, to: ~p"/w/#{slug}/p/#{page_id}")}
+  end
+
+  @impl true
+  def handle_info(
+        %Phoenix.Socket.Broadcast{event: event, payload: notification},
+        socket
+      )
+      when event in ["page_created", "page_updated", "page_archived", "page_restored"] do
+    ws = socket.assigns.workspace
+    user = socket.assigns.current_user
+
+    socket =
+      case Pages.list_tree(actor: user, tenant: ws.id) do
+        {:ok, pages} -> assign(socket, :pages, pages)
+        _ -> socket
+      end
+
+    socket =
+      case {event, notification, socket.assigns[:current_page]} do
+        {"page_updated", %{data: %{id: id} = page}, %{id: id}} ->
+          socket
+          |> assign(:current_page, page)
+          |> assign(:page_title, page.title)
+
+        {"page_archived", %{data: %{id: id}}, %{id: id}} ->
+          socket
+          |> assign(:current_page, nil)
+          |> assign(:page_title, ws.name)
+          |> push_patch(to: ~p"/w/#{ws.slug}")
+
+        _ ->
+          socket
+      end
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -316,14 +341,15 @@ defmodule ConceptWeb.WorkspaceLive do
         <% else %>
           <div class="ora-page-canvas">
             <.presence_bar users={@presence_users} />
-            <h1 class="text-4xl font-bold mb-4">
-              {@current_page.icon_emoji || "📄"}
-              {if @current_page.title == "" || is_nil(@current_page.title),
-                do: "Untitled",
-                else: @current_page.title}
-            </h1>
+            <.live_component
+              module={ConceptWeb.Components.PageHeader}
+              id={"page-header-#{@current_page.id}"}
+              page={@current_page}
+              current_user={@current_user}
+            />
             {live_render(@socket, ConceptWeb.PageEditorLive,
               id: "page-editor-#{@current_page.id}",
+              container: {:div, phx_hook: "PageEditor"},
               session: %{
                 "workspace_id" => @workspace.id,
                 "page_id" => @current_page.id,

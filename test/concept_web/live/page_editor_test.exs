@@ -1,0 +1,201 @@
+defmodule ConceptWeb.PageEditorTest do
+  use ConceptWeb.ConnCase, async: false
+  import Phoenix.LiveViewTest
+
+  alias Concept.Accounts
+  alias Concept.Pages
+  alias Concept.Repo
+  import Ecto.Query
+
+  setup %{conn: conn} do
+    {:ok, user} =
+      Concept.Accounts.User
+      |> Ash.Changeset.for_create(:register_with_password, %{
+        email: "palette#{System.unique_integer([:positive])}@example.com",
+        password: "passw0rd!",
+        password_confirmation: "passw0rd!"
+      })
+      |> Ash.create(authorize?: false)
+
+    # Confirm user directly
+    Repo.update_all(
+      from(u in Concept.Accounts.User, where: u.id == ^user.id),
+      set: [confirmed_at: DateTime.utc_now()]
+    )
+
+    # Sign in to get token
+    {:ok, signed_in} =
+      Concept.Accounts.User
+      |> Ash.Query.for_read(:sign_in_with_password, %{email: user.email, password: "passw0rd!"})
+      |> Ash.read_one(authorize?: false)
+
+    conn =
+      conn
+      |> Phoenix.ConnTest.init_test_session(%{})
+      |> Plug.Conn.put_session("user_token", signed_in.__metadata__.token)
+
+    {:ok, [ws]} = Accounts.Workspace.for_user(user.id, actor: user)
+    {:ok, page} = Pages.create_page("Roadmap", ws.id, nil, actor: user, tenant: ws.id)
+    _ = Pages.create_page("Meeting Notes", ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, conn: conn, user: user, ws: ws, page: page}
+  end
+
+  # ── BUG-001 ──────────────────────────────────────────────────────────
+
+  test "block-handle renders per text block", %{conn: conn, ws: ws, page: page, user: user} do
+    {:ok, _block} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    assert has_element?(view, "ora-block-handle")
+
+    {:ok, _block2} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view2, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    handles = LazyHTML.query(LazyHTML.from_fragment(render(view2)), "ora-block-handle")
+    assert Enum.count(handles) == 2
+  end
+
+  test "format toolbar renders exactly once on page", %{conn: conn, ws: ws, page: page, user: user} do
+    # 0 blocks
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+    toolbars = LazyHTML.query(LazyHTML.from_fragment(render(view)), "ora-format-toolbar")
+    assert Enum.count(toolbars) == 1
+
+    # 1 block
+    {:ok, _} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view2, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+    toolbars2 = LazyHTML.query(LazyHTML.from_fragment(render(view2)), "ora-format-toolbar")
+    assert Enum.count(toolbars2) == 1
+
+    # 2 blocks
+    {:ok, _} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view3, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+    toolbars3 = LazyHTML.query(LazyHTML.from_fragment(render(view3)), "ora-format-toolbar")
+    assert Enum.count(toolbars3) == 1
+  end
+
+  test "handle row layout class present", %{conn: conn, ws: ws, page: page, user: user} do
+    {:ok, _} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    assert has_element?(view, ".ora-block-row")
+  end
+
+  # ── BUG-002 ──────────────────────────────────────────────────────────
+
+  test "insert_paragraph_below creates new block at tail", %{conn: conn, ws: ws, page: page, user: user} do
+    {:ok, block} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    view
+    |> find_live_child("page-editor-#{page.id}")
+    |> render_hook("insert_paragraph_below", %{"block_id" => block.id})
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    assert length(blocks) == 2
+    new_block = Enum.find(blocks, &(&1.id != block.id))
+    assert new_block.position > block.position
+
+    new_block_id = new_block.id
+    assert_push_event(view, "focus_block_caret", %{block_id: new_block_id, position: "start"})
+  end
+
+  test "insert_paragraph_below between siblings", %{conn: conn, ws: ws, page: page, user: user} do
+    {:ok, block_a} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, block_b} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    view
+    |> find_live_child("page-editor-#{page.id}")
+    |> render_hook("insert_paragraph_below", %{"block_id" => block_a.id})
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    assert length(blocks) == 3
+    new_block = Enum.find(blocks, &(&1.id != block_a.id && &1.id != block_b.id))
+    assert new_block.position > block_a.position
+    assert new_block.position < block_b.position
+  end
+
+  test "nav_block down focuses next block", %{conn: conn, ws: ws, page: page, user: user} do
+    {:ok, block1} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, block2} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    block2_id = block2.id
+
+    view
+    |> find_live_child("page-editor-#{page.id}")
+    |> render_hook("nav_block", %{"direction" => "down", "block_id" => block1.id})
+
+    assert_push_event(view, "focus_block_caret", %{block_id: block2_id, position: "start"})
+  end
+
+  test "nav_block up focuses previous block", %{conn: conn, ws: ws, page: page, user: user} do
+    {:ok, block1} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, block2} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    block1_id = block1.id
+
+    view
+    |> find_live_child("page-editor-#{page.id}")
+    |> render_hook("nav_block", %{"direction" => "up", "block_id" => block2.id})
+
+    assert_push_event(view, "focus_block_caret", %{block_id: block1_id, position: "end"})
+  end
+
+  test "nav_block up at first block is no-op", %{conn: conn, ws: ws, page: page, user: user} do
+    {:ok, block1} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    view
+    |> find_live_child("page-editor-#{page.id}")
+    |> render_hook("nav_block", %{"direction" => "up", "block_id" => block1.id})
+
+    refute_push_event(view, "focus_block_caret", %{}, 100)
+  end
+
+  test "delete_block_merge archives empty block and focuses previous", %{conn: conn, ws: ws, page: page, user: user} do
+    {:ok, block1} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, block2} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    view
+    |> find_live_child("page-editor-#{page.id}")
+    |> render_hook("delete_block_merge", %{"block_id" => block2.id})
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    assert length(blocks) == 1
+
+    block1_id = block1.id
+    assert_push_event(view, "focus_block_caret", %{block_id: block1_id, position: "end"})
+  end
+
+  test "delete_block_merge on only block is no-op", %{conn: conn, ws: ws, page: page, user: user} do
+    {:ok, block} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    view
+    |> find_live_child("page-editor-#{page.id}")
+    |> render_hook("delete_block_merge", %{"block_id" => block.id})
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    assert length(blocks) == 1
+  end
+
+  test "block_created does not produce duplicates", %{conn: conn, ws: ws, page: page, user: user} do
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    view
+    |> find_live_child("page-editor-#{page.id}")
+    |> render_hook("add_first_block", %{})
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    assert length(blocks) == 1
+
+    doc = LazyHTML.from_fragment(render(view))
+    block_els = LazyHTML.query(doc, "ora-block")
+    assert Enum.count(block_els) == 1
+  end
+end

@@ -28,6 +28,35 @@ export const BlockEditor = {
     this.el.addEventListener("ora-block-blur", this._onBlur);
     this.el.addEventListener("ora-block-change", this._onChange);
 
+    // Keyboard listeners
+    this._onArrowUp = (e) => {
+      this.pushEvent("nav_block", { direction: "up", block_id: this.el.getAttribute("block-id") });
+    };
+    this._onArrowDown = (e) => {
+      this.pushEvent("nav_block", { direction: "down", block_id: this.el.getAttribute("block-id") });
+    };
+    this._onEnterAtEnd = (e) => {
+      this.pushEvent("insert_paragraph_below", { block_id: this.el.getAttribute("block-id") });
+    };
+    this._onBackspaceAtStart = (e) => {
+      this.pushEvent("delete_block_merge", { block_id: this.el.getAttribute("block-id") });
+    };
+    this.el.addEventListener("ora-block-arrow-up", this._onArrowUp);
+    this.el.addEventListener("ora-block-arrow-down", this._onArrowDown);
+    this.el.addEventListener("ora-block-enter-at-end", this._onEnterAtEnd);
+    this.el.addEventListener("ora-block-backspace-at-start", this._onBackspaceAtStart);
+
+    // Handle server-pushed focus_block_caret event
+    this.handleEvent("focus_block_caret", ({ block_id, position }) => {
+      if (block_id === this.el.getAttribute("block-id")) {
+        if (position === "start") {
+          this.el.focusStart?.();
+        } else if (position === "end") {
+          this.el.focusEnd?.();
+        }
+      }
+    });
+
     // Server-pushed events
     this.handleEvent("lock_granted", ({ block_id }) => {
       if (block_id === this.el.getAttribute("block-id")) {
@@ -93,5 +122,9 @@ export const BlockEditor = {
     this.el.removeEventListener("ora-block-focus", this._onFocus);
     this.el.removeEventListener("ora-block-blur", this._onBlur);
     this.el.removeEventListener("ora-block-change", this._onChange);
+    this.el.removeEventListener("ora-block-arrow-up", this._onArrowUp);
+    this.el.removeEventListener("ora-block-arrow-down", this._onArrowDown);
+    this.el.removeEventListener("ora-block-enter-at-end", this._onEnterAtEnd);
+    this.el.removeEventListener("ora-block-backspace-at-start", this._onBackspaceAtStart);
   },
 };

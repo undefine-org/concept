@@ -12,7 +12,7 @@ defmodule ConceptWeb.PageEditorLive do
     page_id = session["page_id"]
     user_id = session["user_id"]
 
-    user = socket.assigns[:current_user] || %{id: user_id}
+    user = socket.assigns[:current_user] || %{id: user_id, email: session["user_email"] || "unknown"}
     ws = %{id: ws_id}
 
     Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws_id}:page:#{page_id}:blocks")
@@ -45,7 +45,7 @@ defmodule ConceptWeb.PageEditorLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="space-y-1">
+    <div class="space-y-1 relative">
       <ul :if={@blocks != []} class="space-y-1">
         <li :for={b <- @blocks}>
           <ConceptWeb.BlockRender.block block={b} />
@@ -59,6 +59,7 @@ defmodule ConceptWeb.PageEditorLive do
           + Click to add your first block
         </button>
       </div>
+      <ora-format-toolbar id="page-format-toolbar" />
     </div>
     """
   end
@@ -140,6 +141,108 @@ defmodule ConceptWeb.PageEditorLive do
   end
 
   @impl true
+  def handle_event("insert_paragraph_below", %{"block_id" => source_id}, socket) do
+    user = socket.assigns.current_user
+    ws_id = socket.assigns.workspace.id
+    page_id = socket.assigns.page_id
+    blocks = socket.assigns.blocks
+
+    source_idx = Enum.find_index(blocks, &(&1.id == source_id))
+
+    socket =
+      if source_idx do
+        source = Enum.at(blocks, source_idx)
+        next_block = Enum.at(blocks, source_idx + 1)
+
+        position =
+          if next_block do
+            Concept.Pages.FractionalIndex.between(source.position, next_block.position)
+          else
+            Concept.Pages.FractionalIndex.after_(source.position)
+          end
+
+        case Pages.create_block(page_id, :paragraph, ws_id, nil,
+               %{position: position}, actor: user, tenant: ws_id) do
+          {:ok, new_block} ->
+            push_event(socket, "focus_block_caret", %{
+              block_id: new_block.id,
+              position: "start"
+            })
+
+          {:error, _error} ->
+            socket
+        end
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("nav_block", %{"direction" => direction, "block_id" => block_id}, socket) do
+    blocks = socket.assigns.blocks
+    idx = Enum.find_index(blocks, &(&1.id == block_id))
+
+    socket =
+      cond do
+        is_nil(idx) ->
+          socket
+
+        direction == "down" && idx < length(blocks) - 1 ->
+          next = Enum.at(blocks, idx + 1)
+          push_event(socket, "focus_block_caret", %{block_id: next.id, position: "start"})
+
+        direction == "up" && idx > 0 ->
+          prev = Enum.at(blocks, idx - 1)
+          push_event(socket, "focus_block_caret", %{block_id: prev.id, position: "end"})
+
+        true ->
+          socket
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("delete_block_merge", %{"block_id" => block_id}, socket) do
+    user = socket.assigns.current_user
+    ws_id = socket.assigns.workspace.id
+    blocks = socket.assigns.blocks
+
+    idx = Enum.find_index(blocks, &(&1.id == block_id))
+
+    socket =
+      cond do
+        # No-op if only block or not found
+        is_nil(idx) or length(blocks) <= 1 ->
+          socket
+
+        true ->
+          block = Enum.at(blocks, idx)
+
+          case Pages.archive_block(block, actor: user, tenant: ws_id) do
+            {:ok, _archived} ->
+              previous_block = Enum.at(blocks, idx - 1)
+
+              if previous_block do
+                push_event(socket, "focus_block_caret", %{
+                  block_id: previous_block.id,
+                  position: "end"
+                })
+              else
+                socket
+              end
+
+            {:error, _error} ->
+              socket
+          end
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info(
         %Phoenix.Socket.Broadcast{event: "block_updated", payload: notification},
         socket
@@ -184,8 +287,17 @@ defmodule ConceptWeb.PageEditorLive do
         socket
       ) do
     block = notification.data
-    blocks = socket.assigns.blocks ++ [block]
-    {:noreply, assign(socket, :blocks, blocks)}
+    current_user_id = socket.assigns.current_user.id
+
+    # Skip self-broadcast (we already added the block in add_first_block etc.)
+    # Also skip if block already exists in the list
+    if notification.actor_id == current_user_id or
+         Enum.any?(socket.assigns.blocks, &(&1.id == block.id)) do
+      {:noreply, socket}
+    else
+      blocks = socket.assigns.blocks ++ [block]
+      {:noreply, assign(socket, :blocks, blocks)}
+    end
   end
 
   @impl true
