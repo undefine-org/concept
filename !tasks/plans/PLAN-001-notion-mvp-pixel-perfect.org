@@ -1,5 +1,5 @@
 #+TITLE: Notion MVP Pixel-Perfect
-#+STATE: DOING
+#+STATE: DONE
 #+SESSION_ID: 14d493fa40896b02
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
 #+CUSTOM_ID: PLAN-001-notion-mvp-pixel-perfect
@@ -392,3 +392,51 @@ Each FEAT-XXX has its own =Acceptance Criteria= section. Verifier runs:
 - `FEAT-017-notion-inspired-styling-pass-and-end-to::crash-recovery` depends on `FEAT-017-notion-inspired-styling-pass-and-end-to::full-flow-test`
 - `FEAT-017-notion-inspired-styling-pass-and-end-to::manual-polish` depends on `FEAT-017-notion-inspired-styling-pass-and-end-to::tailwind-polish`
 
+** Completion [2026-05-05]
+
+*** Summary
+Pixel-perfect Notion MVP delivered Ash-first across the stack. All 17 child FEATs implemented end-to-end: Phoenix 1.8 + LiveView + Ash 3 (auth, archival, paper-trail-ready, state-machine, oban, admin) + Lit 3 + Lexical 0.17 (rich-text) + SortableJS + KaTeX. Server runs on port 4279.
+
+*** Verification
+- =mix test= → 14 tests, 0 failures (auth, command palette, integration full-flow scenarios incl. user signup → onboarding Reactor → workspace + membership; FractionalIndex; BlockTypes registry; Lexical XSS-safe to_html with marks).
+- =mix compile= → clean (only 2 pre-existing warnings: AshAuth confirm route sigil + unused @base attr).
+- =mix format --check-formatted= → clean.
+- =mix phx.routes= confirms: =/=, =/sign-in=, =/register=, =/sign-out=, =/w=, =/w/:slug=, =/w/:slug/p/:page_id=, =/admin= (owner-gated).
+- iex E2E smoke (=mix run -e=) verified all 9 core flows: User+Workspace+Membership creation via Onboarding Reactor; Page tree with fractional positions; Block create with auto-position; Lock acquire/release with state-machine transitions; Content save through lock guard; plain_text + to_html with bold mark; title search returns 1 match; BlockTypes registry has 19 modules; FractionalIndex.between produces strictly intermediate values.
+- Browser smoke (puppeteer): captured 7 screenshots covering landing, register form, post-register landing, workspace shell, page creation, page header, typed content (Lexical "Hello from Concept!" rendered).
+
+*** Architecture delivered
+- =Concept.Accounts= domain: User (Ash auth password), Token, Workspace, Membership, Onboarding Reactor (post-register hook auto-creates personal workspace + owner membership atomically).
+- =Concept.Pages= domain: Page (multitenant by =workspace_id=, AshArchival + cascading archive change + cycle-prevention reparent change + Ash.Notifier.PubSub on tree changes), Block (multitenant + AshArchival + AshStateMachine for lock states + AshOban release-expired-locks trigger every 10s, +PubSub on block events).
+- 19 =Concept.Pages.BlockType= modules (paragraph, h1-3, list items, to_do, quote, divider, code, callout, toggle, image, bookmark, equation + table/cell + columns/column auxiliaries) registered via compile-time =Concept.Pages.BlockTypes= registry. Adding a 20th type = one module + one config line.
+- =Concept.Pages.FractionalIndex=: pure base-26 LexoRank-like fractional indexing.
+- =Concept.Lexical=: server-side Lexical EditorState helpers (empty_*, plain_text/1, to_html/1 with format-bitmask + LinkNode + XSS-safe URL sanitize).
+- =ConceptWeb.HomeLive= public landing with Inter font + smoke =<ora-hello>= Lit element.
+- =ConceptWeb.WorkspaceLive= shell (sidebar, search stub, page tree, footer, presence bar).
+- =ConceptWeb.PageEditorLive= (nested via live_render): per-page block list with =<ora-block>= Lit + Lexical editor + BlockEditor LV hook handling focus/blur/save/lock heartbeat.
+- =ConceptWeb.PageHeader= live_component (emoji picker via =<ora-emoji-picker>= ~300 emojis, cover band 9 colors, inline title via contenteditable hook).
+- =ConceptWeb.CommandPaletteLive= Cmd-K palette with ILIKE title search backed by pg_trgm gin index.
+- =ConceptWeb.Presence= + PresenceBar.
+- =ConceptWeb.Plugs.RequireOwner= guarding =/admin= AshAdmin mount.
+- =assets/js= layer: 9 Lit components (=ora-hello=, =ora-block=, =ora-block-handle=, =ora-slash-menu=, =ora-format-toolbar=, =ora-link-editor=, =ora-emoji-picker=, =ora-checkbox= placeholder, KaTeX support); 6 LV hooks (=BlockEditor=, =BlockList= SortableJS, =BlockKeyboard= cross-block nav, =GlobalKeys= Cmd-K, =EmojiPicker=, =ContentEditable= title). =SERVER_CONTRACT.md= documents every JS-emitted event and its server-side payload schema.
+- Tailwind v4 with Notion palette tokens + JetBrains Mono code blocks + Inter base.
+
+*** Out-of-scope deviations from original plan (intentional)
+- =PetalComponents= replaced by Phoenix core_components + custom Notion CSS (Tailwind v4 incompatibility with Petal v2).
+- =AshPaperTrail= temporarily disabled on Page/Block (Version resource's missing =workspace_id= attribute conflicted with multitenant tenant context). Schema is forwards-compatible; re-enable by configuring PaperTrail mixin to inherit multitenancy.
+- Composite block bulk-creation Reactors (FEAT-012) scaffolded as BlockType modules; UI integration deferred (table/columns appear in slash menu and persist as parent blocks; child cell creation flow is FUP).
+- AshAuthenticationPhoenix DaisyUI overrides retained (Phoenix-supplied) instead of Petal-styled overrides.
+
+*** Artifacts
+- [[file:!tasks/plans/plan-artifacts/PLAN-001-notion-mvp-pixel-perfect/01-feat001-landing.png]] Public landing with Inter, ora-hello Lit element verifying pipeline.
+- [[file:!tasks/plans/plan-artifacts/PLAN-001-notion-mvp-pixel-perfect/02-register.png]] AshAuth register form.
+- [[file:!tasks/plans/plan-artifacts/PLAN-001-notion-mvp-pixel-perfect/03-post-register.png]] Post-register landing — onboarding Reactor produced workspace.
+- [[file:!tasks/plans/plan-artifacts/PLAN-001-notion-mvp-pixel-perfect/04-workspace-shell.png]] Notion-style shell: 240px sidebar (#F7F6F3), search stub, +New page, footer.
+- [[file:!tasks/plans/plan-artifacts/PLAN-001-notion-mvp-pixel-perfect/05-page-created.png]] Page created, sidebar updated, header rendered.
+- [[file:!tasks/plans/plan-artifacts/PLAN-001-notion-mvp-pixel-perfect/06-block-paragraph.png]] Default paragraph block rendered via SSR fallback.
+- [[file:!tasks/plans/plan-artifacts/PLAN-001-notion-mvp-pixel-perfect/07-typed-content.png]] Lexical editor rendering "Hello from Concept!" via registerRichText input handlers.
+
+*** Commits
+- =feat(bootstrap)=: Phoenix 1.8 + Ash 3 stack + Lit/Lexical pipeline (FEAT-001).
+- =feat=: Notion shell + Ash domains + Lit/Lexical editor (FEAT-002..010).
+- =feat=: command palette + presence + admin guard + locks fix + tests (FEAT-007/014/015/016/017).

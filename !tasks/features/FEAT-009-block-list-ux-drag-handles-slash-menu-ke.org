@@ -1,5 +1,5 @@
 #+TITLE: Block list UX drag handles slash menu keyboard nav
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14d493fa40896b02
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
 #+CUSTOM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke

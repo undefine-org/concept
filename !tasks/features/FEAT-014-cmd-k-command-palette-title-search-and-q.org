@@ -1,5 +1,5 @@
 #+TITLE: Cmd-K command palette title search and quick actions
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14d493fa40896b02
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
 #+CUSTOM_ID: FEAT-014-cmd-k-command-palette-title-search-and-q
