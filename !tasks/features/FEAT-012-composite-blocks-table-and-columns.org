@@ -1,0 +1,134 @@
+#+TITLE: Composite blocks table and columns
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-012-composite-blocks-table-and-columns
+#+DEPENDS: FEAT-010-remaining-simple-block-types-via-blockty
+#+EFFORT: 1.5d
+#+LAYER: ui
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Implement Notion-style =:table= and =:columns= as container BlockType modules that compose existing simple blocks via =parent_block_id=. Use Ash =bulk_create= so inserting a 2-column or 3×3 table is a single transaction. Drag handles work within composite child slots.
+
+* Context & Narrative
+This proves the BlockType registry handles composites without changing the Block resource. Tables here are the *layout* table block (rows of cells of paragraphs), not the Notion "database" feature (out of scope, FUP).
+
+* Scope
+** In-scope
+- =Concept.Pages.BlockTypes.Table= module:
+  - =container?/0 → true=
+  - =default_props/0 → %{rows: 2, cols: 2, has_header_row: true, column_widths: [200, 200]}=
+  - =default_content/0 → %{}= (cells live as child blocks)
+  - On =:create_block= for type =:table=, =Concept.Pages.Blocks.create_table_with_cells/2= runs in a Reactor (or Ash multi-action change) that:
+    - Creates the parent table block
+    - Bulk-creates =rows × cols= paragraph child blocks via =Ash.bulk_create=, each with =parent_block_id=table.id=, type =:table_cell= (which is itself a BlockType wrapping paragraph behavior)
+  - Cells use a thin =:table_cell= BlockType (also added in this FEAT) that wraps paragraph; its render_static is =<td>= rather than =<p>=
+- =Concept.Pages.BlockTypes.Columns= module:
+  - =container?/0 → true=
+  - =default_props/0 → %{count: 2, ratios: [0.5, 0.5]}=
+  - On creation, bulk-creates =:column= child blocks; each column is itself a container that holds simple blocks
+- =Concept.Pages.BlockTypes.TableCell= and =Column= modules (auxiliary container types)
+- =assets/js/components/ora-table.js= Lit element: renders =<table>= grid; resize handles between columns adjust =props.column_widths=; Tab/Shift-Tab navigate cells; Enter inside cell breaks line; ArrowRight at end of cell jumps to next cell
+- =assets/js/components/ora-columns.js= Lit element: flexbox row; resize divider between columns adjusts ratios; each column slot accepts dropped blocks
+- BlockList hook nesting: each container block emits its own =<ul phx-hook="BlockList">= scoped to its children; SortableJS allows cross-list drag for reparenting (already supported in FEAT-009)
+- Slash menu groups: Table + Columns appear under =:advanced= group
+
+** Out-of-scope
+- Notion databases (table-as-database with property schemas) — FUP
+- Cell merging / row spans — FUP
+- Column type sorting/filtering — FUP
+
+* Existing Patterns
+- =Ash.bulk_create=: =Ash.bulk_create(records, Block, :create_block, return_records?: true)=
+- =Reactor= for atomic create-with-children
+- =@lexical/table= node — NOT used; we use child Block records instead so table cells remain first-class blocks (lockable, paper-trailed). Each cell hosts its own =<ora-block>= editor.
+
+* Tests
+File: =test/concept/pages/block_types/table_test.exs=, =columns_test.exs=, =test/concept_web/live/composite_blocks_test.exs=.
+
+Scenarios:
+1. =:table= create with rows=2 cols=2 produces 1 parent + 4 cell child blocks in one transaction; failing the bulk insert rolls back the parent.
+2. Adding a row → bulk_create N cells with new row index in props (cells are ordered by =position= and assigned =props.row_index=, =props.col_index=).
+3. Resizing column updates =table.props.column_widths=.
+4. =:columns= create with count=3 produces 1 parent + 3 child column blocks.
+5. Dragging a paragraph into a column slot reparents it; =parent_block_id= updates; =workspace_id= preserved.
+6. Tab in cell N moves caret to cell N+1; if at last cell of last row, creates new row.
+7. Archiving the parent table archives all cells in cascade (AshArchival default does NOT cascade — explicit change implements it).
+8. Locking cell A by user A does not lock cell B; user B can edit cell B simultaneously.
+
+* Implementation
+** ITEM TableCell + Column auxiliary BlockTypes
+:PROPERTIES:
+:CUSTOM_ID: FEAT-012-composite-blocks-table-and-columns::cell-column-types
+:END:
+- =Concept.Pages.BlockTypes.TableCell=: like paragraph but =render_static= uses =<td>=; =container?/0 false=. Props: =%{row_index, col_index}=.
+- =Concept.Pages.BlockTypes.Column=: =container?/0 true=; props =%{ratio: float()}=; render =<div class="column" style="flex: {ratio}">{children}</div>=.
+
+** ITEM Table BlockType + bulk creation
+:PROPERTIES:
+:CUSTOM_ID: FEAT-012-composite-blocks-table-and-columns::table-create
+:DEPENDS: FEAT-012-composite-blocks-table-and-columns::cell-column-types
+:END:
+- =Concept.Pages.BlockTypes.Table= module + =Concept.Pages.Reactors.CreateTable= reactor:
+  1. create parent =:table= block
+  2. bulk_create cells (=rows × cols=) with =:bypass_archived_filter= true and shared =workspace_id=
+- Action =:create_table= on Block resource (custom action wrapping Reactor invocation) so code_interface =create_table!/1= exists.
+- Tests assert atomic rollback.
+
+** ITEM Columns BlockType
+:PROPERTIES:
+:CUSTOM_ID: FEAT-012-composite-blocks-table-and-columns::columns-create
+:DEPENDS: FEAT-012-composite-blocks-table-and-columns::cell-column-types
+:END:
+- =Concept.Pages.BlockTypes.Columns= module + Reactor =Concept.Pages.Reactors.CreateColumns=.
+- Default ratios computed evenly (=List.duplicate(1.0/count, count)=).
+
+** ITEM Lit ora-table component
+:PROPERTIES:
+:CUSTOM_ID: FEAT-012-composite-blocks-table-and-columns::ora-table
+:DEPENDS: FEAT-012-composite-blocks-table-and-columns::table-create
+:END:
+- Renders grid via =<table>=; cells render =<td><ora-block ...></ora-block></td>= for each child cell.
+- Tab navigation: listens to keydown, prevents default, pushes =:focus_block= to next cell.
+- Resize handles between columns: emit =:set_column_width= event → server updates table.props.column_widths.
+
+** ITEM Lit ora-columns component
+:PROPERTIES:
+:CUSTOM_ID: FEAT-012-composite-blocks-table-and-columns::ora-columns
+:DEPENDS: FEAT-012-composite-blocks-table-and-columns::columns-create
+:END:
+- Flexbox row; per column a =<ul phx-hook="BlockList">= for nested DnD.
+- Resize divider drag adjusts ratios live; commit on mouseup via server event.
+
+** ITEM Cascade archive change
+:PROPERTIES:
+:CUSTOM_ID: FEAT-012-composite-blocks-table-and-columns::cascade-archive
+:DEPENDS: FEAT-012-composite-blocks-table-and-columns::table-create FEAT-012-composite-blocks-table-and-columns::columns-create
+:END:
+- =Concept.Pages.Changes.CascadeArchiveDescendants= attached to =:archive= action on Block resource — when a container is archived, recursively archive children.
+- Same semantics as FEAT-004 page cascade.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-012-composite-blocks-table-and-columns::tests
+:DEPENDS: FEAT-012-composite-blocks-table-and-columns::cascade-archive FEAT-012-composite-blocks-table-and-columns::ora-table FEAT-012-composite-blocks-table-and-columns::ora-columns
+:END:
+- All 8 scenarios across the three test files.
+
+* Edge Cases
+- Empty row deletion: archiving any cell does not delete the row; row deletion is a separate UI action that archives all cells in that row.
+- Adding column to wide table: bulk_create one cell per existing row; positions interleaved via fractional indexing.
+- Drag block into column already at capacity: no capacity limit; columns scroll vertically.
+- Resize ratio < 10%: clamp to 0.1 minimum; UI snaps.
+- Concurrent table rebuild from two users (rare): last-writer wins on column_widths; cells unaffected.
+- Locking a row cell during edit doesn't block resize on column (resize updates parent props, separate row).
+
+* Acceptance Criteria
+- =mix test test/concept/pages/block_types/{table,columns}_test.exs test/concept_web/live/composite_blocks_test.exs= green (8 scenarios)
+- =Concept.Pages.create_table!/1= produces atomic table+cells in iex; rollback works when forced bulk_create error
+- Slash menu shows Table + Columns under =:advanced=
+- =Concept.Pages.BlockTypes.all/0= length now 18 (paragraph + H1-3 + 11 simple + table + table_cell + columns + column)

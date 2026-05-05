@@ -1,0 +1,156 @@
+#+TITLE: Remaining simple block types via BlockType modules
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-010-remaining-simple-block-types-via-blockty
+#+DEPENDS: FEAT-009-block-list-ux-drag-handles-slash-menu-ke
+#+EFFORT: 1.5d
+#+LAYER: ui
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Implement 9 additional non-composite block types as plug-in =Concept.Pages.BlockType= modules: bulleted_list_item, numbered_list_item, to_do, quote, divider, code, callout, toggle, image, bookmark, equation. Adding them touches:
+- one Elixir module per type under =Concept.Pages.BlockTypes.*=
+- one config line appending the module to =:block_types=
+- (optional) Lit sub-components for non-text blocks (divider, image, bookmark, equation, to_do checkbox)
+
+The Block Ash resource, lock manager, slash menu, drag handles, and PubSub from prior FEATs are unchanged.
+
+* Context & Narrative
+Tests the extensibility claim: zero edits to =Concept.Pages.Block= or =BlockEditor= hook. Each new type registers default content + props + render + slash menu metadata; container blocks (toggle) override =container?/0= and the renderer descends.
+
+* Scope
+** In-scope
+- Modules: =BulletedListItem=, =NumberedListItem=, =ToDo=, =Quote=, =Divider=, =Code=, =Callout=, =Toggle=, =Image=, =Bookmark=, =Equation=. (11 modules — 14 total counting paragraph/H1-3 from FEAT-006.)
+- Lexical node types reused from =@lexical/list=, =@lexical/code=, =@lexical/link=. New custom Lexical nodes for: =DividerNode= (decorator, =isInline:false=), =CalloutNode= (element with prop =emoji=), =ToggleNode= (element with prop =open=, container), =ImageNode= (decorator), =BookmarkNode= (decorator), =EquationNode= (decorator using KaTeX), =CheckboxNode= (decorator inside paragraph for to_do).
+- Per-type props validation:
+  - =to_do=: =%{checked: boolean()}=
+  - =code=: =%{language: string()}= (constrained list: plain, javascript, typescript, elixir, python, ruby, html, css, json, markdown, sql, bash, rust, go)
+  - =callout=: =%{emoji: string(), color: ~w(default red ...)}=
+  - =toggle=: =%{open: boolean()}=, =container?: true=
+  - =image=: =%{url: string(), alt: string(), aspect_ratio: float() | nil}=
+  - =bookmark=: =%{url: string(), title: string() | nil, description: string() | nil, favicon_url: string() | nil}= (server-side metadata fetch is FUP — MVP just shows URL + favicon stub)
+  - =equation=: =%{tex: string()}=, render via KaTeX in Lit decorator
+  - =divider=: =%{}= empty
+  - lists: =%{}= empty (children handled by Lexical native list nodes)
+- Slash menu groups:
+  - =:basic= — Text, H1, H2, H3
+  - =:list= — Bulleted, Numbered, To-do
+  - =:media= — Image, Bookmark, Code, Equation, Divider
+  - =:advanced= — Quote, Callout, Toggle
+- BlockType.render_static/1 implementations for each type using HEEx; static fallback before JS upgrade
+- BlockType.slash_menu/0 entries
+- =assets/js/components/= sub-elements:
+  - =ora-checkbox.js= for to_do
+  - =ora-divider.js= (pure visual)
+  - =ora-image.js= (figure with URL paste affordance when empty)
+  - =ora-bookmark.js= (link card)
+  - =ora-equation.js= (KaTeX render)
+  - =ora-callout.js= (emoji + color background)
+  - =ora-toggle.js= (chevron + nested children slot via =<slot>=)
+- =assets/js/lexical/registry.js= extended to register all new nodes
+
+** Out-of-scope
+- Table + Columns (FEAT-012 — composite/grid layout)
+- Inline marks (FEAT-011)
+- Server-side bookmark metadata fetch (FUP)
+- Code syntax highlighting (FUP — display only, monospace font)
+
+* Existing Patterns
+- =Concept.Pages.BlockType= behaviour from FEAT-006
+- =Concept.Pages.BlockTypes= config registry
+- =@lexical/list= installs =ListNode=, =ListItemNode=
+- =@lexical/code= installs =CodeNode=, =CodeHighlightNode= (we keep highlighting off; node only)
+- KaTeX render: =katex.render(tex, element, {throwOnError: false})=
+
+* Tests
+File: =test/concept/pages/block_types/= one file per module + =test/concept_web/live/block_types_integration_test.exs=.
+
+Scenarios per type — at minimum:
+- =default_content/0= shape valid
+- =validate_props/1= rejects malformed props
+- =slash_menu/0= keys correct
+- Round-trip via Block resource: create with type, default content/props applied; updating valid props succeeds, invalid rejected
+- Render fallback HTML smoke
+
+Integration scenarios:
+1. Slash menu shows 14 items grouped into 4 sections matching =:basic/:list/:media/:advanced=.
+2. Inserting a =:to_do= renders checkbox; clicking checkbox pushes =:update_props= with =checked: true=; PaperTrail records change.
+3. Inserting a =:code= block with language switch via Petal Dropdown updates props.
+4. Inserting a =:callout= renders with emoji + colored background.
+5. Inserting a =:toggle= creates container; pressing Enter inside the toggle creates a child block with =parent_block_id=; toggle collapse hides children visually but preserves data.
+6. Inserting an =:image= shows URL input; pasting URL updates props.url and renders =<img>=.
+7. Inserting an =:equation= prompts TeX input; KaTeX renders inline.
+8. =:divider= block has zero text; selecting it shows handle but no editor.
+
+* Implementation
+** ITEM List + ToDo + Quote modules
+:PROPERTIES:
+:CUSTOM_ID: FEAT-010-remaining-simple-block-types-via-blockty::list-todo-quote
+:END:
+- 4 modules: BulletedListItem, NumberedListItem, ToDo, Quote.
+- Reuse =@lexical/list= and =@lexical/rich-text= QuoteNode in registry.
+- ToDo: custom Lit component =ora-checkbox= for the leading checkbox; updates props via LV event; remaining text uses paragraph editor.
+- Tests for each.
+
+** ITEM Divider + Code + Callout
+:PROPERTIES:
+:CUSTOM_ID: FEAT-010-remaining-simple-block-types-via-blockty::divider-code-callout
+:DEPENDS: FEAT-010-remaining-simple-block-types-via-blockty::list-todo-quote
+:END:
+- Divider: decorator Lexical node; static =<hr />=.
+- Code: text-bearing block with monospace font; props =language=; Petal Dropdown for language switch in block actions menu.
+- Callout: container-ish (single inline content) with emoji prop + color prop; renders =<aside class="callout callout-{color}"><span>{emoji}</span><div>{content}</div></aside>=.
+
+** ITEM Toggle (container)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-010-remaining-simple-block-types-via-blockty::toggle
+:DEPENDS: FEAT-010-remaining-simple-block-types-via-blockty::divider-code-callout
+:END:
+- =container?/0 → true=; toggle has its own paragraph content + nested children via =parent_block_id=.
+- =ora-toggle.js= renders chevron, header slot, children slot; clicking chevron toggles =props.open= (server update).
+- BlockList hook scope: nested ul rendered when =container? && open=.
+
+** ITEM Image + Bookmark + Equation
+:PROPERTIES:
+:CUSTOM_ID: FEAT-010-remaining-simple-block-types-via-blockty::media-blocks
+:DEPENDS: FEAT-010-remaining-simple-block-types-via-blockty::divider-code-callout
+:END:
+- Image: empty state shows URL paste input (Petal Field). Filled state shows =<img>= with aspect ratio container.
+- Bookmark: paste URL, server stores props as-is (no metadata fetch in MVP); render shows URL + favicon via =<img src="https://www.google.com/s2/favicons?domain=...">= as cheap stub (acceptable for MVP, doc as FUP for real fetch).
+- Equation: text input for TeX; Lit decorator renders via KaTeX library.
+
+** ITEM Slash menu grouping + sorting
+:PROPERTIES:
+:CUSTOM_ID: FEAT-010-remaining-simple-block-types-via-blockty::slash-menu-groups
+:DEPENDS: FEAT-010-remaining-simple-block-types-via-blockty::toggle FEAT-010-remaining-simple-block-types-via-blockty::media-blocks
+:END:
+- Update =BlockTypes.slash_menu_items/0= to return =[%{group, label, icon, ...}, ...]=; ora-slash-menu groups by =:group= preserving order =[:basic, :list, :media, :advanced]=.
+- Tests assert slash menu structure.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-010-remaining-simple-block-types-via-blockty::tests
+:DEPENDS: FEAT-010-remaining-simple-block-types-via-blockty::slash-menu-groups
+:END:
+- Per-module Ash test files (≥4 scenarios each).
+- Integration =block_types_integration_test.exs= covers 8 user-flow scenarios above.
+
+* Edge Cases
+- ToDo checkbox while another user holds lock: user sees clickable but server rejects =:update_props= with lock error.
+- Code block language list missing entry: server validation rejects unknown language.
+- Image URL invalid (not http/https): props validation rejects.
+- Bookmark URL with no protocol: prepend =https://=.
+- Toggle collapsed with children that hold locks elsewhere: locks unaffected; rendering hidden but lifecycle preserved.
+- Equation TeX with parse error: KaTeX renders error message inline; props persist as typed.
+- Divider in middle of paragraph (cursor on divider): keyboard nav passes through (treated as block-level).
+
+* Acceptance Criteria
+- =mix test test/concept/pages/block_types/= green (≥40 scenarios across 11 modules)
+- =mix test test/concept_web/live/block_types_integration_test.exs= green (8 scenarios)
+- =Concept.Pages.BlockTypes.all/0= length == 14 (paragraph + H1-3 from FEAT-006 + 11 from this FEAT)
+- Slash menu visually shows 4 groups; each item type round-trips through create → update → archive
+- Adding a hypothetical 15th type still requires: 1 module + 1 config line (verified by quick smoke addition during dev review)

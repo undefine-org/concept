@@ -1,0 +1,394 @@
+#+TITLE: Notion MVP Pixel-Perfect
+#+STATE: DOING
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: PLAN-001-notion-mvp-pixel-perfect
+#+EFFORT: 16d
+#+LAYER: plan
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Children
+- [[id:FEAT-001-bootstrap-phoenixashpetallitlexical]]
+- [[id:FEAT-002-user-resource-ash-authentication-email-p]]
+- [[id:FEAT-003-workspace-and-membership-resources]]
+- [[id:FEAT-004-page-resource-with-nested-tree-and-fract]]
+- [[id:FEAT-005-workspace-shell-liveview-with-sidebar-pa]]
+- [[id:FEAT-006-block-ash-resource-with-extensible-block]]
+- [[id:FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence]]
+- [[id:FEAT-008-lit-ora-block-web-component-with-lexical]]
+- [[id:FEAT-009-block-list-ux-drag-handles-slash-menu-ke]]
+- [[id:FEAT-010-remaining-simple-block-types-via-blockty]]
+- [[id:FEAT-011-inline-marks-bold-italic-underline-strik]]
+- [[id:FEAT-012-composite-blocks-table-and-columns]]
+- [[id:FEAT-013-page-metadata-ui-emoji-icon-cover-color]]
+- [[id:FEAT-014-cmd-k-command-palette-title-search-and-q]]
+- [[id:FEAT-015-realtime-sibling-render-presence-avatars]]
+- [[id:FEAT-016-ashadmin-mounted-at-admin-behind-owner-g]]
+- [[id:FEAT-017-notion-inspired-styling-pass-and-end-to]]
+
+* Context
+
+** Goal
+Ship an MVP of a Notion-inspired collaborative document workspace, Ash-first across the entire stack. Output: visitor signs up → personal workspace auto-created → can build nested page trees, edit pages with 14 block types using a Lexical-powered editor wrapped in Lit web components, format inline marks, drag-reorder blocks, search via Cmd-K, and collaborate in real time with paragraph-level locking + presence avatars. Light theme only, looser fidelity (Notion-inspired, not strictly pixel-exact).
+
+** Non-goals (explicit out-of-scope, deferred to FUP)
+- Notion databases (table/board/gallery views with property schemas)
+- Comments, mentions, reminders
+- Public sharing, ACLs beyond workspace membership, invite-by-email
+- File uploads (S3, local disk) — only emoji icons + color covers + URL-paste image/bookmark
+- Full-text search across block content (only title ILIKE in MVP)
+- Dark mode, mobile responsive, A11y full audit
+- Real CRDT (paragraph-level lock instead per AGENTS.md)
+- Templates, AI features, third-party integrations
+- Cross-block undo/redo (only within Lexical block instance)
+- Cell merging, code syntax highlighting, equation editor (renders KaTeX read-only output)
+
+** Settled design decisions
+1. *Stack*: Phoenix 1.8 + LiveView 1.0 + Elixir 1.19; Ash 3 + AshPostgres + AshAuthentication + AshAuthenticationPhoenix + AshPhoenix + AshArchival + AshPaperTrail + AshStateMachine + AshOban + AshAdmin; Postgres 16 (with pg_trgm, citext); Tailwind 3 + PetalComponents 2 for chrome; custom Lit 3 web components for editor; Lexical 0.17 (headless) + KaTeX for equations + SortableJS for drag.
+2. *Auth*: ash_authentication password strategy (email + password). No magic link, no OAuth.
+3. *Workspaces*: multi-workspace from day 1, single auto-created personal per user. Workspace-scoped sharing only — every workspace member sees every page. Switcher UI deferred.
+4. *Multitenancy*: Ash =multitenancy strategy: :attribute, attribute: :workspace_id= on Page + Block resources. All reads/writes auto-scoped.
+5. *Pages*: nested tree via =parent_page_id=; fractional indexing (LexoRank-like) on =position= so insertion never re-shuffles siblings; soft-delete via AshArchival; version history via AshPaperTrail.
+6. *Blocks*: ★ single =Concept.Pages.Block= Ash resource + =Concept.Pages.BlockType= behaviour + explicit-config registry. New type = one module + one config line. State machine for lock states (=:unlocked → :locked=). 14 user-facing types: paragraph, H1/H2/H3, bulleted, numbered, to-do, quote, divider, code, callout, toggle, image (URL), bookmark (URL), equation (KaTeX), plus 4 internal aux types (table, table_cell, columns, column) — registry total 18.
+7. *Editor*: one Lexical instance per block (=<ora-block>= Lit element). Cross-block keyboard nav via LV hook (=ArrowUp/Down=, =Enter at end=, =Backspace at start=). Inline marks (bold/italic/underline/strike/code/link) via Lexical native formats + floating Petal-styled toolbar.
+8. *Realtime*: paragraph-level lock via state machine; lease TTL 30s refreshed every 15s via heartbeat; AshOban trigger releases stale locks every 10s. Phoenix.PubSub for content broadcast; Phoenix.Presence for avatars on page topic =workspace:#{ws}:page:#{p}:presence=.
+9. *Onboarding*: Ash.Reactor =Concept.Accounts.Reactors.Onboarding= replaces =after_action= hook — atomic with compensations.
+10. *AshAdmin* mounted at =/admin= behind owner-only plug.
+11. *Search*: title-only ILIKE with pg_trgm gin index.
+
+** Architecture map
+- =Concept.Accounts= domain → User, Token, Workspace, Membership; AshAuthentication strategies; Onboarding Reactor
+- =Concept.Pages= domain → Page (multitenant), Block (multitenant + state machine), BlockType behaviour + BlockTypes registry, FractionalIndex, Lexical helpers
+- =ConceptWeb= → WorkspaceLive (shell), PageLive (nested via live_render), CommandPaletteLive, AuthOverrides, PresenceBar, PageHeader, PageTree, Sidebar
+- =assets/js= → Lit components (=ora-block=, =ora-block-handle=, =ora-slash-menu=, =ora-format-toolbar=, =ora-link-editor=, =ora-emoji-picker=, =ora-table=, =ora-columns=, =ora-toggle=, =ora-callout=, =ora-checkbox=, =ora-image=, =ora-bookmark=, =ora-equation=, =ora-divider=, =ora-presence-bar=); LV hooks (=BlockEditor=, =BlockList=, =BlockKeyboard=, =GlobalKeys=); Lexical registry/theme/state helpers
+
+* Verification
+
+** Per-FEAT verification
+Each FEAT-XXX has its own =Acceptance Criteria= section. Verifier runs:
+- =mix test= for that FEAT's test files (listed per item)
+- =cd assets && npm test -- <pattern>= for JS-bearing FEATs
+- =mix format --check-formatted=
+
+** Plan-level verification
+- =mix test --include integration= passes the FEAT-017 full-flow scenario (12-step happy path including multi-tab realtime)
+- =mix test= total: ≥80 server tests, ≥10 JS tests
+- =mix phx.server= dev boots with zero compiler warnings and zero JS console errors on landing
+- Adding a hypothetical 15th block type (e.g. =:audio=) demonstrably requires *only* one new module under =Concept.Pages.BlockTypes= + one append to =config :concept, :block_types= — verified by smoke commit during FEAT-017 review
+- =Concept.Pages.list_tree!(actor: user)= run by user A returns no pages from user B's workspace, even with =authorize?: false= (multitenancy enforcement)
+- AshOban release trigger demonstrably clears stale locks within 30s + 10s
+
+** Manual checkpoints
+- Sign-up → workspace exists → emoji + cover + title editable
+- All 14 user-facing block types insertable from slash menu, each rendering correctly
+- Inline marks toolbar appears on selection; Cmd-B/I/U/E/K work
+- Drag block between siblings, into toggle, into column slot — all persist
+- Two browsers, same page: presence avatars visible; locks visible; remote edits propagate without flicker
+- Cmd-K opens palette; "ro" finds "Roadmap"
+- =/admin= as owner shows resource browser; non-owner blocked
+
+* Execution Manifest
+** wave-1 :wave:
+- [[id:FEAT-001-bootstrap-phoenixashpetallitlexical::install-phoenix]] Install Phoenix+LiveView scaffold
+- [[id:FEAT-002-user-resource-ash-authentication-email-p::generate-accounts]] Generate Accounts domain + User + Token resources
+- [[id:FEAT-003-workspace-and-membership-resources::resources]] Generate Workspace + Membership resources
+- [[id:FEAT-004-page-resource-with-nested-tree-and-fract::fractional-index]] FractionalIndex pure module + tests
+- [[id:FEAT-005-workspace-shell-liveview-with-sidebar-pa::routes-skeleton]] Routes + LiveSession + WorkspaceLive skeleton
+- [[id:FEAT-006-block-ash-resource-with-extensible-block::blocktype-behaviour]] BlockType behaviour + helper module
+- [[id:FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::oban-trigger]] AshOban trigger config
+- [[id:FEAT-008-lit-ora-block-web-component-with-lexical::ora-block-lit]] Lit ora-block component (paragraph + headings)
+- [[id:FEAT-009-block-list-ux-drag-handles-slash-menu-ke::handles]] Hover handles + actions popover (Lit + Petal styling)
+- [[id:FEAT-010-remaining-simple-block-types-via-blockty::list-todo-quote]] List + ToDo + Quote modules
+- [[id:FEAT-011-inline-marks-bold-italic-underline-strik::lexical-formats]] Lexical format + link node registration
+- [[id:FEAT-012-composite-blocks-table-and-columns::cell-column-types]] TableCell + Column auxiliary BlockTypes
+- [[id:FEAT-013-page-metadata-ui-emoji-icon-cover-color::page-header-component]] PageHeader live_component skeleton
+- [[id:FEAT-014-cmd-k-command-palette-title-search-and-q::search-action]] Search action + pg_trgm index
+- [[id:FEAT-015-realtime-sibling-render-presence-avatars::presence-bar]] PresenceBar live_component
+- [[id:FEAT-015-realtime-sibling-render-presence-avatars::color-hash]] Color hashing helper
+- [[id:FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::admin-config]] Configure AshAdmin domain visibility
+- [[id:FEAT-017-notion-inspired-styling-pass-and-end-to::tailwind-polish]] Tailwind + base styling pass
+** wave-2 :wave:
+- [[id:FEAT-001-bootstrap-phoenixashpetallitlexical::install-ash]] Add Ash deps via Igniter (full extension stack)
+- [[id:FEAT-001-bootstrap-phoenixashpetallitlexical::petal-tailwind]] Add PetalComponents + Tailwind + Inter
+- [[id:FEAT-001-bootstrap-phoenixashpetallitlexical::js-pipeline]] Wire JS pipeline (Lit, Lexical, SortableJS, KaTeX)
+- [[id:FEAT-002-user-resource-ash-authentication-email-p::router-routes]] Wire AshAuthenticationPhoenix routes
+- [[id:FEAT-003-workspace-and-membership-resources::onboarding-reactor]] Onboarding Reactor (signup → workspace → membership → welcome page)
+- [[id:FEAT-003-workspace-and-membership-resources::policies]] Ash policies for workspace access
+- [[id:FEAT-004-page-resource-with-nested-tree-and-fract::page-resource]] Page resource with multitenancy + archival + paper_trail
+- [[id:FEAT-005-workspace-shell-liveview-with-sidebar-pa::sidebar-layout]] Sidebar layout component (Petal)
+- [[id:FEAT-006-block-ash-resource-with-extensible-block::registry-and-type]] BlockTypes registry + custom Ash type
+- [[id:FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::presence]] Phoenix.Presence module + on_mount tracker
+- [[id:FEAT-008-lit-ora-block-web-component-with-lexical::lexical-registry]] Lexical registry + rich-text setup
+- [[id:FEAT-008-lit-ora-block-web-component-with-lexical::block-editor-hook]] BlockEditor LV hook
+- [[id:FEAT-009-block-list-ux-drag-handles-slash-menu-ke::sortable]] SortableJS BlockList hook
+- [[id:FEAT-009-block-list-ux-drag-handles-slash-menu-ke::slash-menu]] Slash menu component + LV wiring
+- [[id:FEAT-009-block-list-ux-drag-handles-slash-menu-ke::keyboard-nav]] Cross-block keyboard nav
+- [[id:FEAT-010-remaining-simple-block-types-via-blockty::divider-code-callout]] Divider + Code + Callout
+- [[id:FEAT-011-inline-marks-bold-italic-underline-strik::format-toolbar]] Format toolbar Lit element
+- [[id:FEAT-011-inline-marks-bold-italic-underline-strik::server-render]] Server-side mark rendering in Concept.Lexical
+- [[id:FEAT-012-composite-blocks-table-and-columns::table-create]] Table BlockType + bulk creation
+- [[id:FEAT-012-composite-blocks-table-and-columns::columns-create]] Columns BlockType
+- [[id:FEAT-013-page-metadata-ui-emoji-icon-cover-color::emoji-picker]] Emoji picker (Lit) + LV wiring
+- [[id:FEAT-013-page-metadata-ui-emoji-icon-cover-color::cover-color]] Cover color band
+- [[id:FEAT-013-page-metadata-ui-emoji-icon-cover-color::title-edit]] Inline title via AshPhoenix.Form
+- [[id:FEAT-014-cmd-k-command-palette-title-search-and-q::global-keys]] Global keybinding hook
+- [[id:FEAT-015-realtime-sibling-render-presence-avatars::lock-indicator]] Lock indicator on blocks
+- [[id:FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::router-plug]] Router + auth guard
+- [[id:FEAT-017-notion-inspired-styling-pass-and-end-to::z-stack]] Z-index registry + overlay discipline
+- [[id:FEAT-017-notion-inspired-styling-pass-and-end-to::manual-polish]] Polish all FEAT-005..016 surfaces against Notion screenshots
+** wave-3 :wave:
+- [[id:FEAT-001-bootstrap-phoenixashpetallitlexical::repo-config]] Configure AshPostgres repo + Oban
+- [[id:FEAT-002-user-resource-ash-authentication-email-p::petal-overrides]] Petal-style sign-in / sign-up overrides
+- [[id:FEAT-002-user-resource-ash-authentication-email-p::on-mount]] LiveUserAuth on_mount module
+- [[id:FEAT-003-workspace-and-membership-resources::tests]] Tests
+- [[id:FEAT-004-page-resource-with-nested-tree-and-fract::tree-integrity]] Reparent cycle prevention + cascading archive
+- [[id:FEAT-004-page-resource-with-nested-tree-and-fract::calc-agg]] Calculations + aggregates
+- [[id:FEAT-004-page-resource-with-nested-tree-and-fract::policies]] Workspace policies + tenant integration
+- [[id:FEAT-004-page-resource-with-nested-tree-and-fract::pubsub]] Ash.Notifier.PubSub broadcasts
+- [[id:FEAT-005-workspace-shell-liveview-with-sidebar-pa::page-tree]] PageTree live_component
+- [[id:FEAT-006-block-ash-resource-with-extensible-block::paragraph-headings]] Paragraph + Heading BlockType modules
+- [[id:FEAT-006-block-ash-resource-with-extensible-block::resource]] Block resource + state machine + actions
+- [[id:FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::heartbeat]] Heartbeat + refresh integration hook
+- [[id:FEAT-008-lit-ora-block-web-component-with-lexical::page-live]] PageLive + server-side render fallback
+- [[id:FEAT-009-block-list-ux-drag-handles-slash-menu-ke::server-actions]] Server actions: insert/reorder/reparent/turn_into/delete_merge
+- [[id:FEAT-010-remaining-simple-block-types-via-blockty::toggle]] Toggle (container)
+- [[id:FEAT-010-remaining-simple-block-types-via-blockty::media-blocks]] Image + Bookmark + Equation
+- [[id:FEAT-011-inline-marks-bold-italic-underline-strik::link-editor]] Link editor popover
+- [[id:FEAT-011-inline-marks-bold-italic-underline-strik::shortcuts]] Keyboard shortcuts in BlockEditor hook
+- [[id:FEAT-012-composite-blocks-table-and-columns::ora-table]] Lit ora-table component
+- [[id:FEAT-012-composite-blocks-table-and-columns::ora-columns]] Lit ora-columns component
+- [[id:FEAT-012-composite-blocks-table-and-columns::cascade-archive]] Cascade archive change
+- [[id:FEAT-013-page-metadata-ui-emoji-icon-cover-color::sidebar-sync]] Sidebar row PubSub sync (consumes FEAT-005 + FEAT-004)
+- [[id:FEAT-014-cmd-k-command-palette-title-search-and-q::palette-component]] CommandPaletteLive component
+- [[id:FEAT-015-realtime-sibling-render-presence-avatars::apply-remote]] Sibling apply_remote pipe
+- [[id:FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::tests]] Tests
+- [[id:FEAT-017-notion-inspired-styling-pass-and-end-to::full-flow-test]] End-to-end full-flow test
+** wave-4 :wave:
+- [[id:FEAT-001-bootstrap-phoenixashpetallitlexical::home-smoke]] Replace HomeLive with smoke landing + tests
+- [[id:FEAT-002-user-resource-ash-authentication-email-p::tests]] Tests
+- [[id:FEAT-004-page-resource-with-nested-tree-and-fract::tests]] Tests
+- [[id:FEAT-005-workspace-shell-liveview-with-sidebar-pa::pubsub-sync]] PubSub-driven sidebar updates
+- [[id:FEAT-006-block-ash-resource-with-extensible-block::migration]] Migration + relation to Page
+- [[id:FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::tests]] Tests
+- [[id:FEAT-008-lit-ora-block-web-component-with-lexical::tests]] Tests (server + client)
+- [[id:FEAT-009-block-list-ux-drag-handles-slash-menu-ke::tests]] Tests
+- [[id:FEAT-010-remaining-simple-block-types-via-blockty::slash-menu-groups]] Slash menu grouping + sorting
+- [[id:FEAT-011-inline-marks-bold-italic-underline-strik::tests]] Tests
+- [[id:FEAT-012-composite-blocks-table-and-columns::tests]] Tests
+- [[id:FEAT-013-page-metadata-ui-emoji-icon-cover-color::tests]] Tests
+- [[id:FEAT-014-cmd-k-command-palette-title-search-and-q::tests]] Tests
+- [[id:FEAT-015-realtime-sibling-render-presence-avatars::tests]] Tests
+- [[id:FEAT-017-notion-inspired-styling-pass-and-end-to::crash-recovery]] Crash recovery test
+** wave-5 :wave:
+- [[id:FEAT-005-workspace-shell-liveview-with-sidebar-pa::tests]] Tests
+- [[id:FEAT-006-block-ash-resource-with-extensible-block::tests]] Tests
+- [[id:FEAT-010-remaining-simple-block-types-via-blockty::tests]] Tests
+** File-level DAG
+*** Nodes
+- `FEAT-001-bootstrap-phoenixashpetallitlexical` Install Phoenix+LiveView scaffold [ITEM]
+- `FEAT-002-user-resource-ash-authentication-email-p` Generate Accounts domain + User + Token resources [ITEM]
+- `FEAT-003-workspace-and-membership-resources` Generate Workspace + Membership resources [ITEM]
+- `FEAT-004-page-resource-with-nested-tree-and-fract` FractionalIndex pure module + tests [ITEM]
+- `FEAT-005-workspace-shell-liveview-with-sidebar-pa` Routes + LiveSession + WorkspaceLive skeleton [ITEM]
+- `FEAT-006-block-ash-resource-with-extensible-block` BlockType behaviour + helper module [ITEM]
+- `FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence` AshOban trigger config [ITEM]
+- `FEAT-008-lit-ora-block-web-component-with-lexical` Lit ora-block component (paragraph + headings) [ITEM]
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke` Hover handles + actions popover (Lit + Petal styling) [ITEM]
+- `FEAT-010-remaining-simple-block-types-via-blockty` List + ToDo + Quote modules [ITEM]
+- `FEAT-011-inline-marks-bold-italic-underline-strik` Lexical format + link node registration [ITEM]
+- `FEAT-012-composite-blocks-table-and-columns` TableCell + Column auxiliary BlockTypes [ITEM]
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color` PageHeader live_component skeleton [ITEM]
+- `FEAT-014-cmd-k-command-palette-title-search-and-q` Search action + pg_trgm index [ITEM]
+- `FEAT-015-realtime-sibling-render-presence-avatars` PresenceBar live_component [ITEM]
+- `FEAT-016-ashadmin-mounted-at-admin-behind-owner-g` Configure AshAdmin domain visibility [ITEM]
+- `FEAT-017-notion-inspired-styling-pass-and-end-to` Tailwind + base styling pass [ITEM]
+*** Edges
+- None.
+** Subfeature-level DAG
+*** Nodes
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::install-phoenix` Install Phoenix+LiveView scaffold [ITEM]
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::install-ash` Add Ash deps via Igniter (full extension stack) [ITEM]
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::repo-config` Configure AshPostgres repo + Oban [ITEM]
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::petal-tailwind` Add PetalComponents + Tailwind + Inter [ITEM]
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::js-pipeline` Wire JS pipeline (Lit, Lexical, SortableJS, KaTeX) [ITEM]
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::home-smoke` Replace HomeLive with smoke landing + tests [ITEM]
+- `FEAT-002-user-resource-ash-authentication-email-p::generate-accounts` Generate Accounts domain + User + Token resources [ITEM]
+- `FEAT-002-user-resource-ash-authentication-email-p::router-routes` Wire AshAuthenticationPhoenix routes [ITEM]
+- `FEAT-002-user-resource-ash-authentication-email-p::petal-overrides` Petal-style sign-in / sign-up overrides [ITEM]
+- `FEAT-002-user-resource-ash-authentication-email-p::on-mount` LiveUserAuth on_mount module [ITEM]
+- `FEAT-002-user-resource-ash-authentication-email-p::tests` Tests [ITEM]
+- `FEAT-003-workspace-and-membership-resources::resources` Generate Workspace + Membership resources [ITEM]
+- `FEAT-003-workspace-and-membership-resources::onboarding-reactor` Onboarding Reactor (signup → workspace → membership → welcome page) [ITEM]
+- `FEAT-003-workspace-and-membership-resources::policies` Ash policies for workspace access [ITEM]
+- `FEAT-003-workspace-and-membership-resources::tests` Tests [ITEM]
+- `FEAT-004-page-resource-with-nested-tree-and-fract::fractional-index` FractionalIndex pure module + tests [ITEM]
+- `FEAT-004-page-resource-with-nested-tree-and-fract::page-resource` Page resource with multitenancy + archival + paper_trail [ITEM]
+- `FEAT-004-page-resource-with-nested-tree-and-fract::tree-integrity` Reparent cycle prevention + cascading archive [ITEM]
+- `FEAT-004-page-resource-with-nested-tree-and-fract::calc-agg` Calculations + aggregates [ITEM]
+- `FEAT-004-page-resource-with-nested-tree-and-fract::policies` Workspace policies + tenant integration [ITEM]
+- `FEAT-004-page-resource-with-nested-tree-and-fract::pubsub` Ash.Notifier.PubSub broadcasts [ITEM]
+- `FEAT-004-page-resource-with-nested-tree-and-fract::tests` Tests [ITEM]
+- `FEAT-005-workspace-shell-liveview-with-sidebar-pa::routes-skeleton` Routes + LiveSession + WorkspaceLive skeleton [ITEM]
+- `FEAT-005-workspace-shell-liveview-with-sidebar-pa::sidebar-layout` Sidebar layout component (Petal) [ITEM]
+- `FEAT-005-workspace-shell-liveview-with-sidebar-pa::page-tree` PageTree live_component [ITEM]
+- `FEAT-005-workspace-shell-liveview-with-sidebar-pa::pubsub-sync` PubSub-driven sidebar updates [ITEM]
+- `FEAT-005-workspace-shell-liveview-with-sidebar-pa::tests` Tests [ITEM]
+- `FEAT-006-block-ash-resource-with-extensible-block::blocktype-behaviour` BlockType behaviour + helper module [ITEM]
+- `FEAT-006-block-ash-resource-with-extensible-block::registry-and-type` BlockTypes registry + custom Ash type [ITEM]
+- `FEAT-006-block-ash-resource-with-extensible-block::paragraph-headings` Paragraph + Heading BlockType modules [ITEM]
+- `FEAT-006-block-ash-resource-with-extensible-block::resource` Block resource + state machine + actions [ITEM]
+- `FEAT-006-block-ash-resource-with-extensible-block::migration` Migration + relation to Page [ITEM]
+- `FEAT-006-block-ash-resource-with-extensible-block::tests` Tests [ITEM]
+- `FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::oban-trigger` AshOban trigger config [ITEM]
+- `FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::presence` Phoenix.Presence module + on_mount tracker [ITEM]
+- `FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::heartbeat` Heartbeat + refresh integration hook [ITEM]
+- `FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::tests` Tests [ITEM]
+- `FEAT-008-lit-ora-block-web-component-with-lexical::ora-block-lit` Lit ora-block component (paragraph + headings) [ITEM]
+- `FEAT-008-lit-ora-block-web-component-with-lexical::lexical-registry` Lexical registry + rich-text setup [ITEM]
+- `FEAT-008-lit-ora-block-web-component-with-lexical::block-editor-hook` BlockEditor LV hook [ITEM]
+- `FEAT-008-lit-ora-block-web-component-with-lexical::page-live` PageLive + server-side render fallback [ITEM]
+- `FEAT-008-lit-ora-block-web-component-with-lexical::tests` Tests (server + client) [ITEM]
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::handles` Hover handles + actions popover (Lit + Petal styling) [ITEM]
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::sortable` SortableJS BlockList hook [ITEM]
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::slash-menu` Slash menu component + LV wiring [ITEM]
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::keyboard-nav` Cross-block keyboard nav [ITEM]
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::server-actions` Server actions: insert/reorder/reparent/turn_into/delete_merge [ITEM]
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::tests` Tests [ITEM]
+- `FEAT-010-remaining-simple-block-types-via-blockty::list-todo-quote` List + ToDo + Quote modules [ITEM]
+- `FEAT-010-remaining-simple-block-types-via-blockty::divider-code-callout` Divider + Code + Callout [ITEM]
+- `FEAT-010-remaining-simple-block-types-via-blockty::toggle` Toggle (container) [ITEM]
+- `FEAT-010-remaining-simple-block-types-via-blockty::media-blocks` Image + Bookmark + Equation [ITEM]
+- `FEAT-010-remaining-simple-block-types-via-blockty::slash-menu-groups` Slash menu grouping + sorting [ITEM]
+- `FEAT-010-remaining-simple-block-types-via-blockty::tests` Tests [ITEM]
+- `FEAT-011-inline-marks-bold-italic-underline-strik::lexical-formats` Lexical format + link node registration [ITEM]
+- `FEAT-011-inline-marks-bold-italic-underline-strik::format-toolbar` Format toolbar Lit element [ITEM]
+- `FEAT-011-inline-marks-bold-italic-underline-strik::link-editor` Link editor popover [ITEM]
+- `FEAT-011-inline-marks-bold-italic-underline-strik::server-render` Server-side mark rendering in Concept.Lexical [ITEM]
+- `FEAT-011-inline-marks-bold-italic-underline-strik::shortcuts` Keyboard shortcuts in BlockEditor hook [ITEM]
+- `FEAT-011-inline-marks-bold-italic-underline-strik::tests` Tests [ITEM]
+- `FEAT-012-composite-blocks-table-and-columns::cell-column-types` TableCell + Column auxiliary BlockTypes [ITEM]
+- `FEAT-012-composite-blocks-table-and-columns::table-create` Table BlockType + bulk creation [ITEM]
+- `FEAT-012-composite-blocks-table-and-columns::columns-create` Columns BlockType [ITEM]
+- `FEAT-012-composite-blocks-table-and-columns::ora-table` Lit ora-table component [ITEM]
+- `FEAT-012-composite-blocks-table-and-columns::ora-columns` Lit ora-columns component [ITEM]
+- `FEAT-012-composite-blocks-table-and-columns::cascade-archive` Cascade archive change [ITEM]
+- `FEAT-012-composite-blocks-table-and-columns::tests` Tests [ITEM]
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::page-header-component` PageHeader live_component skeleton [ITEM]
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::emoji-picker` Emoji picker (Lit) + LV wiring [ITEM]
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::cover-color` Cover color band [ITEM]
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::title-edit` Inline title via AshPhoenix.Form [ITEM]
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::sidebar-sync` Sidebar row PubSub sync (consumes FEAT-005 + FEAT-004) [ITEM]
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::tests` Tests [ITEM]
+- `FEAT-014-cmd-k-command-palette-title-search-and-q::search-action` Search action + pg_trgm index [ITEM]
+- `FEAT-014-cmd-k-command-palette-title-search-and-q::global-keys` Global keybinding hook [ITEM]
+- `FEAT-014-cmd-k-command-palette-title-search-and-q::palette-component` CommandPaletteLive component [ITEM]
+- `FEAT-014-cmd-k-command-palette-title-search-and-q::tests` Tests [ITEM]
+- `FEAT-015-realtime-sibling-render-presence-avatars::presence-bar` PresenceBar live_component [ITEM]
+- `FEAT-015-realtime-sibling-render-presence-avatars::lock-indicator` Lock indicator on blocks [ITEM]
+- `FEAT-015-realtime-sibling-render-presence-avatars::color-hash` Color hashing helper [ITEM]
+- `FEAT-015-realtime-sibling-render-presence-avatars::apply-remote` Sibling apply_remote pipe [ITEM]
+- `FEAT-015-realtime-sibling-render-presence-avatars::tests` Tests [ITEM]
+- `FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::admin-config` Configure AshAdmin domain visibility [ITEM]
+- `FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::router-plug` Router + auth guard [ITEM]
+- `FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::tests` Tests [ITEM]
+- `FEAT-017-notion-inspired-styling-pass-and-end-to::tailwind-polish` Tailwind + base styling pass [ITEM]
+- `FEAT-017-notion-inspired-styling-pass-and-end-to::z-stack` Z-index registry + overlay discipline [ITEM]
+- `FEAT-017-notion-inspired-styling-pass-and-end-to::full-flow-test` End-to-end full-flow test [ITEM]
+- `FEAT-017-notion-inspired-styling-pass-and-end-to::crash-recovery` Crash recovery test [ITEM]
+- `FEAT-017-notion-inspired-styling-pass-and-end-to::manual-polish` Polish all FEAT-005..016 surfaces against Notion screenshots [ITEM]
+*** Edges
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::install-ash` depends on `FEAT-001-bootstrap-phoenixashpetallitlexical::install-phoenix`
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::repo-config` depends on `FEAT-001-bootstrap-phoenixashpetallitlexical::install-ash`
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::petal-tailwind` depends on `FEAT-001-bootstrap-phoenixashpetallitlexical::install-phoenix`
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::js-pipeline` depends on `FEAT-001-bootstrap-phoenixashpetallitlexical::install-phoenix`
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::home-smoke` depends on `FEAT-001-bootstrap-phoenixashpetallitlexical::petal-tailwind`
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::home-smoke` depends on `FEAT-001-bootstrap-phoenixashpetallitlexical::js-pipeline`
+- `FEAT-001-bootstrap-phoenixashpetallitlexical::home-smoke` depends on `FEAT-001-bootstrap-phoenixashpetallitlexical::repo-config`
+- `FEAT-002-user-resource-ash-authentication-email-p::router-routes` depends on `FEAT-002-user-resource-ash-authentication-email-p::generate-accounts`
+- `FEAT-002-user-resource-ash-authentication-email-p::petal-overrides` depends on `FEAT-002-user-resource-ash-authentication-email-p::router-routes`
+- `FEAT-002-user-resource-ash-authentication-email-p::on-mount` depends on `FEAT-002-user-resource-ash-authentication-email-p::router-routes`
+- `FEAT-002-user-resource-ash-authentication-email-p::tests` depends on `FEAT-002-user-resource-ash-authentication-email-p::on-mount`
+- `FEAT-002-user-resource-ash-authentication-email-p::tests` depends on `FEAT-002-user-resource-ash-authentication-email-p::petal-overrides`
+- `FEAT-003-workspace-and-membership-resources::onboarding-reactor` depends on `FEAT-003-workspace-and-membership-resources::resources`
+- `FEAT-003-workspace-and-membership-resources::policies` depends on `FEAT-003-workspace-and-membership-resources::resources`
+- `FEAT-003-workspace-and-membership-resources::tests` depends on `FEAT-003-workspace-and-membership-resources::onboarding-reactor`
+- `FEAT-003-workspace-and-membership-resources::tests` depends on `FEAT-003-workspace-and-membership-resources::policies`
+- `FEAT-004-page-resource-with-nested-tree-and-fract::page-resource` depends on `FEAT-004-page-resource-with-nested-tree-and-fract::fractional-index`
+- `FEAT-004-page-resource-with-nested-tree-and-fract::tree-integrity` depends on `FEAT-004-page-resource-with-nested-tree-and-fract::page-resource`
+- `FEAT-004-page-resource-with-nested-tree-and-fract::calc-agg` depends on `FEAT-004-page-resource-with-nested-tree-and-fract::page-resource`
+- `FEAT-004-page-resource-with-nested-tree-and-fract::policies` depends on `FEAT-004-page-resource-with-nested-tree-and-fract::page-resource`
+- `FEAT-004-page-resource-with-nested-tree-and-fract::pubsub` depends on `FEAT-004-page-resource-with-nested-tree-and-fract::page-resource`
+- `FEAT-004-page-resource-with-nested-tree-and-fract::tests` depends on `FEAT-004-page-resource-with-nested-tree-and-fract::tree-integrity`
+- `FEAT-004-page-resource-with-nested-tree-and-fract::tests` depends on `FEAT-004-page-resource-with-nested-tree-and-fract::policies`
+- `FEAT-004-page-resource-with-nested-tree-and-fract::tests` depends on `FEAT-004-page-resource-with-nested-tree-and-fract::calc-agg`
+- `FEAT-005-workspace-shell-liveview-with-sidebar-pa::sidebar-layout` depends on `FEAT-005-workspace-shell-liveview-with-sidebar-pa::routes-skeleton`
+- `FEAT-005-workspace-shell-liveview-with-sidebar-pa::page-tree` depends on `FEAT-005-workspace-shell-liveview-with-sidebar-pa::sidebar-layout`
+- `FEAT-005-workspace-shell-liveview-with-sidebar-pa::pubsub-sync` depends on `FEAT-005-workspace-shell-liveview-with-sidebar-pa::page-tree`
+- `FEAT-005-workspace-shell-liveview-with-sidebar-pa::tests` depends on `FEAT-005-workspace-shell-liveview-with-sidebar-pa::pubsub-sync`
+- `FEAT-006-block-ash-resource-with-extensible-block::registry-and-type` depends on `FEAT-006-block-ash-resource-with-extensible-block::blocktype-behaviour`
+- `FEAT-006-block-ash-resource-with-extensible-block::paragraph-headings` depends on `FEAT-006-block-ash-resource-with-extensible-block::registry-and-type`
+- `FEAT-006-block-ash-resource-with-extensible-block::resource` depends on `FEAT-006-block-ash-resource-with-extensible-block::registry-and-type`
+- `FEAT-006-block-ash-resource-with-extensible-block::migration` depends on `FEAT-006-block-ash-resource-with-extensible-block::resource`
+- `FEAT-006-block-ash-resource-with-extensible-block::tests` depends on `FEAT-006-block-ash-resource-with-extensible-block::resource`
+- `FEAT-006-block-ash-resource-with-extensible-block::tests` depends on `FEAT-006-block-ash-resource-with-extensible-block::paragraph-headings`
+- `FEAT-006-block-ash-resource-with-extensible-block::tests` depends on `FEAT-006-block-ash-resource-with-extensible-block::migration`
+- `FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::presence` depends on `FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::oban-trigger`
+- `FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::heartbeat` depends on `FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::presence`
+- `FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::tests` depends on `FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::heartbeat`
+- `FEAT-008-lit-ora-block-web-component-with-lexical::lexical-registry` depends on `FEAT-008-lit-ora-block-web-component-with-lexical::ora-block-lit`
+- `FEAT-008-lit-ora-block-web-component-with-lexical::block-editor-hook` depends on `FEAT-008-lit-ora-block-web-component-with-lexical::ora-block-lit`
+- `FEAT-008-lit-ora-block-web-component-with-lexical::page-live` depends on `FEAT-008-lit-ora-block-web-component-with-lexical::block-editor-hook`
+- `FEAT-008-lit-ora-block-web-component-with-lexical::tests` depends on `FEAT-008-lit-ora-block-web-component-with-lexical::page-live`
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::sortable` depends on `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::handles`
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::slash-menu` depends on `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::handles`
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::keyboard-nav` depends on `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::handles`
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::server-actions` depends on `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::sortable`
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::server-actions` depends on `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::keyboard-nav`
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::server-actions` depends on `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::slash-menu`
+- `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::tests` depends on `FEAT-009-block-list-ux-drag-handles-slash-menu-ke::server-actions`
+- `FEAT-010-remaining-simple-block-types-via-blockty::divider-code-callout` depends on `FEAT-010-remaining-simple-block-types-via-blockty::list-todo-quote`
+- `FEAT-010-remaining-simple-block-types-via-blockty::toggle` depends on `FEAT-010-remaining-simple-block-types-via-blockty::divider-code-callout`
+- `FEAT-010-remaining-simple-block-types-via-blockty::media-blocks` depends on `FEAT-010-remaining-simple-block-types-via-blockty::divider-code-callout`
+- `FEAT-010-remaining-simple-block-types-via-blockty::slash-menu-groups` depends on `FEAT-010-remaining-simple-block-types-via-blockty::toggle`
+- `FEAT-010-remaining-simple-block-types-via-blockty::slash-menu-groups` depends on `FEAT-010-remaining-simple-block-types-via-blockty::media-blocks`
+- `FEAT-010-remaining-simple-block-types-via-blockty::tests` depends on `FEAT-010-remaining-simple-block-types-via-blockty::slash-menu-groups`
+- `FEAT-011-inline-marks-bold-italic-underline-strik::format-toolbar` depends on `FEAT-011-inline-marks-bold-italic-underline-strik::lexical-formats`
+- `FEAT-011-inline-marks-bold-italic-underline-strik::link-editor` depends on `FEAT-011-inline-marks-bold-italic-underline-strik::format-toolbar`
+- `FEAT-011-inline-marks-bold-italic-underline-strik::server-render` depends on `FEAT-011-inline-marks-bold-italic-underline-strik::lexical-formats`
+- `FEAT-011-inline-marks-bold-italic-underline-strik::shortcuts` depends on `FEAT-011-inline-marks-bold-italic-underline-strik::format-toolbar`
+- `FEAT-011-inline-marks-bold-italic-underline-strik::tests` depends on `FEAT-011-inline-marks-bold-italic-underline-strik::server-render`
+- `FEAT-011-inline-marks-bold-italic-underline-strik::tests` depends on `FEAT-011-inline-marks-bold-italic-underline-strik::shortcuts`
+- `FEAT-011-inline-marks-bold-italic-underline-strik::tests` depends on `FEAT-011-inline-marks-bold-italic-underline-strik::link-editor`
+- `FEAT-012-composite-blocks-table-and-columns::table-create` depends on `FEAT-012-composite-blocks-table-and-columns::cell-column-types`
+- `FEAT-012-composite-blocks-table-and-columns::columns-create` depends on `FEAT-012-composite-blocks-table-and-columns::cell-column-types`
+- `FEAT-012-composite-blocks-table-and-columns::ora-table` depends on `FEAT-012-composite-blocks-table-and-columns::table-create`
+- `FEAT-012-composite-blocks-table-and-columns::ora-columns` depends on `FEAT-012-composite-blocks-table-and-columns::columns-create`
+- `FEAT-012-composite-blocks-table-and-columns::cascade-archive` depends on `FEAT-012-composite-blocks-table-and-columns::table-create`
+- `FEAT-012-composite-blocks-table-and-columns::cascade-archive` depends on `FEAT-012-composite-blocks-table-and-columns::columns-create`
+- `FEAT-012-composite-blocks-table-and-columns::tests` depends on `FEAT-012-composite-blocks-table-and-columns::cascade-archive`
+- `FEAT-012-composite-blocks-table-and-columns::tests` depends on `FEAT-012-composite-blocks-table-and-columns::ora-table`
+- `FEAT-012-composite-blocks-table-and-columns::tests` depends on `FEAT-012-composite-blocks-table-and-columns::ora-columns`
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::emoji-picker` depends on `FEAT-013-page-metadata-ui-emoji-icon-cover-color::page-header-component`
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::cover-color` depends on `FEAT-013-page-metadata-ui-emoji-icon-cover-color::page-header-component`
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::title-edit` depends on `FEAT-013-page-metadata-ui-emoji-icon-cover-color::page-header-component`
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::sidebar-sync` depends on `FEAT-013-page-metadata-ui-emoji-icon-cover-color::title-edit`
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::sidebar-sync` depends on `FEAT-013-page-metadata-ui-emoji-icon-cover-color::emoji-picker`
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::sidebar-sync` depends on `FEAT-013-page-metadata-ui-emoji-icon-cover-color::cover-color`
+- `FEAT-013-page-metadata-ui-emoji-icon-cover-color::tests` depends on `FEAT-013-page-metadata-ui-emoji-icon-cover-color::sidebar-sync`
+- `FEAT-014-cmd-k-command-palette-title-search-and-q::global-keys` depends on `FEAT-014-cmd-k-command-palette-title-search-and-q::search-action`
+- `FEAT-014-cmd-k-command-palette-title-search-and-q::palette-component` depends on `FEAT-014-cmd-k-command-palette-title-search-and-q::global-keys`
+- `FEAT-014-cmd-k-command-palette-title-search-and-q::tests` depends on `FEAT-014-cmd-k-command-palette-title-search-and-q::palette-component`
+- `FEAT-015-realtime-sibling-render-presence-avatars::lock-indicator` depends on `FEAT-015-realtime-sibling-render-presence-avatars::presence-bar`
+- `FEAT-015-realtime-sibling-render-presence-avatars::apply-remote` depends on `FEAT-015-realtime-sibling-render-presence-avatars::lock-indicator`
+- `FEAT-015-realtime-sibling-render-presence-avatars::tests` depends on `FEAT-015-realtime-sibling-render-presence-avatars::apply-remote`
+- `FEAT-015-realtime-sibling-render-presence-avatars::tests` depends on `FEAT-015-realtime-sibling-render-presence-avatars::color-hash`
+- `FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::router-plug` depends on `FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::admin-config`
+- `FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::tests` depends on `FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::router-plug`
+- `FEAT-017-notion-inspired-styling-pass-and-end-to::z-stack` depends on `FEAT-017-notion-inspired-styling-pass-and-end-to::tailwind-polish`
+- `FEAT-017-notion-inspired-styling-pass-and-end-to::full-flow-test` depends on `FEAT-017-notion-inspired-styling-pass-and-end-to::z-stack`
+- `FEAT-017-notion-inspired-styling-pass-and-end-to::crash-recovery` depends on `FEAT-017-notion-inspired-styling-pass-and-end-to::full-flow-test`
+- `FEAT-017-notion-inspired-styling-pass-and-end-to::manual-polish` depends on `FEAT-017-notion-inspired-styling-pass-and-end-to::tailwind-polish`
+

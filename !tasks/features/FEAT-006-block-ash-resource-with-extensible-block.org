@@ -1,0 +1,159 @@
+#+TITLE: Block Ash resource with extensible BlockType registry
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-006-block-ash-resource-with-extensible-block
+#+DEPENDS: FEAT-005-workspace-shell-liveview-with-sidebar-pa
+#+EFFORT: 1.5d
+#+LAYER: domain
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Establish the single =Concept.Pages.Block= Ash resource (multitenant, archival, paper-trailed, state-machine-locked) and the extensible =Concept.Pages.BlockType= behaviour + explicit-config registry. After this item: any LV/test can create/read/update/delete blocks of any type via Ash code interface; type validation and Lexical content shape are owned by per-type modules; lock state transitions are guarded by a state machine; adding the 15th type is "drop a module + append to config".
+
+* Context & Narrative
+This is the keystone resource. Settled design (per plan-mode discussion):
+- Single Ash resource → one table, uniform locks/policies/notifications/queries.
+- =BlockType= behaviour → per-type concerns (Lexical schema, validation, slash-menu metadata, static render) live in plug-in modules.
+- Explicit config registry: =config :concept, :block_types, [Paragraph, Heading1, ...]=.
+- Custom Ash type =Concept.Pages.BlockTypeAttr= validates =:type= attribute against the registry at the data layer.
+
+Block types defined in this FEAT (just paragraph + headings to prove the pipeline; remaining 12 types in FEAT-010 and FEAT-012):
+- =Concept.Pages.BlockTypes.Paragraph=
+- =Concept.Pages.BlockTypes.Heading1=, =Heading2=, =Heading3=
+
+* Scope
+** In-scope
+- =Concept.Pages.Block= resource with extensions =AshPostgres.DataLayer=, =AshArchival.Resource=, =AshPaperTrail.Resource=, =AshStateMachine= (for lock state)
+- Multitenancy: =strategy :attribute, attribute :workspace_id= (denormalized FK, enforced via foreign key + change validation that =page.workspace_id == workspace_id=)
+- Attributes: =id (uuid), workspace_id (FK, tenant), page_id (FK), parent_block_id (nullable self-FK for nested blocks: toggle children, table cells, columns), type (Concept.Pages.BlockTypeAttr), position (:string fractional), content (:map jsonb — Lexical EditorState), props (:map jsonb — type-specific), lock_state (atom :unlocked/:locked, state-machine), lock_holder_id (FK User, nullable), lock_acquired_at (utc_datetime, nullable), lock_expires_at (utc_datetime, nullable)=
+- =Concept.Pages.BlockType= behaviour with callbacks =type/0, default_content/0, default_props/0, validate_props/1, lexical_node/0, slash_menu/0, render_static/1, container?/0=
+- =Concept.Pages.BlockTypes= registry module: reads =Application.compile_env(:concept, :block_types)=, exposes =all/0=, =lookup/1=, =slash_menu_items/0=
+- =Concept.Pages.BlockTypeAttr= custom Ash type wrapping =:atom= with constraint =one_of: BlockTypes.all() |> Enum.map(& &1.type())=; cast/dump/load functions
+- BlockType modules for paragraph + H1/H2/H3 (full implementations)
+- Actions:
+  - =:create_block= args =page_id, type, parent_block_id (optional), position (optional, defaults to after-last-sibling)=; runs =BlockTypes.lookup(type).default_content/0= and =default_props/0=
+  - =:update_content= arg =content= (Lexical EditorState map); requires =lock_state == :locked= and =lock_holder_id == actor.id=; bumps =updated_at=
+  - =:update_props= arg =props=; validated by =BlockTypes.lookup(type).validate_props/1=
+  - =:reorder= arg =position=
+  - =:reparent= args =parent_block_id, position=
+  - =:archive= via AshArchival
+  - State-machine actions =:acquire_lock= (transition :unlocked → :locked, sets holder/acquired/expires), =:release_lock= (:locked → :unlocked), =:refresh_lock= (within :locked, extends expires)
+- =code_interface= in =Concept.Pages= domain for every action above
+- Calculations: =plain_text= (extracts text from =content= using =Concept.Lexical.PlainText=), =word_count=
+- Aggregates: =children_count= for container blocks
+- =Ash.Notifier.PubSub= publishes block events to topic =workspace:#{workspace_id}:page:#{page_id}:blocks= (consumed by FEAT-007 + FEAT-015)
+- Helper module =Concept.Lexical= with =empty_paragraph/0=, =heading/1=, =plain_text/1= producing Lexical-shaped maps
+
+** Out-of-scope
+- Lock TTL expiry job (FEAT-007 — AshOban trigger)
+- Lit/Lexical client integration (FEAT-008)
+- Other block types (FEAT-010, FEAT-012)
+- Inline marks Lexical config (FEAT-011)
+- Realtime broadcast UI integration (FEAT-015)
+
+* Existing Patterns
+- AshStateMachine: https://hexdocs.pm/ash_state_machine/getting-started.html — define =state_machine do; initial_states [:unlocked]; default_initial_state :unlocked; transitions do; transition :acquire, from: :unlocked, to: :locked; ... end; end=
+- Custom Ash types: https://hexdocs.pm/ash/Ash.Type.html — =use Ash.Type=, implement =cast_input/2=, =cast_stored/2=, =dump_to_native/2=
+- =Application.compile_env/2= for compile-time registry
+- =Lexical EditorState= JSON shape: https://lexical.dev/docs/concepts/editor-state — root → children → paragraph/heading/text nodes
+
+* Tests
+Files: =test/concept/pages/block_test.exs=, =test/concept/pages/block_type_registry_test.exs=, =test/concept/pages/block_types/paragraph_test.exs= (one file per type module).
+
+Scenarios:
+1. Registry: =BlockTypes.all/0= equals config list; =lookup(:paragraph) == Paragraph=; =lookup(:unknown)= raises =:unknown_block_type=.
+2. Custom Ash type: =:create_block= with =type: :paragraph= succeeds; =type: :nope= raises =Ash.Error.Invalid=.
+3. =:create_block= without =position= computes after-last-sibling; with explicit position uses it.
+4. =:update_content= without lock raises =Ash.Error.Forbidden= (state machine guard).
+5. =:acquire_lock= sets state =:locked=, holder, acquired_at, expires_at = now + 30s; second user's =:acquire_lock= when state =:locked= raises =:lock_held_by_other=.
+6. =:release_lock= clears holder/timestamps and transitions to =:unlocked=.
+7. =:refresh_lock= keeps state =:locked=, extends =lock_expires_at= by 30s.
+8. =BlockTypes.Paragraph.default_content/0= returns valid Lexical paragraph EditorState; =Concept.Lexical.plain_text(content) == ""=.
+9. =:update_props= with invalid props for paragraph (paragraph has no props — must be empty map) returns validation error.
+10. AshPaperTrail: editing content writes a row to =block_versions= with =changes: %{content: _}=.
+11. Multitenancy: blocks of page in workspace A are invisible to workspace B's actor.
+12. Archival: =:destroy= soft-deletes; =:list_for_page= excludes archived.
+13. Cycle prevention on =:reparent= (when parent_block_id chain forms cycle).
+14. PubSub: creating a block publishes ={:block_created, block}= on =workspace:#{ws}:page:#{page}:blocks=.
+
+* Implementation
+** ITEM BlockType behaviour + helper module
+:PROPERTIES:
+:CUSTOM_ID: FEAT-006-block-ash-resource-with-extensible-block::blocktype-behaviour
+:END:
+- =lib/concept/pages/block_type.ex= defining the behaviour with callbacks listed in scope. =@callback type :: atom=, =@callback default_content :: map=, etc.
+- =lib/concept/lexical.ex= helper: =empty_paragraph/0= returns =%{root: %{type: "root", children: [%{type: "paragraph", children: []}]}}=. =heading(level)= analogous. =plain_text/1= walks tree extracting text nodes. =to_html/1= used by static render (basic — full render in FEAT-008).
+
+** ITEM BlockTypes registry + custom Ash type
+:PROPERTIES:
+:CUSTOM_ID: FEAT-006-block-ash-resource-with-extensible-block::registry-and-type
+:DEPENDS: FEAT-006-block-ash-resource-with-extensible-block::blocktype-behaviour
+:END:
+- =lib/concept/pages/block_types.ex=:
+  - =@modules Application.compile_env(:concept, :block_types, [])=
+  - =def all, do: @modules=
+  - =def lookup(type), do: Enum.find(@modules, & &1.type() == type) || raise UnknownBlockType, type=
+  - =def slash_menu_items, do: Enum.map(@modules, & &1.slash_menu())=
+  - Compile-time validation: =@on_load= or module-level =Enum.each(@modules, &Code.ensure_loaded!/1)=.
+- =lib/concept/pages/block_type_attr.ex= =use Ash.Type=. =storage_type/0 = :atom=. =cast_input/2= validates against =BlockTypes.all/0 |> Enum.map(& &1.type())=. =dump_to_native/2= returns =to_string=. =cast_stored/2= reverses.
+- =config/config.exs= adds =config :concept, :block_types, [Concept.Pages.BlockTypes.Paragraph, ...Heading1, Heading2, Heading3]=.
+
+** ITEM Paragraph + Heading BlockType modules
+:PROPERTIES:
+:CUSTOM_ID: FEAT-006-block-ash-resource-with-extensible-block::paragraph-headings
+:DEPENDS: FEAT-006-block-ash-resource-with-extensible-block::registry-and-type
+:END:
+- =lib/concept/pages/block_types/paragraph.ex= implements =BlockType=. =type/0 :paragraph=, =default_content/0 Concept.Lexical.empty_paragraph()=, =default_props/0 %{}=, =validate_props/1= ensures =props == %{}=, =lexical_node/0 "paragraph"=, =slash_menu/0 %{label: "Text", icon: "📝", keywords: ~w(text paragraph p), group: :basic}=, =render_static/1= renders =<p>= with Lexical plain text, =container?/0 false=.
+- =Heading1=, =Heading2=, =Heading3= analogous; =lexical_node "heading"= with =props.level= or distinct nodes; slash_menu labels "Heading 1/2/3", icons "H1/H2/H3", group =:basic=.
+- Each module has its own test file asserting =default_content= shape, slash_menu fields, validate_props edge cases.
+
+** ITEM Block resource + state machine + actions
+:PROPERTIES:
+:CUSTOM_ID: FEAT-006-block-ash-resource-with-extensible-block::resource
+:DEPENDS: FEAT-006-block-ash-resource-with-extensible-block::registry-and-type
+:END:
+- =lib/concept/pages/block.ex= with =use Ash.Resource, domain: Concept.Pages, data_layer: AshPostgres.DataLayer, extensions: [AshArchival.Resource, AshPaperTrail.Resource, AshStateMachine]=.
+- =multitenancy strategy: :attribute, attribute: :workspace_id=.
+- =state_machine do; initial_states [:unlocked]; default_initial_state :unlocked; transitions do; transition :acquire, from: :unlocked, to: :locked; transition :release, from: :locked, to: :unlocked; transition :refresh, from: :locked, to: :locked; end; end=.
+- Actions implementing scope list. =:acquire_lock= action: change sets =lock_holder_id= = actor.id, =lock_acquired_at= = =now()=, =lock_expires_at= = =now() + 30s=, then transitions state. Validation =Concept.Pages.Validations.LockNotHeld= rejects with =:lock_held_by_other= if existing holder != actor.
+- =paper_trail do; ignore_attributes [:lock_state, :lock_holder_id, :lock_acquired_at, :lock_expires_at]; end= — lock churn doesn't pollute history.
+- =pub_sub do; module Concept.PubSub; prefix "workspace"; publish_all :create, ["#{workspace_id}", "page", "#{page_id}", "blocks"]; publish_all :update, [...] ; publish :acquire_lock, [..., "lock"]; publish :release_lock, [..., "lock"]; end=.
+- =code_interface= functions =create_block!/1=, =update_content!/2=, =update_props!/2=, =reorder_block!/2=, =reparent_block!/3=, =archive_block!/1=, =acquire_lock!/2=, =release_lock!/2=, =refresh_lock!/2=, =list_for_page!/1=.
+- Validation =Concept.Pages.Validations.WorkspaceMatch= ensures =workspace_id == page.workspace_id=.
+
+** ITEM Migration + relation to Page
+:PROPERTIES:
+:CUSTOM_ID: FEAT-006-block-ash-resource-with-extensible-block::migration
+:DEPENDS: FEAT-006-block-ash-resource-with-extensible-block::resource
+:END:
+- =mix ash.codegen blocks=, =mix ash.migrate=. Migration creates =blocks= + =block_versions= tables, indexes =(workspace_id, page_id, parent_block_id, position) WHERE archived_at IS NULL=, FK to =pages=, =users(lock_holder_id)=.
+- Update =Concept.Pages.Page= =has_many :blocks, Concept.Pages.Block= (the relationship was forward-declared in FEAT-004).
+- Aggregate =:block_count= on Page now active.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-006-block-ash-resource-with-extensible-block::tests
+:DEPENDS: FEAT-006-block-ash-resource-with-extensible-block::resource FEAT-006-block-ash-resource-with-extensible-block::paragraph-headings FEAT-006-block-ash-resource-with-extensible-block::migration
+:END:
+- All 14 scenarios listed in Tests section.
+- Per-type module tests asserting BlockType callback behaviour.
+
+* Edge Cases
+- Two clients race =:acquire_lock=: one transition succeeds (state machine + Postgres row lock via =Ash.Changeset.before_action= takes =FOR UPDATE=); other gets =:lock_held_by_other=.
+- Lock holder disconnects without releasing: TTL expiry handled by FEAT-007 AshOban trigger; until trigger fires, block is held — acceptable since TTL is 30s.
+- Block type removed from config but exists in DB: =BlockTypes.lookup= raises; reads should degrade gracefully → render as paragraph fallback. Add =safe_lookup/1= that returns =Paragraph= on miss for static rendering only.
+- Lexical EditorState is large (>1MB): jsonb fine up to ~Postgres TOAST limits; warn if =byte_size(Jason.encode!(content)) > 200_000= via validation.
+- Reparenting block to its own descendant: cycle check.
+- Cross-page reparent: blocked — =parent_block_id= must belong to same =page_id=.
+- Hard delete via Ash.destroy with =:bypass_archive=: locked behind admin-only action (FUP).
+
+* Acceptance Criteria
+- =mix test test/concept/pages/block_test.exs test/concept/pages/block_type_registry_test.exs test/concept/pages/block_types/= green (≥14 + per-type tests)
+- iex round-trip: create page, create paragraph block, acquire lock, update content, release lock, archive — all via =Concept.Pages.*!= code interface
+- =Concept.Pages.BlockTypes.all/0= returns 4 modules (Paragraph, H1, H2, H3); =slash_menu_items/0= returns 4 maps
+- Adding a new module + appending to =config :concept, :block_types= compiles + works without touching Block resource source
+- =mix format --check-formatted= clean

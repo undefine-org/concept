@@ -1,0 +1,110 @@
+#+TITLE: User resource + ash_authentication email/password
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-002-user-resource-ash-authentication-email-p
+#+DEPENDS: FEAT-001-bootstrap-phoenixashpetallitlexical
+#+EFFORT: 1d
+#+LAYER: auth
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Stand up =Concept.Accounts.User= as an Ash resource with =AshAuthentication= email+password strategy and integrate =AshAuthenticationPhoenix= LiveView routes for sign-in/sign-up/sign-out + a session-aware =on_mount= guard. Output: a visitor can register, log in, log out; protected routes redirect to =/sign-in=; =current_user= is available in every LiveView.
+
+* Context & Narrative
+Builds on FEAT-001 (Phoenix+Ash). This is the bedrock for FEAT-003 (workspaces auto-create on signup). Petal supplies the form chrome.
+
+* Scope
+** In-scope
+- =Concept.Accounts= Ash domain
+- =Concept.Accounts.User= resource: =id (uuid), email (citext), hashed_password, display_name, avatar_emoji, inserted_at, updated_at=
+- =AshAuthentication= strategy =:password= (email + password, no magic link, no oauth)
+- =Concept.Accounts.Token= resource (Ash-generated for revocation/sessions)
+- =AshAuthenticationPhoenix= router macros (=sign_in_route=, =sign_out_route=, =reset_route=, =register_route=) under =/=. Custom Petal-styled overrides for sign_in.html and register.html (LV components).
+- =ConceptWeb.LiveUserAuth= module with =on_mount :live_user_required= and =:live_user_optional=
+- Migration via =mix ash.codegen --name install_users=
+- LiveView tests for register/login/logout flow
+
+** Out-of-scope
+- OAuth providers, magic link, password reset email delivery (=Swoosh= is configured but emails go to local Mailbox preview only)
+- Workspace creation logic (FEAT-003)
+- Avatar upload (stub: emoji only)
+
+* Existing Patterns
+- AshAuthentication =Strategy.Password= docs: https://hexdocs.pm/ash_authentication/AshAuthentication.Strategy.Password.html
+- Phoenix=AshAuthenticationPhoenix.Router=: =sign_in_route on_mount: [{ConceptWeb.LiveUserAuth, :live_user_optional}]=
+- Petal: =<.field />= component for inputs, =<.button />= for submit; the AshAuthenticationPhoenix overrides expect =assigns.form= shaped like AshPhoenix.Form
+- Use =AshPhoenix.Form= for any custom forms (later FEATs)
+
+* Tests
+Files: =test/concept_web/live/auth_live_test.exs=, =test/concept/accounts/user_test.exs=
+
+Scenarios:
+1. =register/0= action with valid email + password creates User, returns token; duplicate email errors with =:email_taken=.
+2. =sign_in_with_password/0= rejects bad password with =:invalid_credentials=.
+3. LV: =GET /sign-up= renders Petal form; submit with valid params redirects to =/= and =current_user= assigned.
+4. LV: =GET /sign-in= happy path → redirect to =/=; bad creds → flash "Invalid email or password".
+5. LV: =/sign-out= clears session; subsequent =GET /protected= → redirect to =/sign-in=.
+6. =on_mount :live_user_required= halts unauthenticated mounts with =push_navigate to: "/sign-in"=.
+
+* Implementation
+** ITEM Generate Accounts domain + User + Token resources
+:PROPERTIES:
+:CUSTOM_ID: FEAT-002-user-resource-ash-authentication-email-p::generate-accounts
+:END:
+- =mix ash_authentication.install= (Igniter): generates =Concept.Accounts=, =Concept.Accounts.User= w/ password strategy, =Concept.Accounts.Token=, secrets module =Concept.Secrets=.
+- Inspect generated resource; add attributes =display_name :string= (allow_nil? true) and =avatar_emoji :string= (default "👤").
+- Confirm =postgres do; table "users"; repo Concept.Repo; end= block present.
+- Run =mix ash.codegen install_users= to create migration; =mix ash.migrate=.
+
+** ITEM Wire AshAuthenticationPhoenix routes
+:PROPERTIES:
+:CUSTOM_ID: FEAT-002-user-resource-ash-authentication-email-p::router-routes
+:DEPENDS: FEAT-002-user-resource-ash-authentication-email-p::generate-accounts
+:END:
+- =lib/concept_web/router.ex=: import =AshAuthentication.Phoenix.Router=. Add =pipeline :browser= plugs =:load_from_session= (or =:load_from_bearer= for API). Add =sign_in_route=, =sign_out_route=, =reset_route /password-reset= (stub), =auth_routes_for Concept.Accounts.User, to: ConceptWeb.AuthController=.
+- Generate =ConceptWeb.AuthController= via =mix ash_authentication_phoenix.install --controller=.
+
+** ITEM Petal-style sign-in / sign-up overrides
+:PROPERTIES:
+:CUSTOM_ID: FEAT-002-user-resource-ash-authentication-email-p::petal-overrides
+:DEPENDS: FEAT-002-user-resource-ash-authentication-email-p::router-routes
+:END:
+- Override =AshAuthentication.Phoenix.Components.SignIn= and =Register= using =overrides= module =ConceptWeb.AuthOverrides= configured in =config/config.exs= =config :concept, ConceptWeb.AuthOverrides, ...=.
+- Replace raw inputs with Petal =<.field />= and =<.button />= in =assets/auth_overrides=.
+- Inter font + max-width 380px centered card matches Notion sign-in look.
+
+** ITEM LiveUserAuth on_mount module
+:PROPERTIES:
+:CUSTOM_ID: FEAT-002-user-resource-ash-authentication-email-p::on-mount
+:DEPENDS: FEAT-002-user-resource-ash-authentication-email-p::router-routes
+:END:
+- =lib/concept_web/live_user_auth.ex= with =on_mount :live_user_required=, =:live_user_optional=, =:no_user= (redirect away if logged in). Uses =AshAuthentication.Phoenix.LiveSession= helpers.
+- Plug pipeline =:require_authenticated_user= for non-LV controllers (auth callback).
+- Add to =live_session= macro in router for protected scopes used by FEAT-005.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-002-user-resource-ash-authentication-email-p::tests
+:DEPENDS: FEAT-002-user-resource-ash-authentication-email-p::on-mount FEAT-002-user-resource-ash-authentication-email-p::petal-overrides
+:END:
+- =UserTest= covers register/sign-in/sign-out actions using =Ash.Generator= for fixtures.
+- =AuthLiveTest= drives Petal forms via =render_submit=; asserts redirects + flash + =get_session(conn, :user_token)=.
+- Helper =register_and_log_in_user/1= in =test/support/conn_case.ex= for downstream tests.
+
+* Edge Cases
+- Email case-insensitive: =:citext= attribute type; lowercase normalisation in change.
+- Password min length 8, validated via Ash validation.
+- Token rotation: AshAuthentication revokes on sign-out.
+- Concurrent logins from multiple tabs: tokens are independent, fine.
+- Reset-password route exists but emails are dev-only =Swoosh.Adapters.Local= (FUP for prod email).
+
+* Acceptance Criteria
+- =mix test test/concept_web/live/auth_live_test.exs= green (≥6 scenarios)
+- Manual: =/sign-up= form renders with Petal styling, registers user, lands on =/=
+- =/sign-out= clears session; =/= now redirects to =/sign-in= when wrapped in protected =live_session=
+- =Concept.Accounts.User= round-trips through =Ash.Changeset.for_create(User, :register, %{email: ..., password: ...})=
+- =mix format --check-formatted= clean

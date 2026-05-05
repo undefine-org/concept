@@ -1,0 +1,98 @@
+#+TITLE: Lock TTL via AshOban and PubSub presence
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence
+#+DEPENDS: FEAT-006-block-ash-resource-with-extensible-block
+#+EFFORT: 0.75d
+#+LAYER: realtime
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Make block locks self-healing: if a holder disconnects without releasing, an AshOban trigger releases the lock when =lock_expires_at < now()=. Plus stand up =ConceptWeb.Presence= so each =PageLive= tracks which users are viewing/editing a page (used by FEAT-015 for avatars and lock UI hints).
+
+* Context & Narrative
+Settled: AshOban trigger replaces the originally planned custom GenServer. Phoenix.Presence is a thin native fit for "who's looking at this page".
+
+* Scope
+** In-scope
+- AshOban trigger on =Concept.Pages.Block=:
+  - =trigger :release_expired_locks= action =:release_lock=
+  - filter =lock_state == :locked and lock_expires_at < now()=
+  - scheduler runs every 10s on the =:locks= Oban queue
+  - trigger uses =:system= actor to bypass actor-based policies
+- Configure cron-style schedule via =AshOban.Plugin= in =config :concept, Oban=
+- =ConceptWeb.Presence= module using =Phoenix.Presence= against topic =workspace:#{ws}:page:#{page}:presence=
+- Helper =ConceptWeb.PageChannel.track(socket, user)= called from =PageLive.mount/3= via =on_mount= hook
+- Refresh action wired: when user edits a block, =ConceptWeb.PageLive= calls =refresh_lock!/2= every 15s while focus is held (heartbeat from Lit hook in FEAT-008)
+- Tests covering lock-expiry trigger and presence join/leave
+
+** Out-of-scope
+- UI rendering of presence avatars (FEAT-015)
+- Lock UI affordances on blocks held by others (FEAT-015)
+
+* Existing Patterns
+- AshOban: =triggers do; trigger :name do; action :acn; where expr(...); scheduler_cron "*/10 * * * * *"; end; end=
+- Phoenix.Presence: =use Phoenix.Presence, otp_app: :concept, pubsub_server: Concept.PubSub=
+
+* Tests
+File: =test/concept/pages/lock_expiry_test.exs=, =test/concept_web/presence_test.exs=
+
+Scenarios:
+1. Block locked with =lock_expires_at= 1s in past; running =Concept.Pages.Block.AshOban.run_trigger(:release_expired_locks)= releases it; state =:unlocked=, holder cleared.
+2. Lock with future expiry not affected by trigger.
+3. =:refresh_lock= called by holder extends =lock_expires_at= by 30s.
+4. Two LV processes joining same page topic appear in =Presence.list/1=; on terminate they leave.
+5. PubSub: presence diff broadcasts on join/leave.
+
+* Implementation
+** ITEM AshOban trigger config
+:PROPERTIES:
+:CUSTOM_ID: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::oban-trigger
+:END:
+- Add =extensions: [..., AshOban]= to Block resource.
+- =oban do; triggers do; trigger :release_expired_locks do; action :release_lock; where expr(lock_state == :locked and lock_expires_at < now()); scheduler_cron "*/10 * * * * *"; queue :locks; max_attempts 3; end; end; end=.
+- Apply Ash policies bypass via =trigger ... actor :system= or set =bypass_policies?: true=.
+- Update =Concept.Oban= config queues with =:locks=.
+
+** ITEM Phoenix.Presence module + on_mount tracker
+:PROPERTIES:
+:CUSTOM_ID: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::presence
+:DEPENDS: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::oban-trigger
+:END:
+- =lib/concept_web/presence.ex= =use Phoenix.Presence, otp_app: :concept, pubsub_server: Concept.PubSub=.
+- =ConceptWeb.PagePresence.track(socket, user, page_id)= calls =Presence.track= with topic =workspace:#{ws_id}:page:#{page_id}:presence= and metadata =%{user_id, display_name, avatar_emoji, online_at}=.
+- =on_mount {ConceptWeb.PagePresence, :track}= for the =:page= live_action in FEAT-005's WorkspaceLive (update FEAT-005 router opts when this lands — already noted there).
+
+** ITEM Heartbeat + refresh integration hook
+:PROPERTIES:
+:CUSTOM_ID: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::heartbeat
+:DEPENDS: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::presence
+:END:
+- Add =handle_info(:lock_heartbeat, socket)= in =ConceptWeb.WorkspaceLive=: refreshes any block lock currently held by =current_user= on the active page; reschedules =Process.send_after(self(), :lock_heartbeat, 15_000)=.
+- Schedule starts on first =:acquire_lock= broadcast for current user; cancelled on =:release_lock=.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::tests
+:DEPENDS: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence::heartbeat
+:END:
+- =lock_expiry_test.exs= manually inserts a stale lock + invokes =AshOban.Test.run_trigger(Block, :release_expired_locks)=; asserts release.
+- Property: the trigger's =where= clause matches only stale locks (use =StreamData= over =lock_expires_at= ± now).
+- =presence_test.exs= spins two LV processes via =LiveViewTest.live=, asserts both appear in =Presence.list= and disappear on shutdown.
+
+* Edge Cases
+- Clock skew: server clock authoritative; client never sends timestamps.
+- Trigger queue backed up: with =max_attempts: 3=, rare; document in module doc.
+- Lock holder reconnects after expiry: their next =:update_content= fails with =:not_lock_holder=; LV catches and shows "Re-acquire?" toast.
+- Presence flapping (5s reconnect): TTL stays 30s so brief disconnects don't release.
+- Test isolation: AshOban trigger must be invoked manually, never via cron, in tests.
+
+* Acceptance Criteria
+- =mix test test/concept/pages/lock_expiry_test.exs test/concept_web/presence_test.exs= green (≥5 scenarios)
+- =Oban Web= (if installed in dev) shows =:release_expired_locks= job processing
+- iex: lock a block, =Process.sleep(31_000)=, run trigger manually → released
+- =mix format --check-formatted= clean

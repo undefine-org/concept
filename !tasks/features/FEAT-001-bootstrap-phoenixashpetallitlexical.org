@@ -1,0 +1,127 @@
+#+TITLE: Bootstrap Phoenix+Ash+Petal+Lit+Lexical
+#+STATE: DOING
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical
+#+EFFORT: 1d
+#+LAYER: bootstrap
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Convert the bare =mix new= project into a Phoenix 1.8 + LiveView 1.0 + Ash 3 application with PetalComponents, Tailwind+Inter, esbuild, Lit 3, Lexical, SortableJS, and a Postgres-backed AshPostgres repo. After this item: =mix phx.server= boots, =/= renders a Petal-styled landing, the JS bundle resolves =import 'lit'= and =import 'lexical'=, and =mix test= is green.
+
+* Context & Narrative
+Repo today: =mix new= scaffold only (=lib/concept.ex= hello-world, =mix.exs= empty deps). Every later FEAT depends on this. AGENTS.md mandates Ash + Lexical-in-Lit + LiveView. User cleared PetalComponents for chrome.
+
+OTP app stays =:concept= (already named); web namespace =ConceptWeb=; domain code under =Concept.*=.
+
+* Scope
+** In-scope
+- Phoenix 1.8 + LiveView 1.0 install (router, endpoint, layouts, dev_dashboard, mailer)
+- Ash 3 deps: =ash=, =ash_postgres=, =ash_phoenix=, =ash_authentication=, =ash_authentication_phoenix=
+- =Concept.Repo= using =AshPostgres.Repo=
+- Tailwind 3 + Inter font (Google Fonts =@import= + system-ui fallback)
+- =petal_components ~> 2.0= installed; tailwind config vendor_paths includes deps/petal_components
+- =assets/package.json= with =lit ^3.0=, =lexical ^0.17=, =@lexical/utils=, =@lexical/selection=, =@lexical/list=, =@lexical/link=, =@lexical/code=, =@lexical/rich-text=, =sortablejs=, =katex=
+- esbuild bundles =assets/js/app.js= which side-effect-imports =./hooks/index.js= and =./components/index.js=
+- =ConceptWeb.HomeLive= placeholder with one Petal button + a mounted dummy =<ora-hello>= Lit element to prove pipeline
+- =config/{dev,test,prod}.exs= configured for Postgres
+- =.tool-versions= or README note for Elixir/Erlang/Node/Postgres versions
+
+** Out-of-scope
+- Auth resources, workspaces, pages, blocks (later FEATs)
+- Real Lit components beyond a smoke-test =<ora-hello>=
+- Production deployment config
+
+* Existing Patterns
+- Bare =mix.exs= line 6 sets =elixir: "~> 1.19"= — keep
+- =lib/concept.ex= will be replaced by =lib/concept/application.ex= supervision tree
+- Use Igniter (=mix igniter.install=) for Ash installers; they patch =mix.exs=, =config/config.exs=, =Application=, =router= and =endpoint= deterministically
+- Phoenix scaffold convention: =lib/concept_web/= for web modules; =lib/concept_web.ex= for use macros
+
+* Tests
+- =mix test= passes the scaffolded =ConceptWeb.HomeLiveTest= asserting the landing renders "Concept" and a Petal button by data-testid
+- =mix phx.routes= lists =GET  /=
+- Manual: =iex -S mix phx.server= → =http://localhost:4000= shows landing with Inter font; browser console shows no JS errors and =customElements.get('ora-hello')= returns a constructor
+
+* Implementation
+** ITEM Install Phoenix+LiveView scaffold
+:PROPERTIES:
+:CUSTOM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical::install-phoenix
+:END:
+- Run =mix archive.install hex phx_new= (if missing) then =mix phx.new . --app concept --module Concept --live --binary-id --database postgres --no-mailer= in repo root, accepting overwrite of =mix.exs=, =README.md=, =test/=. Manually merge: keep existing =AGENTS.md=.
+- Verify =lib/concept_web.ex=, =lib/concept_web/router.ex=, =lib/concept_web/endpoint.ex=, =lib/concept/application.ex= exist.
+- Edit =mix.exs= =elixir: "~> 1.19"= preserved.
+
+** ITEM Add Ash deps via Igniter (full extension stack)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical::install-ash
+:DEPENDS: FEAT-001-bootstrap-phoenixashpetallitlexical::install-phoenix
+:END:
+- Core: =mix igniter.install ash ash_postgres ash_phoenix=
+- Auth: =mix igniter.install ash_authentication ash_authentication_phoenix= (config in FEAT-002)
+- Extensions: =mix igniter.install ash_archival ash_paper_trail ash_state_machine=
+- Background work: =mix igniter.install ash_oban= (transitively adds =:oban= and configures =Concept.Oban= supervisor)
+- Admin: =mix igniter.install ash_admin= (config in FEAT-016)
+- Reactor: =mix igniter.install reactor= (Ash.Reactor used by FEAT-003)
+- Confirm =config/config.exs= registers the empty-for-now =:concept, ash_domains: []= (domains added in FEAT-002+).
+- Run =mix deps.get= and =mix compile=; expect zero warnings.
+- Add to =.formatter.exs= =:import_deps=: =[:ash, :ash_postgres, :ash_phoenix, :ash_authentication, :ash_authentication_phoenix, :ash_archival, :ash_paper_trail, :ash_state_machine, :ash_oban, :ash_admin, :reactor, :phoenix]=.
+
+** ITEM Configure AshPostgres repo + Oban
+:PROPERTIES:
+:CUSTOM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical::repo-config
+:DEPENDS: FEAT-001-bootstrap-phoenixashpetallitlexical::install-ash
+:END:
+- =lib/concept/repo.ex=: =use AshPostgres.Repo, otp_app: :concept=. =installed_extensions/0= returns =["ash-functions", "citext", "uuid-ossp"]=.
+- =config/dev.exs= and =config/test.exs= set Postgres URL/user/db (=concept_dev=, =concept_test#{partition}=).
+- =config :concept, Oban, repo: Concept.Repo, queues: [default: 10, locks: 5], plugins: [Oban.Plugins.Pruner]= (the =:locks= queue is consumed by FEAT-007).
+- Add =Concept.Oban= or ={Oban, Application.fetch_env!(:concept, Oban)}= to =Concept.Application.start/2= children.
+- =mix ecto.create= and =mix ecto.migrate= must succeed (Oban migration auto-generated by =mix ash_oban.install=).
+
+** ITEM Add PetalComponents + Tailwind + Inter
+:PROPERTIES:
+:CUSTOM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical::petal-tailwind
+:DEPENDS: FEAT-001-bootstrap-phoenixashpetallitlexical::install-phoenix
+:END:
+- Add =:petal_components, "~> 2.0"= to =mix.exs= deps; =mix deps.get=.
+- =assets/tailwind.config.js= add =./deps/petal_components/**/*.*ex= to =content=.
+- =assets/css/app.css= prepend =@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");=. Set =font-family: 'Inter', system-ui, -apple-system, sans-serif= on =body= via tailwind theme.
+- =lib/concept_web/components/layouts/root.html.heex= and =app.html.heex= reference Petal alias =alias PetalComponents.{Button, Modal, Dropdown, Sidebar, Field}= where applicable.
+
+** ITEM Wire JS pipeline (Lit, Lexical, SortableJS, KaTeX)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical::js-pipeline
+:DEPENDS: FEAT-001-bootstrap-phoenixashpetallitlexical::install-phoenix
+:END:
+- Create =assets/package.json= via =cd assets && npm init -y= then =npm i lit@^3 lexical@^0.17 @lexical/utils @lexical/selection @lexical/list @lexical/link @lexical/code @lexical/rich-text sortablejs katex=.
+- Update =config/config.exs= esbuild args to bundle =--external:/fonts/* --external:/images/* --loader:.css=text= and resolve =node_modules=.
+- =assets/js/app.js=: imports LiveSocket, =./hooks=, =./components/index.js=. Hooks/components dirs created with placeholder modules.
+- =assets/js/components/ora-hello.js=: minimal Lit element rendering "ok" — proves Lit resolves at build time.
+
+** ITEM Replace HomeLive with smoke landing + tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical::home-smoke
+:DEPENDS: FEAT-001-bootstrap-phoenixashpetallitlexical::petal-tailwind FEAT-001-bootstrap-phoenixashpetallitlexical::js-pipeline FEAT-001-bootstrap-phoenixashpetallitlexical::repo-config
+:END:
+- =lib/concept_web/live/home_live.ex= mounts, renders =<.button label="Get started" data-testid="get-started" />= and =<ora-hello data-testid="ora-hello" />=.
+- Router: =live "/", HomeLive, :index=.
+- =test/concept_web/live/home_live_test.exs=: assert =has_element?(view, "[data-testid=get-started]")= and HTML contains =ora-hello=.
+- Add =test/support/data_case.ex= and =conn_case.ex= via Phoenix scaffold.
+- Sanity: =Concept.Application= supervises =Concept.Repo=, =Phoenix.PubSub=, =ConceptWeb.Endpoint=, =Oban=.
+* Edge Cases
+- Igniter overwrites formatter; re-add =:ash, :ash_postgres= to =:import_deps= in =.formatter.exs=.
+- esbuild may fail to resolve Lexical's package =exports= field — ensure Node 20+ and esbuild 0.21+; pin via =assets/package.json=.
+- Inter font request fails offline → CSS =font-family= fallback chain still renders system-ui.
+- Postgres role missing locally → README must document =createuser -s postgres= step.
+
+* Acceptance Criteria
+- =mix test= green (1+ test, =HomeLiveTest= asserts landing render)
+- =mix phx.server= boots with no warnings; =GET /= → 200 HTML containing "Get started" button and =<ora-hello>= tag
+- =Concept.Repo.__adapter__()= is AshPostgres-backed; =mix ecto.create= and =mix ecto.migrate= idempotent
+- =Oban= supervisor present; =Oban.Job= table created via Ash-generated migration
+- =assets/node_modules/{lit,lexical,sortablejs,katex}= all resolve; =mix assets.build= produces =priv/static/assets/app.js= without errors
+- =mix format --check-formatted= clean; =.formatter.exs= imports all installed Ash extensions

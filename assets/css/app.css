@@ -1,0 +1,41 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap");
+@import "tailwindcss" source(none);
+@source "../../deps/ash_authentication_phoenix";
+@source "../css";
+@source "../js";
+@source "../../lib/concept_web";
+
+@plugin "../vendor/heroicons";
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --color-notion-bg: #FFFFFF;
+  --color-notion-sidebar: #F7F6F3;
+  --color-notion-sidebar-hover: #E9E8E6;
+  --color-notion-sidebar-active: #EFEEEC;
+  --color-notion-text: #37352F;
+  --color-notion-text-light: #787774;
+  --color-notion-divider: #E9E9E7;
+  --color-notion-blue: #2EAADC;
+}
+
+@layer base {
+  html, body { font-family: var(--font-sans); color: var(--color-notion-text); }
+  body { font-feature-settings: 'cv02','cv03','cv04','cv11'; }
+  button { cursor: pointer; }
+}
+
+@layer components {
+  .ora-page-canvas { background: var(--color-notion-bg); max-width: 720px; margin: 0 auto; padding: 96px 96px 240px 96px; }
+  .ora-sidebar { background: var(--color-notion-sidebar); width: 240px; height: 100vh; padding: 8px; overflow-y: auto; }
+  .ora-sidebar-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 14px; color: var(--color-notion-text-light); }
+  .ora-sidebar-row:hover { background: var(--color-notion-sidebar-hover); }
+  .ora-sidebar-row.active { background: var(--color-notion-sidebar-active); color: var(--color-notion-text); }
+  .ora-block { padding: 3px 0; line-height: 1.5; min-height: 1.5em; outline: none; }
+  .ora-block[contenteditable]:empty::before { content: attr(data-placeholder); color: var(--color-notion-text-light); pointer-events: none; }
+  .ora-block.h1 { font-size: 32px; font-weight: 700; padding: 24px 0 4px 0; }
+  .ora-block.h2 { font-size: 26px; font-weight: 600; padding: 20px 0 4px 0; }
+  .ora-block.h3 { font-size: 20px; font-weight: 600; padding: 16px 0 4px 0; }
+}

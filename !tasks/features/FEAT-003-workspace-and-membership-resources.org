@@ -1,0 +1,98 @@
+#+TITLE: Workspace and Membership resources
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-003-workspace-and-membership-resources
+#+DEPENDS: FEAT-002-user-resource-ash-authentication-email-p
+#+EFFORT: 0.5d
+#+LAYER: domain
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Model multi-workspace tenancy: =Concept.Accounts.Workspace= owns pages; =Concept.Accounts.Membership= joins =User= ↔ =Workspace= with role =:owner= or =:member=. On user signup, a personal workspace is auto-created with the user as owner. Provide policies so that page operations (FEAT-004+) authorize via membership.
+
+* Context & Narrative
+Decided: multi-workspace from day 1, no switcher UI in MVP (single personal workspace each), but schema supports many. All page CRUD requires the actor to be a member.
+
+* Scope
+** In-scope
+- =Concept.Accounts.Workspace=: =id, name, slug, icon_emoji ("🏠"), owner_id (FK User), inserted_at, updated_at=
+- =Concept.Accounts.Membership=: =id, workspace_id, user_id, role: :atom (:owner | :member), inserted_at=. Unique index on =(workspace_id, user_id)=
+- Auto-create personal workspace on User register via =AshAuthentication= post-register hook (=after_action= change on =:register= action) — workspace name "#{display_name || email}'s workspace", slug derived from email local-part with random suffix, owner_id = user.id, then Membership row =:owner=.
+- Ash policies: only members of a workspace may =:read=/=:update= it; only =:owner= may =:destroy= or =:invite=.
+- Helper =Concept.Accounts.current_workspace(user)= returns user's first workspace (sufficient for MVP single-workspace UI).
+
+** Out-of-scope
+- Workspace switcher UI, invite-by-email flow (FUP), leaving workspace, transfer ownership
+
+* Existing Patterns
+- AshAuthentication =after_action= hook example: https://hexdocs.pm/ash_authentication/get-started.html#post-registration
+- Ash policies: =authorize :always= with =policy action_type(:read) do; authorize_if expr(...) end=
+- =Ash.Generator= for test fixtures
+
+* Tests
+File: =test/concept/accounts/workspace_test.exs=
+
+Scenarios:
+1. Registering a new user side-effects exactly one =Workspace= and one =Membership= (=role: :owner=); slug is deterministic from email.
+2. Two users registering with the same email local-part get unique slugs (suffix collision handled).
+3. =Workspace.read= action returns workspaces where actor has membership; non-member sees =[]=.
+4. =Membership= unique constraint rejects duplicate user+workspace insert.
+5. Policy: non-owner cannot run =:destroy= on workspace → =Ash.Error.Forbidden=.
+
+* Implementation
+** ITEM Generate Workspace + Membership resources
+:PROPERTIES:
+:CUSTOM_ID: FEAT-003-workspace-and-membership-resources::resources
+:END:
+- =lib/concept/accounts/workspace.ex= and =membership.ex= using =AshPostgres.DataLayer=.
+- Workspace exposes =code_interface= in =Concept.Accounts= domain: =create_personal_workspace/1=, =get_by_slug/1=, =list_for_user/1=.
+- Membership exposes =code_interface=: =add_member/2=, =remove_member/2=, =role_for/2=.
+- Postgres tables =workspaces=, =memberships= with FKs and unique index =(workspace_id, user_id)=.
+- Update =Concept.Accounts= domain block to register =[User, Token, Workspace, Membership]=.
+- =mix ash.codegen workspaces= and =mix ash.migrate=.
+
+** ITEM Onboarding Reactor (signup → workspace → membership → welcome page)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-003-workspace-and-membership-resources::onboarding-reactor
+:DEPENDS: FEAT-003-workspace-and-membership-resources::resources
+:END:
+- =lib/concept/accounts/reactors/onboarding.ex= with =use Ash.Reactor=. Inputs: =user=. Steps:
+  1. =:slug= — pure compute step deriving slug from =user.email= local-part (=String.split("@") |> hd |> Slug.slugify/1=) plus =Nanoid.generate(6)= suffix.
+  2. =:workspace= — =Ash.Reactor.create Workspace, :create_personal=, args =name: "#{display_or_email}'s workspace", slug: result(:slug), icon_emoji: "🏠", owner_id: user.id=. Compensation: =:destroy=.
+  3. =:membership= — =Ash.Reactor.create Membership, :create=, args =workspace_id: result(:workspace).id, user_id: user.id, role: :owner=. Compensation: =:destroy=.
+  4. (Welcome page seeding deferred to FEAT-005 once Page exists; Reactor is built to accept additional steps.)
+- The Reactor is invoked from User resource via =change run_after_register_reactor= (a tiny Ash change that calls =Reactor.run!/2= in =after_action=, but the orchestration logic stays in the Reactor — the change is just glue). Compensations roll back on partial failure.
+- Slug uniqueness: retry up to 3× with new suffix on =:slug_taken= AshError; failure raises =Concept.Accounts.SlugError= and the Reactor compensates.
+
+** ITEM Ash policies for workspace access
+:PROPERTIES:
+:CUSTOM_ID: FEAT-003-workspace-and-membership-resources::policies
+:DEPENDS: FEAT-003-workspace-and-membership-resources::resources
+:END:
+- Workspace policies: =read= → =relates_to_actor_via([:memberships, :user])=; =update/destroy= → membership.role == :owner; =create= bypassed via =authorize_unless actor_present()= (Reactor runs without actor, =:system= context).
+- Membership policies: =read= where =user_id == ^actor(:id)= OR membership exists for the workspace; =create/destroy= owner-only (except first-membership during onboarding which uses =:system= actor).
+- =Concept.Accounts= domain enables =authorize :always= so policies are enforced unconditionally.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-003-workspace-and-membership-resources::tests
+:DEPENDS: FEAT-003-workspace-and-membership-resources::onboarding-reactor FEAT-003-workspace-and-membership-resources::policies
+:END:
+- File =test/concept/accounts/onboarding_reactor_test.exs= covers Reactor in isolation: happy path, slug-collision retry, compensation when Membership step fails (Workspace must be destroyed).
+- File =test/concept/accounts/workspace_test.exs= covers integrated signup (=Concept.Accounts.User |> Ash.Changeset.for_create(:register_with_password, ...) |> Ash.create!=) producing user + workspace + membership atomically.
+- =Concept.AccountsFixtures.user_fixture/1= helper returns =%{user: u, workspace: w, membership: m}=.
+* Edge Cases
+- Slug collision after 3 retries → raise =Concept.Accounts.SlugError=, transaction rolls back, user not created (acceptable for MVP).
+- Email change in future: workspace slug stays (no rename).
+- Multiple workspaces per user: =current_workspace/1= returns first by =inserted_at asc=; UI later may add switcher.
+- Deleting last owner: blocked by policy (cannot self-destroy as only owner).
+
+* Acceptance Criteria
+- =mix test test/concept/accounts/workspace_test.exs= green (5 scenarios)
+- =Concept.Accounts.User |> Ash.Changeset.for_create(:register_with_password, ...) |> Ash.create!()= produces user + workspace + membership atomically (verify in =iex=)
+- Migration =add unique_index(:memberships, [:workspace_id, :user_id])= present
+- =mix format --check-formatted= clean

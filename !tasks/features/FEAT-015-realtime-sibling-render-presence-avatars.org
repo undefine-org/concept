@@ -1,0 +1,99 @@
+#+TITLE: Realtime sibling render presence avatars and lock UI
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-015-realtime-sibling-render-presence-avatars
+#+DEPENDS: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence FEAT-009-block-list-ux-drag-handles-slash-menu-ke
+#+EFFORT: 0.75d
+#+LAYER: realtime
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Make collaboration visible: presence avatars in page header (chip per active user, color-coded), block-level lock indicator (subtle border + holder avatar + holder name tooltip), and seamless propagation of remote content changes (already wired in FEAT-008, polished here).
+
+* Context & Narrative
+FEAT-007 already publishes presence and FEAT-008 already subscribes to block events; this FEAT focuses on UX polish: avatar bar, lock overlays, smooth cross-tab updates without flicker.
+
+* Scope
+** In-scope
+- =ConceptWeb.PresenceBar= live_component in =PageHeader= renders up to 5 avatar chips (initials or emoji) + "+N more" overflow; reads from =Phoenix.Presence.list/1=
+- Each =<ora-block>= gets =data-locked-by= attribute when held by another user; CSS adds left border in user's color + tooltip with holder name
+- =BlockEditor= JS hook respects =data-locked-by= → forces =setReadOnly(true)=, hides format toolbar
+- Color assignment: hash =user_id= to one of 8 preset colors (consistent across sessions)
+- Notification "X user(s) editing" in sidebar page row when remote edits occur (transient toast, 2s)
+- All four lifecycle events drive UI: =:block_locked=, =:block_unlocked=, =:block_updated=, =:presence_diff=
+
+** Out-of-scope
+- Cursor presence (showing exact caret of other users) — requires CRDT-ish work, FUP
+- Selection presence — FUP
+- Notification center for asynchronous events — FUP
+
+* Existing Patterns
+- =Phoenix.Presence.list/1= returns =%{user_id => %{metas: [%{user_id, display_name, avatar_emoji, online_at, color}]}}=
+- Petal Avatar / AvatarGroup components
+- Ash.Notifier.PubSub events from FEAT-006 already reach PageLive
+
+* Tests
+File: =test/concept_web/live/realtime_test.exs=.
+
+Scenarios:
+1. Two PageLive sessions for same page; both appear in presence bar; user A leaves → bar updates within 1s.
+2. User A acquires lock on block X; user B's view marks block X with =data-locked-by=user_a_id= and read-only flag.
+3. User A saves content on block X; user B's =<ora-block>= receives =applyRemote= and renders new content.
+4. User A releases lock; user B's block X becomes editable.
+5. Presence color is stable for the same user across reconnects.
+
+* Implementation
+** ITEM PresenceBar live_component
+:PROPERTIES:
+:CUSTOM_ID: FEAT-015-realtime-sibling-render-presence-avatars::presence-bar
+:END:
+- =lib/concept_web/components/presence_bar.ex= reads =Phoenix.Presence.list/1= on mount + =handle_info {:presence_diff, ...}=.
+- Tailwind classes for circular chips with initials over color background.
+
+** ITEM Lock indicator on blocks
+:PROPERTIES:
+:CUSTOM_ID: FEAT-015-realtime-sibling-render-presence-avatars::lock-indicator
+:DEPENDS: FEAT-015-realtime-sibling-render-presence-avatars::presence-bar
+:END:
+- =PageLive= subscribes to =:block_locked= / =:block_unlocked= events; updates per-block assigns =@locked_by_id=.
+- =<ora-block>= rendered with =data-locked-by={@locked_by_id}= attribute.
+- CSS: =[data-locked-by]:not([data-locked-by=""])= → border-left in holder color.
+- Tooltip via =title= attribute or Petal Tooltip.
+
+** ITEM Color hashing helper
+:PROPERTIES:
+:CUSTOM_ID: FEAT-015-realtime-sibling-render-presence-avatars::color-hash
+:END:
+- =Concept.Accounts.User.color/1=: hash =user.id= → palette index (=:erlang.phash2(id, 8)=); palette in =ConceptWeb.Colors=.
+
+** ITEM Sibling apply_remote pipe
+:PROPERTIES:
+:CUSTOM_ID: FEAT-015-realtime-sibling-render-presence-avatars::apply-remote
+:DEPENDS: FEAT-015-realtime-sibling-render-presence-avatars::lock-indicator
+:END:
+- =PageLive= =handle_info {:block_updated, block, by_user_id}= when =by_user_id != current_user.id= → =push_event "apply_remote_#{block.id}", %{state: block.content}=.
+- =BlockEditor= hook listens for =apply_remote_#{id}= events; calls =element.applyRemote(state)=.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-015-realtime-sibling-render-presence-avatars::tests
+:DEPENDS: FEAT-015-realtime-sibling-render-presence-avatars::apply-remote FEAT-015-realtime-sibling-render-presence-avatars::color-hash
+:END:
+- 5 scenarios in =realtime_test.exs= using two LV processes.
+
+* Edge Cases
+- User in 6 tabs of same workspace: presence shows once (group by =user_id= in metas).
+- Lock granted to user who immediately disconnects: TTL release (FEAT-007) clears it; UI updates within 30s + 10s trigger interval.
+- Presence flap (network blip): 5s grace before removing avatar.
+- Apply remote arriving while user holds lock: discarded with warning (should not happen due to lock contract).
+- Color collision (8 colors, >8 users): tolerated; users with same color distinguished by initials.
+
+* Acceptance Criteria
+- =mix test test/concept_web/live/realtime_test.exs= green (5 scenarios)
+- Manual: open same page in 2 browsers, edit in one, see update + lock indicator in other
+- Presence bar shows ≤5 chips + overflow on 6+ users
+- =mix format --check-formatted= clean

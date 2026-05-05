@@ -1,0 +1,116 @@
+#+TITLE: Inline marks bold italic underline strike code link
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-011-inline-marks-bold-italic-underline-strik
+#+DEPENDS: FEAT-008-lit-ora-block-web-component-with-lexical
+#+EFFORT: 0.75d
+#+LAYER: ui
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Enable inline text formatting on every text-bearing block (paragraph, headings, list items, quote, callout, toggle, to_do): bold, italic, underline, strikethrough, inline code, and link (URL editor). Floating Petal-styled toolbar appears above text selection. Keyboard shortcuts: Cmd-B/I/U, Cmd-Shift-X, Cmd-E, Cmd-K (link).
+
+* Context & Narrative
+Lexical handles marks via =TextNode.format= bitmask natively. Link is its own node from =@lexical/link=. We add a Lit floating toolbar Lit element rendered when a Lexical selection is non-collapsed.
+
+* Scope
+** In-scope
+- Lexical formats enabled in =assets/js/lexical/registry.js=: =BOLD=, =ITALIC=, =UNDERLINE=, =STRIKETHROUGH=, =CODE=. =LinkNode= from =@lexical/link= registered.
+- =assets/js/components/ora-format-toolbar.js= Lit element: floats above selection (computed via getBoundingClientRect of selection); buttons toggle each format; Link button opens =ora-link-editor= popover.
+- =assets/js/components/ora-link-editor.js= Lit popover: Petal-styled URL field + Apply/Remove buttons; on Apply runs =$toggleLink(url)= from =@lexical/link=.
+- Keyboard shortcuts registered via Lexical command listeners in =BlockEditor= hook.
+- Style: =.text-bold{font-weight:600}=, =.text-italic{font-style:italic}=, etc. via Lit element shadow CSS or global Tailwind utilities.
+- Server-side static render: =BlockType.render_static/1= must walk Lexical TextNode format bits and emit corresponding HTML (=<strong>=, =<em>=, =<u>=, =<s>=, =<code>=, =<a href>=). Implemented in =Concept.Lexical.to_html/1= helper from FEAT-006, extended here.
+- Tests: format toggling persists in saved =content=; static render emits correct tags.
+
+** Out-of-scope
+- Color marks (Notion has color text + background) — FUP
+- Comments / suggestions on marks — FUP
+- Mention nodes (@user) — FUP
+- Markdown shortcuts (=**bold**= → bold) — FUP
+
+* Existing Patterns
+- Lexical commands: =editor.dispatchCommand(FORMAT_TEXT_COMMAND, "bold")=
+- =@lexical/link=: =$toggleLink(url, attributes)=
+- Petal Button + Field for toolbar/link editor
+
+* Tests
+File: =test/concept_web/live/inline_marks_test.exs=, JS test =assets/test/format-toolbar.test.js=.
+
+Scenarios:
+1. Server: =Concept.Lexical.to_html(content_with_bold_text) =~ "<strong>"=.
+2. Server: link node rendered as =<a href="https://example.com" rel="noopener">label</a>=.
+3. LV: simulated content update with =format = 1= (bold bit) round-trips through =:save_content=; =plain_text= calc still extracts text correctly.
+4. JS: simulating selection + Bold button click toggles BOLD format on TextNode.
+5. JS: link editor with empty URL removes link node; with URL applies LinkNode wrapping.
+6. Keyboard shortcut Cmd-B inside a paragraph emits same FORMAT_TEXT_COMMAND.
+
+* Implementation
+** ITEM Lexical format + link node registration
+:PROPERTIES:
+:CUSTOM_ID: FEAT-011-inline-marks-bold-italic-underline-strik::lexical-formats
+:END:
+- Update =assets/js/lexical/registry.js= adding =LinkNode=.
+- =assets/js/lexical/commands.js= helper module exporting =toggleBold(editor)=, =applyLink(editor, url)= using Lexical commands.
+
+** ITEM Format toolbar Lit element
+:PROPERTIES:
+:CUSTOM_ID: FEAT-011-inline-marks-bold-italic-underline-strik::format-toolbar
+:DEPENDS: FEAT-011-inline-marks-bold-italic-underline-strik::lexical-formats
+:END:
+- =ora-format-toolbar.js= rendered globally inside =PageLive=; positioned absolutely; observes =selectionchange= event.
+- Buttons styled like Petal Toolbar; icons via inline SVG.
+- Aware of which formats are active (highlighted).
+
+** ITEM Link editor popover
+:PROPERTIES:
+:CUSTOM_ID: FEAT-011-inline-marks-bold-italic-underline-strik::link-editor
+:DEPENDS: FEAT-011-inline-marks-bold-italic-underline-strik::format-toolbar
+:END:
+- =ora-link-editor.js= sub-popover triggered by toolbar's Link button or Cmd-K.
+- Detects existing link in selection: prefills URL; "Remove" button appears.
+- Clicking outside dismisses without applying.
+
+** ITEM Server-side mark rendering in Concept.Lexical
+:PROPERTIES:
+:CUSTOM_ID: FEAT-011-inline-marks-bold-italic-underline-strik::server-render
+:DEPENDS: FEAT-011-inline-marks-bold-italic-underline-strik::lexical-formats
+:END:
+- Extend =Concept.Lexical.to_html/1= to handle =format= bitmask: =1=BOLD, 2=ITALIC, 4=STRIKETHROUGH, 8=UNDERLINE, 16=CODE= (Lexical constants).
+- Link node walks =children= and wraps in =<a>=.
+- Used by =BlockType.render_static/1= for all text-bearing types — no per-type code needed.
+
+** ITEM Keyboard shortcuts in BlockEditor hook
+:PROPERTIES:
+:CUSTOM_ID: FEAT-011-inline-marks-bold-italic-underline-strik::shortcuts
+:DEPENDS: FEAT-011-inline-marks-bold-italic-underline-strik::format-toolbar
+:END:
+- Register Lexical command listeners on editor instance for =FORMAT_TEXT_COMMAND=.
+- Cmd-K opens link-editor without going through toolbar.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-011-inline-marks-bold-italic-underline-strik::tests
+:DEPENDS: FEAT-011-inline-marks-bold-italic-underline-strik::server-render FEAT-011-inline-marks-bold-italic-underline-strik::shortcuts FEAT-011-inline-marks-bold-italic-underline-strik::link-editor
+:END:
+- Server tests in =inline_marks_test.exs= cover scenarios 1–3.
+- JS tests cover scenarios 4–6 in =assets/test/format-toolbar.test.js=.
+
+* Edge Cases
+- Multiple formats overlapping (bold+italic+code): both bits set; HTML nests =<code><strong><em>...=.
+- Link on selection that already contains link: replace.
+- Link URL invalid (no scheme, no domain): client warns, server validates to_html escapes URL.
+- XSS via link href starting with =javascript:=: sanitize in to_html — only allow http/https/mailto.
+- Cmd-K conflicting with browser shortcut: prevent default only when block is focused.
+- Selection across multiple blocks: out of scope (single-block scope only); toolbar hides if selection spans blocks.
+
+* Acceptance Criteria
+- =mix test test/concept_web/live/inline_marks_test.exs= green (3 server scenarios)
+- =cd assets && npm test -- format-toolbar= green (3 JS scenarios)
+- Manual: select paragraph text, toolbar appears, Bold makes it bold, Cmd-K adds link, refreshing page preserves formatting
+- =Concept.Lexical.to_html/1= handles all 5 marks + link with no =<script>= injection (XSS-safe)
+- =mix format --check-formatted= clean

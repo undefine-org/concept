@@ -1,0 +1,100 @@
+#+TITLE: Cmd-K command palette title search and quick actions
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-014-cmd-k-command-palette-title-search-and-q
+#+DEPENDS: FEAT-009-block-list-ux-drag-handles-slash-menu-ke FEAT-013-page-metadata-ui-emoji-icon-cover-color
+#+EFFORT: 0.5d
+#+LAYER: ui
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Cmd-K (Ctrl-K on Linux/Windows) opens a Petal-styled overlay command palette with: title-only ILIKE page search across the workspace, quick actions (New page, New page in current page, Sign out, Toggle archived view), and arrow-key + Enter selection. Replaces the inert search box in the sidebar.
+
+* Context & Narrative
+Title-only ILIKE keeps the implementation tiny while satisfying the "Search in MVP" decision; Postgres pg_trgm index keeps it fast.
+
+* Scope
+** In-scope
+- =ConceptWeb.CommandPaletteLive= live_component embedded into =WorkspaceLive=, hidden by default; opened via =push_event "open_command_palette"= triggered by global keybinding hook =assets/js/hooks/global_keys.js=
+- Global keys hook listens for Cmd-K / Ctrl-K, pushes =:open_palette= to LV
+- Server action =Concept.Pages.search_pages_by_title/2= executes Ash read action =:search_titles= filtering =title ILIKE ^"%#{query}%"= AND =archived_at is_nil=, ordered by updated_at desc, limit 20
+- pg_trgm index on =pages.title= via migration =CREATE INDEX pages_title_trgm_idx ON pages USING gin (title gin_trgm_ops)=
+- Action items hardcoded:
+  - "New page" → =Concept.Pages.create_page!=
+  - "New child page" (if a page is currently open) → =create_page!= with =parent_page_id=
+  - "Sign out" → push_navigate to =/sign-out=
+  - "Show archived" → toggle a sidebar pref (FUP for full archive viewer; here it just adds a flag)
+- Petal Modal-style overlay with input, sectioned results, keyboard nav
+
+** Out-of-scope
+- Full-text search across block content (FUP)
+- Recent pages section (FUP — would require activity log)
+- Page action commands (rename, archive, move) — FUP
+
+* Existing Patterns
+- =AshPhoenix.Form= overkill for one input; use plain assign-driven event
+- =Phoenix.LiveView.JS= for transitions
+- pg_trgm migration via Ash custom migration step
+
+* Tests
+File: =test/concept_web/live/command_palette_test.exs=.
+
+Scenarios:
+1. Cmd-K opens palette; Esc closes.
+2. Typing "ro" returns pages with "Roadmap", "Roma" but not "Notes".
+3. Arrow Down/Up cycles selection; Enter navigates to page.
+4. "New page" action creates page and navigates to it.
+5. "Sign out" action redirects to =/sign-out=.
+6. Search excludes archived pages.
+
+* Implementation
+** ITEM Search action + pg_trgm index
+:PROPERTIES:
+:CUSTOM_ID: FEAT-014-cmd-k-command-palette-title-search-and-q::search-action
+:END:
+- Add =:search_titles= read action on =Concept.Pages.Page= with arg =:query=, filter via =Ash.Query.filter expr(ilike(title, ^"%#{query}%") and is_nil(archived_at))=, sort by =updated_at desc=, limit 20.
+- Migration =CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE INDEX pages_title_trgm_idx ON pages USING gin (title gin_trgm_ops);= via Ash custom migration step.
+- code_interface =search_pages_by_title!/2=.
+
+** ITEM Global keybinding hook
+:PROPERTIES:
+:CUSTOM_ID: FEAT-014-cmd-k-command-palette-title-search-and-q::global-keys
+:DEPENDS: FEAT-014-cmd-k-command-palette-title-search-and-q::search-action
+:END:
+- =assets/js/hooks/global_keys.js= attached to =<body phx-hook="GlobalKeys">= or LV root.
+- Captures Cmd-K / Ctrl-K (preventDefault) and pushes ="open_command_palette"=.
+- Esc captured when palette open to push ="close_command_palette"=.
+
+** ITEM CommandPaletteLive component
+:PROPERTIES:
+:CUSTOM_ID: FEAT-014-cmd-k-command-palette-title-search-and-q::palette-component
+:DEPENDS: FEAT-014-cmd-k-command-palette-title-search-and-q::global-keys
+:END:
+- =lib/concept_web/live/command_palette_live.ex= live_component.
+- Renders Petal Modal-like overlay with input (=phx-keyup="search" phx-debounce="100"=) and result list grouped: Actions / Pages.
+- Arrow keys cycle =:selected_index=; Enter dispatches selected item's action.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-014-cmd-k-command-palette-title-search-and-q::tests
+:DEPENDS: FEAT-014-cmd-k-command-palette-title-search-and-q::palette-component
+:END:
+- All 6 scenarios; key events simulated via =render_keydown/3=.
+
+* Edge Cases
+- Empty query: show only Actions section + "Recent" (FUP — show empty pages section).
+- Query with =% _= SQL wildcards: escape via =Postgrex= parameterization (Ash handles).
+- Query of 100+ chars: truncate to 100.
+- Workspace with 50k pages: pg_trgm keeps query under 50ms; limit 20 caps payload.
+- Cmd-K inside Lexical editor: still triggers palette (preventDefault wins).
+- Palette open while modal open: only one floating overlay at a time; later one wins.
+
+* Acceptance Criteria
+- =mix test test/concept_web/live/command_palette_test.exs= green (6 scenarios)
+- pg_trgm extension installed; index present in migration
+- Manual: Cmd-K from any page opens palette; typing finds pages; Enter navigates
+- =EXPLAIN ANALYZE SELECT id FROM pages WHERE title ILIKE '%foo%'= shows index scan, not seq scan, on dataset >1k rows

@@ -1,0 +1,128 @@
+#+TITLE: Lit ora-block web component with Lexical editor
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-008-lit-ora-block-web-component-with-lexical
+#+DEPENDS: FEAT-006-block-ash-resource-with-extensible-block
+#+EFFORT: 2d
+#+LAYER: ui
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Build the per-block Lit web component =<ora-block>= that hosts one Lexical editor instance, plus the LiveView hook =BlockEditor= that wires it to the server: lock acquire on focus, lock release on blur, debounced =:update_content= save, render-from-server on remote update. Render =:paragraph=, =:heading_1/2/3= types end-to-end in =ConceptWeb.PageLive=. Read-only render for blocks held by other users.
+
+* Context & Narrative
+This is the first integration of Lit + Lexical + LV + Ash. We restrict to the 4 types from FEAT-006 to prove the loop; remaining types in FEAT-010/012 plug in via the BlockType registry without rewiring this layer.
+
+* Scope
+** In-scope
+- =assets/js/components/ora-block.js= Lit element:
+  - Attributes: =block-id=, =block-type=, =initial-content= (JSON-encoded EditorState), =read-only= (bool), =placeholder= (string)
+  - Mounts a Lexical headless editor in =firstUpdated()= using =createEditor({ namespace: "ora", nodes: [...registry], theme: ora.theme })=
+  - Loads initial state via =editor.setEditorState(editor.parseEditorState(JSON))=
+  - Listens to editor updates → emits ={detail: {state}}= CustomEvent =ora-block-change= (debounced 400ms)
+  - Emits =ora-block-focus=, =ora-block-blur=, =ora-block-arrow-up=, =ora-block-arrow-down=, =ora-block-enter-at-end=, =ora-block-backspace-at-start=
+  - =read-only= sets =editor.setEditable(false)=
+- =assets/js/lexical/registry.js=: imports the four lexical core nodes (=ParagraphNode=, =HeadingNode=, =TextNode=, =LineBreakNode=) plus =@lexical/rich-text= bootstrapping. Mapping from BlockType =lexical_node= string to JS class.
+- =assets/js/hooks/block_editor.js= Phoenix LV Hook attached to =<ora-block>= host:
+  - =mounted()=: listens to ora-block-* events; pushes server events =:focus_block=, =:blur_block=, =:save_content=, =:nav_block=
+  - =updated()=: when server pushes new initial-content (e.g. another user edited), calls =element.applyRemote(state)= which uses =editor.setEditorState= without firing local change handler (guard flag)
+  - Lock handling: on focus → push =:focus_block= → server attempts =acquire_lock!/2= → on success, server replies via =push_event "lock_granted"=; on failure (=:lock_held_by_other=), Hook sets =read-only=
+  - Heartbeat: while focused, sends =:refresh_lock= every 15s
+- =ConceptWeb.PageLive= module rendered inside =WorkspaceLive='s =:page= live_action slot:
+  - =mount/3= loads page + blocks via =Concept.Pages.list_blocks_for_page!=
+  - =render/1= iterates =@blocks= and renders =<ora-block>= per row with =phx-hook="BlockEditor"=
+  - =handle_event "focus_block"=: =Concept.Pages.acquire_lock!/2=; on success broadcast + push lock_granted; on failure push =:lock_denied=
+  - =handle_event "save_content"=: validates lock, =Concept.Pages.update_content!/2=
+  - =handle_event "blur_block"=: =Concept.Pages.release_lock!/2=
+  - =handle_info {:block_updated, block}=: when sender is another user, push =:apply_remote= to that block
+- Static read-only render fallback (server-rendered HTML inside =<ora-block read-only>=) for first paint / non-JS / SEO
+
+** Out-of-scope
+- Block list UX (drag, +, ::, slash menu) — FEAT-009
+- Inline marks (bold/italic/etc.) — FEAT-011
+- More block types — FEAT-010
+- Composite types — FEAT-012
+- Presence avatars / lock UI affordance polish — FEAT-015
+
+* Existing Patterns
+- Lit reactive properties: https://lit.dev/docs/components/properties/
+- Phoenix LV hook lifecycle: =mounted/updated/destroyed/disconnected/reconnected=
+- Lexical headless registration: =createEditor({ nodes, theme, onError })=
+- =@lexical/rich-text= provides default registration helpers; we register our subset
+
+* Tests
+Files: =test/concept_web/live/page_live_test.exs=, =test/concept_web/components/ora_block_render_test.exs= (server-side render fallback), JS unit test =assets/test/ora-block.test.js= (vitest or similar — set up via FEAT-001 polish).
+
+Scenarios:
+1. =PageLive= mounts, server-renders 1 paragraph block with text "Hello"; HTML contains =<ora-block block-id=...>=.
+2. =handle_event "save_content"= for current lock holder updates block; PaperTrail row created.
+3. =handle_event "save_content"= without lock returns error tuple, content not updated.
+4. =:focus_block= acquires lock; broadcasts =:block_locked=. Same user blurring releases lock.
+5. Two PageLive processes for same page: user A focuses block X. User B's view receives =push_event :read_only_on=.
+6. Server applies remote update: when user A saves, user B's =<ora-block>= receives =applyRemote(state)= and re-renders without losing user B's caret position elsewhere.
+7. JS unit: ora-block emits =ora-block-change= on simulated input; debounced.
+
+* Implementation
+** ITEM Lit ora-block component (paragraph + headings)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-008-lit-ora-block-web-component-with-lexical::ora-block-lit
+:END:
+- =assets/js/components/ora-block.js= using =LitElement= base.
+- Uses Shadow DOM =false= (light DOM) so server-rendered fallback is visible until JS upgrades.
+- =render()= returns =<div part="content" contenteditable=...></div>=; Lexical attaches there.
+- Style minimal: inherits font-family from page; H1/H2/H3 sizes via Tailwind classes propagated through =part=.
+- Public methods: =applyRemote(stateJson)=, =setReadOnly(bool)=, =focusEnd()=, =focusStart()=.
+
+** ITEM Lexical registry + rich-text setup
+:PROPERTIES:
+:CUSTOM_ID: FEAT-008-lit-ora-block-web-component-with-lexical::lexical-registry
+:DEPENDS: FEAT-008-lit-ora-block-web-component-with-lexical::ora-block-lit
+:END:
+- =assets/js/lexical/registry.js= imports =ParagraphNode=, =HeadingNode=, =TextNode=, =LineBreakNode=.
+- =assets/js/lexical/theme.js= defines minimal theme classes (=paragraph=, =heading h1/h2/h3=).
+- =assets/js/lexical/state.js= helpers: =parseInitial(json)=, =serialize(editor)=.
+
+** ITEM BlockEditor LV hook
+:PROPERTIES:
+:CUSTOM_ID: FEAT-008-lit-ora-block-web-component-with-lexical::block-editor-hook
+:DEPENDS: FEAT-008-lit-ora-block-web-component-with-lexical::ora-block-lit
+:END:
+- =assets/js/hooks/block_editor.js=. Wires events ↔ pushes; manages debounce, heartbeat timer, applyRemote guard.
+- =assets/js/hooks/index.js= exports map ={ BlockEditor }= consumed by =app.js=.
+
+** ITEM PageLive + server-side render fallback
+:PROPERTIES:
+:CUSTOM_ID: FEAT-008-lit-ora-block-web-component-with-lexical::page-live
+:DEPENDS: FEAT-008-lit-ora-block-web-component-with-lexical::block-editor-hook
+:END:
+- =lib/concept_web/live/page_live.ex= rendered via =live_render/3= from WorkspaceLive (=<.live_render module={PageLive} id={"page-#{page.id}"} session={%{"page_id" => page.id}} />=) so its assigns lifecycle is decoupled.
+- Server-side =<ora-block>= renders a static HTML body using =BlockType.render_static/1= for first paint; Lit upgrades on JS load.
+- Saves go through =Concept.Pages.update_content!/2= which emits PubSub events.
+
+** ITEM Tests (server + client)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-008-lit-ora-block-web-component-with-lexical::tests
+:DEPENDS: FEAT-008-lit-ora-block-web-component-with-lexical::page-live
+:END:
+- LV test scenarios 1–6 above; cross-process testing via two =live(conn, ...)= sessions.
+- JS unit test scenario 7 via =vitest=; configure under =assets/=. (=vitest= dev dep added in FEAT-001 follow-up — capture as note.)
+- Add =vitest= to =assets/package.json= devDeps if missing; CI step =cd assets && npm test=.
+
+* Edge Cases
+- Initial editor state JSON malformed → Lit element catches exception, falls back to empty paragraph and pushes =:client_state_recovered= event with original JSON for server-side log.
+- Lock granted by server then user navigates away within 100ms: hook's =destroyed()= sends =:blur_block=; server releases.
+- LV reconnect: hook =reconnected()= clears debounce + re-subscribes; if local edits pending, immediate save flush.
+- Lexical's =onError= callback escalates to LV via =:editor_error= push; server logs and keeps block read-only until next focus.
+- Conflicting remote update arriving while user holds lock: should not happen (lock prevents it); if it does (clock skew), discard remote, log warning.
+- Caret loss on remote applyRemote: the spec says we only call applyRemote when local user does NOT hold the lock. Lexical's =setEditorState= preserves selection where possible.
+
+* Acceptance Criteria
+- =mix test test/concept_web/live/page_live_test.exs= green (6 LV scenarios)
+- =cd assets && npm test= green (1 JS scenario)
+- Manual: typing in a paragraph block updates DB within ~400ms; closing tab releases lock; reopening preserves text
+- =assets/js/components/ora-block.js= ≤ 250 LOC; =hooks/block_editor.js= ≤ 200 LOC
+- HTML first-paint contains rendered text without JS (server-side render); JS upgrades to Lexical without flash

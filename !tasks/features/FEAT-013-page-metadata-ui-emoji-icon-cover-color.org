@@ -1,0 +1,116 @@
+#+TITLE: Page metadata UI emoji icon cover color title
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color
+#+DEPENDS: FEAT-005-workspace-shell-liveview-with-sidebar-pa
+#+EFFORT: 0.5d
+#+LAYER: ui
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Notion-style page header: emoji icon picker, solid-color cover band, large editable title (single-line, bold). All three editable inline; values persist via Ash =Concept.Pages.set_icon!=, =set_cover_color!=, =rename_page!= using =AshPhoenix.Form=.
+
+* Context & Narrative
+Page metadata changes broadcast via Ash.Notifier.PubSub (already configured in FEAT-004); sidebar tree row reflects new icon/title in real time.
+
+* Scope
+** In-scope
+- =ConceptWeb.PageHeader= live_component:
+  - Emoji icon button (32px) → opens =ora-emoji-picker= popover (Lit element wrapping =emoji-picker-element= npm package or custom grid)
+  - Cover color band (160px height when set, hidden when =default=) above title; "+ Add cover" affordance when none
+  - Title input: single-line contenteditable, autosize font 36px, bold, Inter, placeholder "Untitled"
+- AshPhoenix.Form for title with debounced 500ms autosave on blur or Enter
+- =assets/js/components/ora-emoji-picker.js= Lit element with grid of common emojis (≈300, hardcoded categories: smileys, animals, food, travel, objects, symbols) + filter input — no external API
+- Color band component: 9 colors matching Notion palette swatches (default, gray, brown, orange, yellow, green, blue, purple, pink, red); CSS gradients hardcoded
+- Sidebar row in PageTree (FEAT-005) reads =icon_emoji= from page assigns; live-updates via PubSub event
+- Tests: changing each field persists; sidebar row updates across two LV processes
+
+** Out-of-scope
+- Image/gradient covers (FUP)
+- Custom emoji upload (FUP)
+- Cover positioning (FUP)
+- Page lock icon for "locked-by-other" status — that's general lock UI, FEAT-015
+
+* Existing Patterns
+- AshPhoenix.Form: =AshPhoenix.Form.for_update(page, :rename, ...)=
+- Petal Field for inline forms; Petal Modal for emoji picker on small screens (desktop uses Lit popover)
+- Phoenix.PubSub already wired by FEAT-004's pub_sub block on Page resource
+
+* Tests
+File: =test/concept_web/live/page_header_test.exs=, JS test =assets/test/emoji-picker.test.js=.
+
+Scenarios:
+1. Click emoji button → picker opens; selecting "🚀" updates =page.icon_emoji= and sidebar row.
+2. Click "+ Add cover" → cover swatches popover; selecting "blue" sets =cover_color= to "blue"; band renders.
+3. Editing title and pressing Enter saves via =:rename= action; PaperTrail records.
+4. Editing title and clicking outside (blur) also saves; empty title stored as "" — sidebar shows "Untitled" via fallback render.
+5. Two LV processes: title change in tab A appears in tab B sidebar within one PubSub round-trip.
+6. JS: emoji picker filter "rocket" narrows results to 🚀.
+
+* Implementation
+** ITEM PageHeader live_component skeleton
+:PROPERTIES:
+:CUSTOM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color::page-header-component
+:END:
+- =lib/concept_web/components/page_header.ex= live_component renders header, accepts =:page= assign + =:current_user=.
+- Uses Petal classes for shape; custom sizing for Notion-feel.
+
+** ITEM Emoji picker (Lit) + LV wiring
+:PROPERTIES:
+:CUSTOM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color::emoji-picker
+:DEPENDS: FEAT-013-page-metadata-ui-emoji-icon-cover-color::page-header-component
+:END:
+- =assets/js/components/ora-emoji-picker.js=. ~300 emojis hardcoded in JS module =assets/js/data/emojis.js=.
+- Filter via simple substring on emoji =keywords= field.
+- Emits =select={detail: emoji}= → hook pushes =:set_icon=.
+
+** ITEM Cover color band
+:PROPERTIES:
+:CUSTOM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color::cover-color
+:DEPENDS: FEAT-013-page-metadata-ui-emoji-icon-cover-color::page-header-component
+:END:
+- Static swatch palette in HEEx; click triggers =:set_cover_color=.
+- "Remove cover" button when set; sets back to "default".
+
+** ITEM Inline title via AshPhoenix.Form
+:PROPERTIES:
+:CUSTOM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color::title-edit
+:DEPENDS: FEAT-013-page-metadata-ui-emoji-icon-cover-color::page-header-component
+:END:
+- =<.simple_form for={@title_form} phx-change="title-change" phx-submit="title-save">=
+- Debounced server-side via =phx-debounce="500"=.
+- On submit (Enter), =AshPhoenix.Form.submit/1=.
+
+** ITEM Sidebar row PubSub sync (consumes FEAT-005 + FEAT-004)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color::sidebar-sync
+:DEPENDS: FEAT-013-page-metadata-ui-emoji-icon-cover-color::title-edit FEAT-013-page-metadata-ui-emoji-icon-cover-color::emoji-picker FEAT-013-page-metadata-ui-emoji-icon-cover-color::cover-color
+:END:
+- Verify FEAT-005's =handle_info= for =:page_updated= updates =@pages= stream; if not already done, complete here.
+- Test cross-tab.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color::tests
+:DEPENDS: FEAT-013-page-metadata-ui-emoji-icon-cover-color::sidebar-sync
+:END:
+- =page_header_test.exs= covers 5 LV scenarios.
+- JS test for emoji picker filter.
+
+* Edge Cases
+- Empty title: stored as "" not nil; sidebar shows "Untitled" via =title || "Untitled"= guard.
+- Special characters in title (emoji, RTL): allowed as-is.
+- Color name unknown: validation rejects via Ash constraint.
+- Concurrent rename: last-writer wins; PaperTrail captures sequence.
+- Picker closing while a save is in flight: save still completes.
+
+* Acceptance Criteria
+- =mix test test/concept_web/live/page_header_test.exs= green (5 scenarios)
+- =cd assets && npm test -- emoji-picker= green (1 scenario)
+- Manual: click emoji, pick rocket, see sidebar update; type new title, press Enter, sidebar updates
+- =Concept.Pages.set_icon!(page, "🚀", actor: user)= round-trip works
+- =mix format --check-formatted= clean

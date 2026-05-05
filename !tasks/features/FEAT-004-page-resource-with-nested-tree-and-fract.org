@@ -1,0 +1,147 @@
+#+TITLE: Page resource with nested tree and fractional position
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-004-page-resource-with-nested-tree-and-fract
+#+DEPENDS: FEAT-003-workspace-and-membership-resources
+#+EFFORT: 1d
+#+LAYER: domain
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Model Notion-style nested pages as =Concept.Pages.Page= within =Concept.Pages= domain. Pages are tree-structured per workspace via =parent_page_id= self-FK, ordered by fractional-index =position= (LexoRank-like string), soft-deletable via =archived_at=. Provide actions: =:create_page=, =:rename=, =:set_icon=, =:set_cover_color=, =:reparent=, =:reorder=, =:archive=, =:restore=. Authorisation: actor must be a member of the workspace.
+
+* Context & Narrative
+Foundation for sidebar tree (FEAT-005) and block storage (FEAT-006). Fractional indexing avoids re-shuffling siblings on insert; we use string keys (LexoRank single-char alphabet) so two clients can insert "between A and B" by midpoint without coordination.
+
+* Scope
+** In-scope
+- =Concept.Pages= Ash domain with =code_interface= exposing: =create_page!/1=, =rename_page!/2=, =set_icon!/2=, =set_cover_color!/2=, =reorder_page!/2=, =reparent_page!/3=, =archive_page!/1=, =restore_page!/1=, =list_tree!/1=, =get_page!/1=, =breadcrumbs!/1=
+- =Concept.Pages.Page= Ash resource with extensions =AshPostgres.DataLayer=, =AshArchival.Resource=, =AshPaperTrail.Resource=
+  - Multitenancy: =multitenancy do; strategy :attribute; attribute :workspace_id; global? false; end= — every read/write is workspace-scoped automatically
+  - Attributes: =id (uuid), workspace_id (FK, tenant), parent_page_id (nullable self-FK), title (:string, default ""), icon_emoji (:string, default "📄"), cover_color (:string, constraint one_of), position (:string, fractional index)=
+  - Soft-delete via =AshArchival= (=archived_at= managed automatically; =:destroy= becomes archive)
+  - Version history via =AshPaperTrail= → table =page_versions=
+- =Concept.Pages.FractionalIndex= module: =between/2=, =after/1=, =before/1=, =initial/0=
+- Actions:
+  - =:create_page= args =parent_page_id (optional), title=; computes position; =workspace_id= comes from tenant
+  - =:rename= arg =title=
+  - =:set_icon= arg =icon_emoji=
+  - =:set_cover_color= arg constrained to =~w(default red orange yellow green blue purple pink gray)=
+  - =:reparent= args =parent_page_id, position=
+  - =:reorder= arg =position= (within current parent)
+  - =:archive= via AshArchival (cascades to descendants in transactional change; descendants archived_at is set to same timestamp)
+  - =:restore= clears =archived_at=
+- Calculations: =calculate :depth, :integer, expr(...recursive...)=, =calculate :breadcrumbs, {:array, :map}, Concept.Pages.Calculations.Breadcrumbs=
+- Aggregates: =aggregate :children_count, :count, :children=, =aggregate :block_count, :count, :blocks= (FK exists from FEAT-006; declare as relation upfront with empty target until FEAT-006 lands — feature-flag the aggregate behind a compile-time guard or stub it as 0 until FEAT-006)
+- Read action =:list_tree= ordered by =position=; benefits from auto-archival filter
+- Index =(workspace_id, parent_page_id, position)= for sidebar query
+
+** Out-of-scope
+- Block storage (FEAT-006)
+- Hard delete (=:purge=) — FUP
+- Page templates, duplication, page history UI (FEAT-006 PaperTrail data is captured but no UI yet)
+* Existing Patterns
+- Ash =manage_relationship= for FKs
+- AshPostgres recursive query via =fragment("WITH RECURSIVE ...")= or use =Concept.Repo.query!= for breadcrumbs/cascade
+- Fractional indexing reference: https://observablehq.com/@dgreensp/implementing-fractional-indexing
+- =Ash.Notifier.PubSub= for broadcasting page tree changes (used by FEAT-005 sidebar)
+
+* Tests
+Files: =test/concept/pages/page_test.exs=, =test/concept/pages/fractional_index_test.exs=
+
+Scenarios:
+1. =FractionalIndex.between("a", "c") == "b"=; =between("a", "b") == "an"= (midpoint extending alphabet); =initial() == "n"= (mid of a..z).
+2. Creating 3 pages at root produces strictly-increasing positions; sibling order matches insertion order.
+3. =:reorder= moves page between siblings: target between B and C → new position is =FractionalIndex.between(B.pos, C.pos)=; siblings unchanged.
+4. =:reparent= to deeper parent updates =parent_page_id=; descendants stay attached (subtree moves with it).
+5. =:archive= on a parent cascades =archived_at= to all descendants in one transaction; =:list_tree= returns =[]=.
+6. =:restore= clears archived_at on the page only (descendants stay archived unless explicitly restored).
+7. Policy: a user not in the workspace gets =Ash.Error.Forbidden= on =:create_page=.
+8. Cycle prevention: =:reparent= where new parent is a descendant raises =:cycle_detected= validation error.
+
+* Implementation
+** ITEM FractionalIndex pure module + tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-004-page-resource-with-nested-tree-and-fract::fractional-index
+:END:
+- =lib/concept/pages/fractional_index.ex= with alphabet =?a..?z=, BASE=26.
+- =between(nil, nil)= = =initial/0= = =<<(?a + 12)>>= (≈"m").
+- =between(left, right)= midpoint by treating strings as base-26 fractions; recurse on next char if midpoint equals one bound.
+- =after(left)= = =between(left, nil)=; =before(right)= = =between(nil, right)=.
+- Pure module; tested first in =test/concept/pages/fractional_index_test.exs= incl. property test.
+
+** ITEM Page resource with multitenancy + archival + paper_trail
+:PROPERTIES:
+:CUSTOM_ID: FEAT-004-page-resource-with-nested-tree-and-fract::page-resource
+:DEPENDS: FEAT-004-page-resource-with-nested-tree-and-fract::fractional-index
+:END:
+- =lib/concept/pages/page.ex= with =use Ash.Resource, domain: Concept.Pages, data_layer: AshPostgres.DataLayer, extensions: [AshArchival.Resource, AshPaperTrail.Resource]=.
+- =multitenancy do; strategy :attribute; attribute :workspace_id; end= (global? false → tenant required on every action).
+- =paper_trail do; change_tracking_mode :changes_only; store_action_name? true; end= (records who/when changed what).
+- =archive do; attribute :archived_at; end= from AshArchival.
+- Attributes, identities, relationships (=belongs_to :workspace, parent_page=, =has_many :children, Page, destination_attribute: :parent_page_id=).
+- =Concept.Pages= domain block uses =resources do; resource Concept.Pages.Page; end= and =code_interface do; define :create_page, args: [:title, {:optional, :parent_page_id}]; ... end= for every action listed in scope.
+- Migration: =mix ash.codegen pages=, =mix ash.migrate=. Verify =page_versions= table is created and =workspace_id NOT NULL= partial index =CREATE INDEX ... WHERE archived_at IS NULL=.
+
+** ITEM Reparent cycle prevention + cascading archive
+:PROPERTIES:
+:CUSTOM_ID: FEAT-004-page-resource-with-nested-tree-and-fract::tree-integrity
+:DEPENDS: FEAT-004-page-resource-with-nested-tree-and-fract::page-resource
+:END:
+- =:reparent= action change =Concept.Pages.Changes.PreventCycles= runs a recursive CTE: =SELECT 1 FROM pages WHERE id = ^new_parent AND workspace_id = ^tenant AND ancestor_includes(^moving_id)= → if hit, raise =:cycle_detected= validation error.
+- =:archive= action change =Concept.Pages.Changes.CascadeArchive= updates all descendants in one =Concept.Repo.update_all= keyed off recursive CTE, all setting same =archived_at=. Wraps action in transaction.
+
+** ITEM Calculations + aggregates
+:PROPERTIES:
+:CUSTOM_ID: FEAT-004-page-resource-with-nested-tree-and-fract::calc-agg
+:DEPENDS: FEAT-004-page-resource-with-nested-tree-and-fract::page-resource
+:END:
+- =Concept.Pages.Calculations.Depth= — recursive CTE counting ancestors.
+- =Concept.Pages.Calculations.Breadcrumbs= — returns =[%{id, title, icon_emoji}]= from root to self.
+- =aggregate :children_count, :count, :children=.
+- =aggregate :block_count, :count, :blocks= — relationship declared with =has_many :blocks, Concept.Pages.Block= but Block module may not exist yet; gate with =if Code.ensure_loaded?(Concept.Pages.Block)= or comment-out and add in FEAT-006. Recommended: add the relation as a placeholder to a not-yet-existing module via string reference and let FEAT-006 create the module — Ash supports this pattern.
+
+** ITEM Workspace policies + tenant integration
+:PROPERTIES:
+:CUSTOM_ID: FEAT-004-page-resource-with-nested-tree-and-fract::policies
+:DEPENDS: FEAT-004-page-resource-with-nested-tree-and-fract::page-resource
+:END:
+- Policies: read/create/update require =membership exists(actor, workspace_id)=. With multitenancy, the tenant attribute is forced to match actor's current workspace, so most policy checks reduce to "actor is a member of current tenant".
+- Helper =Concept.Pages.list_tree(workspace_id, actor)= sets =Ash.Query.set_tenant/2= and reads.
+- =code_interface= functions accept actor + tenant as opts; default tenant from actor's first workspace when omitted (convenience for tests).
+
+** ITEM Ash.Notifier.PubSub broadcasts
+:PROPERTIES:
+:CUSTOM_ID: FEAT-004-page-resource-with-nested-tree-and-fract::pubsub
+:DEPENDS: FEAT-004-page-resource-with-nested-tree-and-fract::page-resource
+:END:
+- Configure =pub_sub do; module Concept.PubSub; prefix "workspace"; publish :create, ["#{workspace_id}", "pages", :id]; ... end=.
+- Topic format: =workspace:#{workspace_id}:pages= — subscribed by FEAT-005 sidebar LV via =Phoenix.PubSub.subscribe/2=.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-004-page-resource-with-nested-tree-and-fract::tests
+:DEPENDS: FEAT-004-page-resource-with-nested-tree-and-fract::tree-integrity FEAT-004-page-resource-with-nested-tree-and-fract::policies FEAT-004-page-resource-with-nested-tree-and-fract::calc-agg
+:END:
+- All 8 scenarios from Tests section.
+- Multitenancy test: actions without tenant raise =Ash.Error.Invalid= mentioning tenant; cross-tenant read returns =[]= even for owner of another workspace.
+- PaperTrail test: =:rename= produces a =page_versions= row with =changes: %{title: ...}= and =version_action_name: :rename=.
+- AshArchival test: =Ash.destroy(page)= soft-deletes; =list_tree= returns =[]=; restoring via =:restore= action returns it.
+- StreamData property test for FractionalIndex.
+* Edge Cases
+- Position string overflow: deep midpoints can grow unbounded. Periodic compaction is FUP; document in module doc.
+- Concurrent reorder of same page from two clients: last-writer-wins on position; acceptable for MVP.
+- Archiving root-level page hides whole subtree from sidebar but preserves data; restoring root only restores root (descendants need explicit restore — keeps logic simple).
+- Workspace deletion: out-of-scope (no cascade needed yet).
+
+* Acceptance Criteria
+- =mix test test/concept/pages/= green (≥10 scenarios incl. multitenancy + paper_trail + archival + property test)
+- Migration creates =pages= + =page_versions= tables; partial index =CREATE INDEX ON pages(workspace_id, parent_page_id, position) WHERE archived_at IS NULL= present
+- =Concept.Pages.list_tree!(actor: user)= round-trips create → reorder → reparent → archive in iex
+- Calling any action without =tenant: ws.id= (or actor whose membership infers tenant) raises =Ash.Error.Invalid: tenant is required=
+- =Concept.Pages.Page |> Ash.read!()= run by user A returns only pages in user A's workspace, even with =authorize?: false=
+- =mix format --check-formatted= clean

@@ -1,0 +1,71 @@
+#+TITLE: AshAdmin mounted at admin behind owner guard
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-016-ashadmin-mounted-at-admin-behind-owner-g
+#+DEPENDS: FEAT-006-block-ash-resource-with-extensible-block FEAT-003-workspace-and-membership-resources
+#+EFFORT: 0.25d
+#+LAYER: ops
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Mount =AshAdmin= at =/admin= as a workspace-owner-only resource explorer. Useful for dev/staging inspection of Users, Workspaces, Memberships, Pages, Blocks, PaperTrail rows, Oban jobs.
+
+* Context & Narrative
+AshAdmin is a one-line install that auto-discovers Ash domains and exposes a CRUD UI honoring policies. The only custom work here is the auth guard.
+
+* Scope
+** In-scope
+- =/admin= route through =AshAdmin.Router=, scoped behind a =:require_owner_or_admin= plug
+- =:require_owner_or_admin= plug checks =current_user= is membership-owner of at least one workspace
+- =Concept.Accounts= and =Concept.Pages= domains exposed in admin via =admin do; show? true; end= block on each domain (or per-resource toggle)
+- Read-only by default for Block content (jsonb is huge); table view shows truncated content
+- Test: unauthenticated → 302 to /sign-in; member non-owner → 403; owner → 200
+
+** Out-of-scope
+- Per-resource permission tuning beyond default (FUP)
+- Custom admin actions / dashboards (FUP)
+
+* Existing Patterns
+- =AshAdmin.Router= macro
+- Phoenix plug pipelines
+
+* Tests
+File: =test/concept_web/admin_test.exs=. Three scenarios.
+
+* Implementation
+** ITEM Configure AshAdmin domain visibility
+:PROPERTIES:
+:CUSTOM_ID: FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::admin-config
+:END:
+- Add =extensions: [AshAdmin.Domain]= to =Concept.Accounts= and =Concept.Pages= domains.
+- =admin do; show? true; end= on each.
+
+** ITEM Router + auth guard
+:PROPERTIES:
+:CUSTOM_ID: FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::router-plug
+:DEPENDS: FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::admin-config
+:END:
+- =lib/concept_web/plugs/require_owner.ex= plug.
+- =router.ex= adds =scope "/admin" do; pipe_through [:browser, :require_authenticated_user, :require_owner]; ash_admin "/" end=.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::tests
+:DEPENDS: FEAT-016-ashadmin-mounted-at-admin-behind-owner-g::router-plug
+:END:
+- 3 scenarios above.
+
+* Edge Cases
+- User loses owner role mid-session: next request returns 403; existing socket continues until reconnect.
+- Multiple workspaces, owner of one only: allowed.
+- Production env: optionally gate behind =Application.get_env(:concept, :admin_enabled?, Mix.env() != :prod)= — recommended off in prod by default; document in module doc.
+
+* Acceptance Criteria
+- =mix test test/concept_web/admin_test.exs= green (3 scenarios)
+- Manual: log in as owner → =/admin= shows User/Workspace/Page/Block tables
+- Non-owner gets 403; unauthenticated redirected
+- =mix format --check-formatted= clean

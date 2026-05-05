@@ -1,0 +1,783 @@
+#+TITLE: Session 14d5785c1b1df8b3 Todos
+#+DATE: 2026-05-05
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* FEAT-001 Bootstrap
+
+** DONE Install Phoenix+LiveView scaffold
+:PROPERTIES:
+:TASK_ID: f1-phx
+:STATUS: completed
+:ORG_ITEM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical
+:END:
+
+mix phx.new . --app concept --module Concept --live --binary-id --database postgres --no-mailer; preserve AGENTS.md
+
+** DOING Add Ash deps via Igniter
+:PROPERTIES:
+:TASK_ID: f1-ash
+:STATUS: in_progress
+:DEPENDS: f1-phx
+:ORG_ITEM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical
+:END:
+
+mix igniter.install ash ash_postgres ash_phoenix ash_authentication ash_authentication_phoenix ash_archival ash_paper_trail ash_state_machine ash_oban ash_admin reactor
+
+** ITEM Add PetalComponents + Tailwind + Inter
+:PROPERTIES:
+:TASK_ID: f1-petal
+:STATUS: pending
+:DEPENDS: f1-phx
+:ORG_ITEM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical
+:END:
+
+** ITEM Wire JS pipeline (Lit, Lexical, SortableJS, KaTeX)
+:PROPERTIES:
+:TASK_ID: f1-js
+:STATUS: pending
+:DEPENDS: f1-phx
+:ORG_ITEM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical
+:END:
+
+** ITEM Configure AshPostgres repo + Oban
+:PROPERTIES:
+:TASK_ID: f1-repo
+:STATUS: pending
+:DEPENDS: f1-ash
+:ORG_ITEM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical
+:END:
+
+** ITEM Replace HomeLive with smoke landing + tests
+:PROPERTIES:
+:TASK_ID: f1-home
+:STATUS: pending
+:GATE_CMD: mix test
+:DEPENDS: f1-petal f1-js f1-repo
+:ORG_ITEM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical
+:END:
+
+* FEAT-002 Auth
+
+** ITEM Generate Accounts domain + User + Token
+:PROPERTIES:
+:TASK_ID: f2-gen
+:STATUS: pending
+:DEPENDS: f1-home
+:ORG_ITEM_ID: FEAT-002-user-resource-ash-authentication-email-p
+:END:
+
+** ITEM Wire AshAuthenticationPhoenix routes
+:PROPERTIES:
+:TASK_ID: f2-router
+:STATUS: pending
+:DEPENDS: f2-gen
+:ORG_ITEM_ID: FEAT-002-user-resource-ash-authentication-email-p
+:END:
+
+** ITEM Petal-style sign-in/sign-up overrides
+:PROPERTIES:
+:TASK_ID: f2-petal
+:STATUS: pending
+:DEPENDS: f2-router
+:ORG_ITEM_ID: FEAT-002-user-resource-ash-authentication-email-p
+:END:
+
+** ITEM LiveUserAuth on_mount module
+:PROPERTIES:
+:TASK_ID: f2-mount
+:STATUS: pending
+:DEPENDS: f2-router
+:ORG_ITEM_ID: FEAT-002-user-resource-ash-authentication-email-p
+:END:
+
+** ITEM FEAT-002 tests
+:PROPERTIES:
+:TASK_ID: f2-tests
+:STATUS: pending
+:GATE_CMD: mix test test/concept_web/live/auth_live_test.exs
+:DEPENDS: f2-mount f2-petal
+:ORG_ITEM_ID: FEAT-002-user-resource-ash-authentication-email-p
+:END:
+
+* FEAT-003 Workspace
+
+** ITEM Generate Workspace + Membership
+:PROPERTIES:
+:TASK_ID: f3-res
+:STATUS: pending
+:DEPENDS: f2-gen
+:ORG_ITEM_ID: FEAT-003-workspace-and-membership-resources
+:END:
+
+** ITEM Onboarding Reactor
+:PROPERTIES:
+:TASK_ID: f3-react
+:STATUS: pending
+:DEPENDS: f3-res
+:ORG_ITEM_ID: FEAT-003-workspace-and-membership-resources
+:END:
+
+** ITEM Workspace policies
+:PROPERTIES:
+:TASK_ID: f3-pol
+:STATUS: pending
+:DEPENDS: f3-res
+:ORG_ITEM_ID: FEAT-003-workspace-and-membership-resources
+:END:
+
+** ITEM FEAT-003 tests
+:PROPERTIES:
+:TASK_ID: f3-tests
+:STATUS: pending
+:GATE_CMD: mix test test/concept/accounts/workspace_test.exs
+:DEPENDS: f3-react f3-pol
+:ORG_ITEM_ID: FEAT-003-workspace-and-membership-resources
+:END:
+
+* FEAT-004 Pages
+
+** ITEM FractionalIndex module + tests
+:PROPERTIES:
+:TASK_ID: f4-frac
+:STATUS: pending
+:DEPENDS: f1-home
+:ORG_ITEM_ID: FEAT-004-page-resource-with-nested-tree-and-fract
+:END:
+
+** ITEM Page resource (multitenant+archival+papertrail)
+:PROPERTIES:
+:TASK_ID: f4-page
+:STATUS: pending
+:DEPENDS: f4-frac f3-res
+:ORG_ITEM_ID: FEAT-004-page-resource-with-nested-tree-and-fract
+:END:
+
+** ITEM Reparent cycle prevention + cascading archive
+:PROPERTIES:
+:TASK_ID: f4-tree
+:STATUS: pending
+:DEPENDS: f4-page
+:ORG_ITEM_ID: FEAT-004-page-resource-with-nested-tree-and-fract
+:END:
+
+** ITEM Calculations + aggregates
+:PROPERTIES:
+:TASK_ID: f4-calc
+:STATUS: pending
+:DEPENDS: f4-page
+:ORG_ITEM_ID: FEAT-004-page-resource-with-nested-tree-and-fract
+:END:
+
+** ITEM Workspace policies + tenant integration
+:PROPERTIES:
+:TASK_ID: f4-pol
+:STATUS: pending
+:DEPENDS: f4-page
+:ORG_ITEM_ID: FEAT-004-page-resource-with-nested-tree-and-fract
+:END:
+
+** ITEM Ash.Notifier.PubSub broadcasts
+:PROPERTIES:
+:TASK_ID: f4-pubsub
+:STATUS: pending
+:DEPENDS: f4-page
+:ORG_ITEM_ID: FEAT-004-page-resource-with-nested-tree-and-fract
+:END:
+
+** ITEM FEAT-004 tests
+:PROPERTIES:
+:TASK_ID: f4-tests
+:STATUS: pending
+:GATE_CMD: mix test test/concept/pages/page_test.exs
+:DEPENDS: f4-tree f4-pol f4-calc
+:ORG_ITEM_ID: FEAT-004-page-resource-with-nested-tree-and-fract
+:END:
+
+* FEAT-005 Shell
+
+** ITEM Routes + LiveSession + WorkspaceLive skeleton
+:PROPERTIES:
+:TASK_ID: f5-skel
+:STATUS: pending
+:DEPENDS: f4-page f2-mount
+:ORG_ITEM_ID: FEAT-005-workspace-shell-liveview-with-sidebar-pa
+:END:
+
+** ITEM Sidebar layout component
+:PROPERTIES:
+:TASK_ID: f5-side
+:STATUS: pending
+:DEPENDS: f5-skel
+:ORG_ITEM_ID: FEAT-005-workspace-shell-liveview-with-sidebar-pa
+:END:
+
+** ITEM PageTree live_component
+:PROPERTIES:
+:TASK_ID: f5-tree
+:STATUS: pending
+:DEPENDS: f5-side
+:ORG_ITEM_ID: FEAT-005-workspace-shell-liveview-with-sidebar-pa
+:END:
+
+** ITEM PubSub-driven sidebar updates
+:PROPERTIES:
+:TASK_ID: f5-pubsub
+:STATUS: pending
+:DEPENDS: f5-tree f4-pubsub
+:ORG_ITEM_ID: FEAT-005-workspace-shell-liveview-with-sidebar-pa
+:END:
+
+** ITEM FEAT-005 tests
+:PROPERTIES:
+:TASK_ID: f5-tests
+:STATUS: pending
+:GATE_CMD: mix test test/concept_web/live/workspace_live_test.exs
+:DEPENDS: f5-pubsub
+:ORG_ITEM_ID: FEAT-005-workspace-shell-liveview-with-sidebar-pa
+:END:
+
+* FEAT-006 Block
+
+** ITEM BlockType behaviour + Lexical helper
+:PROPERTIES:
+:TASK_ID: f6-beh
+:STATUS: pending
+:DEPENDS: f1-home
+:ORG_ITEM_ID: FEAT-006-block-ash-resource-with-extensible-block
+:END:
+
+** ITEM BlockTypes registry + custom Ash type
+:PROPERTIES:
+:TASK_ID: f6-reg
+:STATUS: pending
+:DEPENDS: f6-beh
+:ORG_ITEM_ID: FEAT-006-block-ash-resource-with-extensible-block
+:END:
+
+** ITEM Paragraph + Heading BlockType modules
+:PROPERTIES:
+:TASK_ID: f6-types
+:STATUS: pending
+:DEPENDS: f6-reg
+:ORG_ITEM_ID: FEAT-006-block-ash-resource-with-extensible-block
+:END:
+
+** ITEM Block resource + state machine + actions
+:PROPERTIES:
+:TASK_ID: f6-res
+:STATUS: pending
+:DEPENDS: f6-reg f4-page
+:ORG_ITEM_ID: FEAT-006-block-ash-resource-with-extensible-block
+:END:
+
+** ITEM Block migration + Page relation
+:PROPERTIES:
+:TASK_ID: f6-mig
+:STATUS: pending
+:DEPENDS: f6-res
+:ORG_ITEM_ID: FEAT-006-block-ash-resource-with-extensible-block
+:END:
+
+** ITEM FEAT-006 tests
+:PROPERTIES:
+:TASK_ID: f6-tests
+:STATUS: pending
+:GATE_CMD: mix test test/concept/pages/block_test.exs
+:DEPENDS: f6-types f6-mig
+:ORG_ITEM_ID: FEAT-006-block-ash-resource-with-extensible-block
+:END:
+
+* FEAT-007 Locks+Presence
+
+** ITEM AshOban release-expired-locks trigger
+:PROPERTIES:
+:TASK_ID: f7-oban
+:STATUS: pending
+:DEPENDS: f6-res
+:ORG_ITEM_ID: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence
+:END:
+
+** ITEM Phoenix.Presence + on_mount
+:PROPERTIES:
+:TASK_ID: f7-pres
+:STATUS: pending
+:DEPENDS: f7-oban f5-skel
+:ORG_ITEM_ID: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence
+:END:
+
+** ITEM Heartbeat refresh integration
+:PROPERTIES:
+:TASK_ID: f7-hb
+:STATUS: pending
+:DEPENDS: f7-pres
+:ORG_ITEM_ID: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence
+:END:
+
+** ITEM FEAT-007 tests
+:PROPERTIES:
+:TASK_ID: f7-tests
+:STATUS: pending
+:DEPENDS: f7-hb
+:ORG_ITEM_ID: FEAT-007-lock-ttl-via-ashoban-and-pubsub-presence
+:END:
+
+* FEAT-008 Lit/Lexical
+
+** ITEM ora-block Lit element (paragraph+headings)
+:PROPERTIES:
+:TASK_ID: f8-lit
+:STATUS: pending
+:DEPENDS: f6-types
+:ORG_ITEM_ID: FEAT-008-lit-ora-block-web-component-with-lexical
+:END:
+
+** ITEM Lexical registry + theme
+:PROPERTIES:
+:TASK_ID: f8-reg
+:STATUS: pending
+:DEPENDS: f8-lit
+:ORG_ITEM_ID: FEAT-008-lit-ora-block-web-component-with-lexical
+:END:
+
+** ITEM BlockEditor LV hook
+:PROPERTIES:
+:TASK_ID: f8-hook
+:STATUS: pending
+:DEPENDS: f8-lit
+:ORG_ITEM_ID: FEAT-008-lit-ora-block-web-component-with-lexical
+:END:
+
+** ITEM PageLive + SSR fallback
+:PROPERTIES:
+:TASK_ID: f8-page
+:STATUS: pending
+:DEPENDS: f8-hook f5-skel f6-mig
+:ORG_ITEM_ID: FEAT-008-lit-ora-block-web-component-with-lexical
+:END:
+
+** ITEM FEAT-008 tests
+:PROPERTIES:
+:TASK_ID: f8-tests
+:STATUS: pending
+:DEPENDS: f8-page
+:ORG_ITEM_ID: FEAT-008-lit-ora-block-web-component-with-lexical
+:END:
+
+* FEAT-009 Block UX
+
+** ITEM Hover handles + actions popover
+:PROPERTIES:
+:TASK_ID: f9-han
+:STATUS: pending
+:DEPENDS: f8-page
+:ORG_ITEM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke
+:END:
+
+** ITEM SortableJS BlockList hook
+:PROPERTIES:
+:TASK_ID: f9-sort
+:STATUS: pending
+:DEPENDS: f9-han
+:ORG_ITEM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke
+:END:
+
+** ITEM Slash menu component
+:PROPERTIES:
+:TASK_ID: f9-slash
+:STATUS: pending
+:DEPENDS: f9-han
+:ORG_ITEM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke
+:END:
+
+** ITEM Cross-block keyboard nav
+:PROPERTIES:
+:TASK_ID: f9-kbd
+:STATUS: pending
+:DEPENDS: f9-han
+:ORG_ITEM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke
+:END:
+
+** ITEM Server actions: insert/reorder/reparent/turn_into/delete_merge
+:PROPERTIES:
+:TASK_ID: f9-srv
+:STATUS: pending
+:DEPENDS: f9-sort f9-slash f9-kbd
+:ORG_ITEM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke
+:END:
+
+** ITEM FEAT-009 tests
+:PROPERTIES:
+:TASK_ID: f9-tests
+:STATUS: pending
+:DEPENDS: f9-srv
+:ORG_ITEM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke
+:END:
+
+* FEAT-010 More types
+
+** ITEM List/ToDo/Quote modules
+:PROPERTIES:
+:TASK_ID: f10-list
+:STATUS: pending
+:DEPENDS: f6-types
+:ORG_ITEM_ID: FEAT-010-remaining-simple-block-types-via-blockty
+:END:
+
+** ITEM Divider/Code/Callout
+:PROPERTIES:
+:TASK_ID: f10-dcc
+:STATUS: pending
+:DEPENDS: f10-list
+:ORG_ITEM_ID: FEAT-010-remaining-simple-block-types-via-blockty
+:END:
+
+** ITEM Toggle container
+:PROPERTIES:
+:TASK_ID: f10-tog
+:STATUS: pending
+:DEPENDS: f10-dcc
+:ORG_ITEM_ID: FEAT-010-remaining-simple-block-types-via-blockty
+:END:
+
+** ITEM Image/Bookmark/Equation
+:PROPERTIES:
+:TASK_ID: f10-media
+:STATUS: pending
+:DEPENDS: f10-dcc
+:ORG_ITEM_ID: FEAT-010-remaining-simple-block-types-via-blockty
+:END:
+
+** ITEM Slash menu grouping/sorting
+:PROPERTIES:
+:TASK_ID: f10-menu
+:STATUS: pending
+:DEPENDS: f10-tog f10-media
+:ORG_ITEM_ID: FEAT-010-remaining-simple-block-types-via-blockty
+:END:
+
+** ITEM FEAT-010 tests
+:PROPERTIES:
+:TASK_ID: f10-tests
+:STATUS: pending
+:DEPENDS: f10-menu
+:ORG_ITEM_ID: FEAT-010-remaining-simple-block-types-via-blockty
+:END:
+
+* FEAT-011 Marks
+
+** ITEM Lexical format + LinkNode registration
+:PROPERTIES:
+:TASK_ID: f11-fmt
+:STATUS: pending
+:DEPENDS: f8-reg
+:ORG_ITEM_ID: FEAT-011-inline-marks-bold-italic-underline-strik
+:END:
+
+** ITEM Format toolbar Lit element
+:PROPERTIES:
+:TASK_ID: f11-tb
+:STATUS: pending
+:DEPENDS: f11-fmt
+:ORG_ITEM_ID: FEAT-011-inline-marks-bold-italic-underline-strik
+:END:
+
+** ITEM Link editor popover
+:PROPERTIES:
+:TASK_ID: f11-link
+:STATUS: pending
+:DEPENDS: f11-tb
+:ORG_ITEM_ID: FEAT-011-inline-marks-bold-italic-underline-strik
+:END:
+
+** ITEM Server-side mark rendering Concept.Lexical.to_html
+:PROPERTIES:
+:TASK_ID: f11-srv
+:STATUS: pending
+:DEPENDS: f11-fmt f6-beh
+:ORG_ITEM_ID: FEAT-011-inline-marks-bold-italic-underline-strik
+:END:
+
+** ITEM Keyboard shortcuts in BlockEditor
+:PROPERTIES:
+:TASK_ID: f11-kbd
+:STATUS: pending
+:DEPENDS: f11-tb
+:ORG_ITEM_ID: FEAT-011-inline-marks-bold-italic-underline-strik
+:END:
+
+** ITEM FEAT-011 tests
+:PROPERTIES:
+:TASK_ID: f11-tests
+:STATUS: pending
+:GATE_CMD: mix test test/concept_web/live/inline_marks_test.exs
+:DEPENDS: f11-srv f11-kbd f11-link
+:ORG_ITEM_ID: FEAT-011-inline-marks-bold-italic-underline-strik
+:END:
+
+* FEAT-012 Composites
+
+** ITEM TableCell + Column aux types
+:PROPERTIES:
+:TASK_ID: f12-cell
+:STATUS: pending
+:DEPENDS: f10-list
+:ORG_ITEM_ID: FEAT-012-composite-blocks-table-and-columns
+:END:
+
+** ITEM Table BlockType + bulk creation
+:PROPERTIES:
+:TASK_ID: f12-tab
+:STATUS: pending
+:DEPENDS: f12-cell
+:ORG_ITEM_ID: FEAT-012-composite-blocks-table-and-columns
+:END:
+
+** ITEM Columns BlockType
+:PROPERTIES:
+:TASK_ID: f12-col
+:STATUS: pending
+:DEPENDS: f12-cell
+:ORG_ITEM_ID: FEAT-012-composite-blocks-table-and-columns
+:END:
+
+** ITEM ora-table component
+:PROPERTIES:
+:TASK_ID: f12-tlit
+:STATUS: pending
+:DEPENDS: f12-tab
+:ORG_ITEM_ID: FEAT-012-composite-blocks-table-and-columns
+:END:
+
+** ITEM ora-columns component
+:PROPERTIES:
+:TASK_ID: f12-clit
+:STATUS: pending
+:DEPENDS: f12-col
+:ORG_ITEM_ID: FEAT-012-composite-blocks-table-and-columns
+:END:
+
+** ITEM Cascade archive change
+:PROPERTIES:
+:TASK_ID: f12-arch
+:STATUS: pending
+:DEPENDS: f12-tab f12-col
+:ORG_ITEM_ID: FEAT-012-composite-blocks-table-and-columns
+:END:
+
+** ITEM FEAT-012 tests
+:PROPERTIES:
+:TASK_ID: f12-tests
+:STATUS: pending
+:DEPENDS: f12-arch f12-tlit f12-clit
+:ORG_ITEM_ID: FEAT-012-composite-blocks-table-and-columns
+:END:
+
+* FEAT-013 Page meta
+
+** ITEM PageHeader live_component
+:PROPERTIES:
+:TASK_ID: f13-hdr
+:STATUS: pending
+:DEPENDS: f8-page
+:ORG_ITEM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color
+:END:
+
+** ITEM Emoji picker Lit + LV wiring
+:PROPERTIES:
+:TASK_ID: f13-emo
+:STATUS: pending
+:DEPENDS: f13-hdr
+:ORG_ITEM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color
+:END:
+
+** ITEM Cover color band
+:PROPERTIES:
+:TASK_ID: f13-cov
+:STATUS: pending
+:DEPENDS: f13-hdr
+:ORG_ITEM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color
+:END:
+
+** ITEM Inline title via AshPhoenix.Form
+:PROPERTIES:
+:TASK_ID: f13-tit
+:STATUS: pending
+:DEPENDS: f13-hdr
+:ORG_ITEM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color
+:END:
+
+** ITEM Sidebar PubSub sync
+:PROPERTIES:
+:TASK_ID: f13-sync
+:STATUS: pending
+:DEPENDS: f13-emo f13-cov f13-tit f5-pubsub
+:ORG_ITEM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color
+:END:
+
+** ITEM FEAT-013 tests
+:PROPERTIES:
+:TASK_ID: f13-tests
+:STATUS: pending
+:DEPENDS: f13-sync
+:ORG_ITEM_ID: FEAT-013-page-metadata-ui-emoji-icon-cover-color
+:END:
+
+* FEAT-014 Cmd-K
+
+** ITEM Search action + pg_trgm index
+:PROPERTIES:
+:TASK_ID: f14-srch
+:STATUS: pending
+:DEPENDS: f4-page
+:ORG_ITEM_ID: FEAT-014-cmd-k-command-palette-title-search-and-q
+:END:
+
+** ITEM Global keybinding hook
+:PROPERTIES:
+:TASK_ID: f14-keys
+:STATUS: pending
+:DEPENDS: f14-srch
+:ORG_ITEM_ID: FEAT-014-cmd-k-command-palette-title-search-and-q
+:END:
+
+** ITEM CommandPaletteLive component
+:PROPERTIES:
+:TASK_ID: f14-pal
+:STATUS: pending
+:DEPENDS: f14-keys
+:ORG_ITEM_ID: FEAT-014-cmd-k-command-palette-title-search-and-q
+:END:
+
+** ITEM FEAT-014 tests
+:PROPERTIES:
+:TASK_ID: f14-tests
+:STATUS: pending
+:DEPENDS: f14-pal
+:ORG_ITEM_ID: FEAT-014-cmd-k-command-palette-title-search-and-q
+:END:
+
+* FEAT-015 Realtime
+
+** ITEM PresenceBar live_component
+:PROPERTIES:
+:TASK_ID: f15-bar
+:STATUS: pending
+:DEPENDS: f7-pres
+:ORG_ITEM_ID: FEAT-015-realtime-sibling-render-presence-avatars
+:END:
+
+** ITEM Color hashing helper
+:PROPERTIES:
+:TASK_ID: f15-color
+:STATUS: pending
+:DEPENDS: f1-home
+:ORG_ITEM_ID: FEAT-015-realtime-sibling-render-presence-avatars
+:END:
+
+** ITEM Lock indicator on blocks
+:PROPERTIES:
+:TASK_ID: f15-lock
+:STATUS: pending
+:DEPENDS: f15-bar f8-page
+:ORG_ITEM_ID: FEAT-015-realtime-sibling-render-presence-avatars
+:END:
+
+** ITEM apply_remote pipe
+:PROPERTIES:
+:TASK_ID: f15-rem
+:STATUS: pending
+:DEPENDS: f15-lock
+:ORG_ITEM_ID: FEAT-015-realtime-sibling-render-presence-avatars
+:END:
+
+** ITEM FEAT-015 tests
+:PROPERTIES:
+:TASK_ID: f15-tests
+:STATUS: pending
+:DEPENDS: f15-rem f15-color
+:ORG_ITEM_ID: FEAT-015-realtime-sibling-render-presence-avatars
+:END:
+
+* FEAT-016 Admin
+
+** ITEM AshAdmin domain visibility
+:PROPERTIES:
+:TASK_ID: f16-cfg
+:STATUS: pending
+:DEPENDS: f6-res f3-res
+:ORG_ITEM_ID: FEAT-016-ashadmin-mounted-at-admin-behind-owner-g
+:END:
+
+** ITEM Router + auth guard
+:PROPERTIES:
+:TASK_ID: f16-rt
+:STATUS: pending
+:DEPENDS: f16-cfg
+:ORG_ITEM_ID: FEAT-016-ashadmin-mounted-at-admin-behind-owner-g
+:END:
+
+** ITEM FEAT-016 tests
+:PROPERTIES:
+:TASK_ID: f16-tests
+:STATUS: pending
+:DEPENDS: f16-rt
+:ORG_ITEM_ID: FEAT-016-ashadmin-mounted-at-admin-behind-owner-g
+:END:
+
+* FEAT-017 Polish
+
+** ITEM Tailwind + base styling pass
+:PROPERTIES:
+:TASK_ID: f17-tw
+:STATUS: pending
+:DEPENDS: f1-petal
+:ORG_ITEM_ID: FEAT-017-notion-inspired-styling-pass-and-end-to
+:END:
+
+** ITEM Z-index registry
+:PROPERTIES:
+:TASK_ID: f17-z
+:STATUS: pending
+:DEPENDS: f17-tw
+:ORG_ITEM_ID: FEAT-017-notion-inspired-styling-pass-and-end-to
+:END:
+
+** ITEM End-to-end full-flow test
+:PROPERTIES:
+:TASK_ID: f17-flow
+:STATUS: pending
+:DEPENDS: f17-z f10-tests f11-tests f12-tests f13-tests f14-tests f15-tests
+:ORG_ITEM_ID: FEAT-017-notion-inspired-styling-pass-and-end-to
+:END:
+
+** ITEM Crash recovery test
+:PROPERTIES:
+:TASK_ID: f17-crash
+:STATUS: pending
+:DEPENDS: f17-flow
+:ORG_ITEM_ID: FEAT-017-notion-inspired-styling-pass-and-end-to
+:END:
+
+** ITEM Manual polish surfaces
+:PROPERTIES:
+:TASK_ID: f17-pol
+:STATUS: pending
+:DEPENDS: f17-tw
+:ORG_ITEM_ID: FEAT-017-notion-inspired-styling-pass-and-end-to
+:END:
+
+* Finalize
+
+** ITEM Full verification pass + screenshots
+:PROPERTIES:
+:TASK_ID: final-verify
+:STATUS: pending
+:DEPENDS: f17-flow f16-tests f7-tests f9-tests
+:END:
+
+** ITEM Update PLAN-001 + close child items + commit
+:PROPERTIES:
+:TASK_ID: final-org
+:STATUS: pending
+:DEPENDS: final-verify
+:END:

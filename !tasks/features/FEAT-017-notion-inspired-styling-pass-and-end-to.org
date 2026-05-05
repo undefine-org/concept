@@ -1,0 +1,113 @@
+#+TITLE: Notion-inspired styling pass and end-to-end LV test suite
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-017-notion-inspired-styling-pass-and-end-to
+#+DEPENDS: FEAT-010-remaining-simple-block-types-via-blockty FEAT-011-inline-marks-bold-italic-underline-strik FEAT-012-composite-blocks-table-and-columns FEAT-013-page-metadata-ui-emoji-icon-cover-color FEAT-014-cmd-k-command-palette-title-search-and-q FEAT-015-realtime-sibling-render-presence-avatars
+#+EFFORT: 1d
+#+LAYER: polish
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Final pass: Notion-inspired CSS polish (Inter weights, exact paddings, hover states, transitions, Z-stack discipline) + a single end-to-end LiveView test suite walking the full happy path: signup → workspace shell → create page → add icon/cover/title → insert all 14 block types → drag/reorder → format with marks → table+columns → search via Cmd-K → multi-tab realtime smoke.
+
+* Context & Narrative
+Aggregator FEAT. Pulls every preceding piece into a single user-facing experience proven by one comprehensive scenario. Catches integration bugs not visible in unit-level FEATs.
+
+* Scope
+** In-scope
+- =assets/css/app.css= and =assets/tailwind.config.js= polish:
+  - =@layer base= sets =font-family: 'Inter'=, =font-feature-settings: 'cv02','cv03','cv04','cv11'=
+  - Sidebar bg =#F7F6F3=, active row bg =#EFEEEC=, hover =#E9E8E6=
+  - Page canvas =#FFFFFF=, max-width =720px=, padding =96px= top, =0= bottom; cover band =200px= when set
+  - Block hover handles fade in 80ms; active block border-left highlight =2px= when locked-by-other
+  - Slash menu: =280px= wide popover, =rounded-md=, =shadow-lg=, =z-50=; Petal Modal z-index 60
+  - Code block: monospace =JetBrains Mono= via web font; bg =#F7F6F3=
+- Z-index registry: document in =assets/css/zindex.md= — modal=60, palette=55, tooltip=50, slash-menu=40, format-toolbar=35, sidebar-overlay=20, page-content=0
+- =test/concept_web/integration/full_flow_test.exs= single end-to-end scenario covering 30+ assertions
+- Lighthouse-style smoke: confirm Inter loaded; FCP <2s on dev (manual)
+- LiveView crash test: kill =PageLive= process via =Process.exit=; reconnect restores state without data loss
+
+** Out-of-scope
+- Visual regression via Percy/Chromatic (FUP)
+- A11y full audit (FUP — basic semantic HTML only)
+- Mobile/responsive (out of MVP scope)
+
+* Existing Patterns
+- Phoenix.LiveViewTest end-to-end style: =live(conn, ...) |> form(...) |> render_submit()=
+- Petal CSS already imported via FEAT-001
+- =mix test --include integration= tag
+
+* Tests
+File: =test/concept_web/integration/full_flow_test.exs=. Single scenario (large), tagged =:integration=.
+
+Steps:
+1. Register user → onboarding reactor creates workspace + membership; redirected to =/=.
+2. Sidebar visible; create new page → click "+", verify sidebar row.
+3. Open page → set emoji "🚀", cover "blue", title "Roadmap" → assert each persists.
+4. Insert paragraph block, type "Hello", press Enter, slash menu "Heading 1", type "Q1 Goals".
+5. Continue inserting one of each remaining 12 block types via slash menu; assert each rendered.
+6. Drag heading above paragraph; assert ordering.
+7. Format selection "Hello" as bold + italic; assert mark persists.
+8. Open Cmd-K, search "road", assert "Roadmap" appears, Enter → no-op (already open).
+9. Open second LV session as second user (added to workspace via fixture), assert presence bar shows two chips.
+10. User A acquires lock on heading, User B sees lock indicator + read-only state.
+11. User A edits heading, User B's view reflects new content within one PubSub round-trip.
+12. Archive page; sidebar row disappears; page redirects to empty state.
+
+* Implementation
+** ITEM Tailwind + base styling pass
+:PROPERTIES:
+:CUSTOM_ID: FEAT-017-notion-inspired-styling-pass-and-end-to::tailwind-polish
+:END:
+- Update =tailwind.config.js= theme extensions for Notion palette (=notion-bg-default=, =notion-bg-gray=, etc.).
+- =app.css= base layer rules.
+- Per-component class adjustments throughout existing components — surgical edits.
+
+** ITEM Z-index registry + overlay discipline
+:PROPERTIES:
+:CUSTOM_ID: FEAT-017-notion-inspired-styling-pass-and-end-to::z-stack
+:DEPENDS: FEAT-017-notion-inspired-styling-pass-and-end-to::tailwind-polish
+:END:
+- =assets/css/zindex.md= documents stack.
+- Update each Lit component to use the documented values.
+
+** ITEM End-to-end full-flow test
+:PROPERTIES:
+:CUSTOM_ID: FEAT-017-notion-inspired-styling-pass-and-end-to::full-flow-test
+:DEPENDS: FEAT-017-notion-inspired-styling-pass-and-end-to::z-stack
+:END:
+- =test/concept_web/integration/full_flow_test.exs= covering all 12 steps.
+- Helper =Concept.IntegrationFixtures.invite_user/2= to add second user to workspace via Ash action (build a small =:add_member= action on Membership for tests; gated to test/dev or admin in prod).
+
+** ITEM Crash recovery test
+:PROPERTIES:
+:CUSTOM_ID: FEAT-017-notion-inspired-styling-pass-and-end-to::crash-recovery
+:DEPENDS: FEAT-017-notion-inspired-styling-pass-and-end-to::full-flow-test
+:END:
+- Kill PageLive process; assert reconnect renders identical content; assert any held lock is released by next AshOban run.
+
+** ITEM Polish all FEAT-005..016 surfaces against Notion screenshots
+:PROPERTIES:
+:CUSTOM_ID: FEAT-017-notion-inspired-styling-pass-and-end-to::manual-polish
+:DEPENDS: FEAT-017-notion-inspired-styling-pass-and-end-to::tailwind-polish
+:END:
+- Check each surface against Notion light theme reference: sidebar, header, slash menu, format toolbar, command palette, presence bar, page tree row hover, block hover handles, callout colors, code block.
+- Capture screenshots into =docs/screenshots/= for review.
+
+* Edge Cases
+- Tailwind purge removing dynamic classes (e.g. =callout-{color}= where color is dynamic): add safelist for known color names.
+- Inter font fallback chain visible during slow network: pre-load font in =<link rel="preload" as="font">=.
+- LiveView reconnect mid-edit: =BlockEditor= hook =reconnected()= flushes pending debounced save before resubscribing.
+- Crash during table creation Reactor: compensations restore previous state.
+
+* Acceptance Criteria
+- =mix test --include integration= green (full flow + crash recovery)
+- =mix format --check-formatted= clean
+- =mix credo --strict= passes (or zero warnings if credo unconfigured)
+- Manual screenshot comparison shows pixel-close-enough match to Notion reference for: sidebar, page header, paragraph + heading, slash menu, format toolbar, command palette
+- =mix phx.server= dev page loads with no console errors and no failing network requests
+- All 16 prior FEATs' acceptance criteria still pass (regression sweep)

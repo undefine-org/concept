@@ -1,0 +1,115 @@
+#+TITLE: Workspace shell LiveView with sidebar page tree
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-005-workspace-shell-liveview-with-sidebar-pa
+#+DEPENDS: FEAT-004-page-resource-with-nested-tree-and-fract
+#+EFFORT: 1d
+#+LAYER: ui
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Render the Notion-style application shell: left sidebar (240px, =#F7F6F3=) with workspace header, search input (inert in this FEAT — wired in FEAT-014), nested collapsible page tree, "+ New page" affordance; main canvas area showing either an empty state or the active page slot (filled by FEAT-008+ once blocks land). Sidebar reflects =Concept.Pages= changes via PubSub.
+
+* Context & Narrative
+Shell is the persistent home for everything. We use Petal Sidebar/Dropdown/Modal for chrome, custom layout CSS for proportions. Sidebar tree expands/collapses children lazily (toggle ▶/▼ next to each row).
+
+* Scope
+** In-scope
+- =ConceptWeb.WorkspaceLive= LiveView at =/w/:workspace_slug= and =/w/:workspace_slug/p/:page_id=
+- =live_session :authenticated, on_mount: {LiveUserAuth, :live_user_required}=
+- Sidebar layout: workspace header (icon + name + chevron-down placeholder for switcher), search input (stub), pinned actions ("New page"), page tree, footer (settings/sign-out via Petal Dropdown)
+- Page tree component =ConceptWeb.PageTree= (live_component): renders nested =<ul>= with disclosure triangles, hover affordances (+/...), drag handles (Sortable hook attached but actual reorder wired in FEAT-009)
+- Right-click / Petal Dropdown on row: Rename, Duplicate (FUP — disabled in MVP), Move to (FUP), Archive
+- "+" affordance on hover row → creates child page via =Concept.Pages.create_page=, navigates to it
+- Inline rename: double-click title → contenteditable input → Enter commits via =:rename=
+- Empty state on canvas when no page selected: "Pick a page or create one" + Petal button
+- PubSub subscription to =workspace:#{ws.id}:pages=; handler updates assigns and re-renders
+
+** Out-of-scope
+- Workspace switcher (single workspace assumption)
+- Drag reorder (FEAT-009 ships SortableJS hook generically; sidebar is a reorder target but actual DnD wiring lives there)
+- Page metadata editing (FEAT-013)
+- Block rendering (FEAT-008+)
+- Search functionality (FEAT-014)
+
+* Existing Patterns
+- =PetalComponents.Sidebar=, =Dropdown=, =Modal=, =Field=, =Button=
+- LV streams for the tree set: =stream(:pages, list)= keyed by id; on PubSub update use =stream_insert= / =stream_delete=
+- =Phoenix.Component.live_component= for =PageTree= so it owns local UI state (expanded set)
+- Navigation via =push_patch=
+
+* Tests
+File: =test/concept_web/live/workspace_live_test.exs=
+
+Scenarios:
+1. Authenticated user lands on =/w/:slug=; sidebar shows their workspace name + emoji + 0 pages.
+2. Click "+ New page" → page created, pushed_patch to =/w/:slug/p/:page_id=, sidebar shows new row.
+3. Hover a page row, click "+" → creates child page, parent auto-expands, child visible.
+4. Double-click title → inline input; type "Roadmap" + Enter → page row updates, DB record updated.
+5. Petal Dropdown → "Archive" → row disappears; archived_at set in DB.
+6. Two open browser tabs (simulated via two LV processes in test) — creating a page in tab A appears in tab B's sidebar within one PubSub round-trip.
+7. Unauthenticated visit redirects to =/sign-in=.
+8. Membership absent: visiting another user's =/w/:other_slug= → redirect to own workspace with flash error.
+
+* Implementation
+** ITEM Routes + LiveSession + WorkspaceLive skeleton
+:PROPERTIES:
+:CUSTOM_ID: FEAT-005-workspace-shell-liveview-with-sidebar-pa::routes-skeleton
+:END:
+- =router.ex=: =live_session :authenticated, on_mount: [{ConceptWeb.LiveUserAuth, :live_user_required}] do; live "/w/:workspace_slug", WorkspaceLive, :workspace; live "/w/:workspace_slug/p/:page_id", WorkspaceLive, :page; end=
+- =mount/3=: load workspace by slug, verify membership, assign =:workspace=, =:current_page= (nil or loaded), subscribe to =workspace:#{ws.id}:pages= and =workspace:#{ws.id}:presence= (no-op until FEAT-007).
+- =handle_params/3=: switches =@live_action= between =:workspace= and =:page=.
+
+** ITEM Sidebar layout component (Petal)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-005-workspace-shell-liveview-with-sidebar-pa::sidebar-layout
+:DEPENDS: FEAT-005-workspace-shell-liveview-with-sidebar-pa::routes-skeleton
+:END:
+- =lib/concept_web/components/sidebar.ex= live_component or function component.
+- Uses Petal =<.sidebar />= structure but with Notion-style spacing (240px, light bg).
+- Sections: header (workspace switcher placeholder), quick actions (Search inert button, Settings, New page), page tree slot, footer (user dropdown).
+
+** ITEM PageTree live_component
+:PROPERTIES:
+:CUSTOM_ID: FEAT-005-workspace-shell-liveview-with-sidebar-pa::page-tree
+:DEPENDS: FEAT-005-workspace-shell-liveview-with-sidebar-pa::sidebar-layout
+:END:
+- =lib/concept_web/components/page_tree.ex= live_component.
+- Owns =:expanded_ids = MapSet=.
+- Renders flat list as =<ul>= with indent based on =depth= attribute precomputed in mount.
+- Hover affordances: small + and ⋯ buttons via Tailwind =group-hover:opacity-100=.
+- Events: =add_child=, =rename_start=, =rename_commit=, =archive=, =toggle_expand=.
+
+** ITEM PubSub-driven sidebar updates
+:PROPERTIES:
+:CUSTOM_ID: FEAT-005-workspace-shell-liveview-with-sidebar-pa::pubsub-sync
+:DEPENDS: FEAT-005-workspace-shell-liveview-with-sidebar-pa::page-tree
+:END:
+- =handle_info({:page_created | :page_updated | :page_archived, page}, socket)= updates =:pages= stream.
+- Use =Ash.Notifier.PubSub= topic published in FEAT-004.
+- Optimistic UI: creator handles the create event, ignores duplicate from PubSub.
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-005-workspace-shell-liveview-with-sidebar-pa::tests
+:DEPENDS: FEAT-005-workspace-shell-liveview-with-sidebar-pa::pubsub-sync
+:END:
+- =workspace_live_test.exs= covers all 8 scenarios.
+- Cross-tab: ={:ok, view2, _} = live(conn2, ...)=; assert =render(view2) =~ "Roadmap"= after creation in =view1=.
+
+* Edge Cases
+- Slow DB / many pages: cap initial sidebar load at 500 rows; show "Show more" if exceeded (FUP for virtualized list).
+- Inline rename racing with PubSub update from another tab: last-write-wins; show subtle flash if conflict detected.
+- Archiving currently-open page: redirect to =/w/:slug= empty state with flash.
+- Browser back/forward: =push_patch= handles state correctly.
+- Workspace slug with unicode: route uses URL-encoded slug; rejected if not ascii in current MVP (slug generator already enforces).
+
+* Acceptance Criteria
+- =mix test test/concept_web/live/workspace_live_test.exs= green (8 scenarios incl. cross-tab)
+- Manual: shell renders Notion-style left sidebar; creating, renaming, archiving pages all reflect immediately and across tabs
+- Visual smoke: sidebar bg =#F7F6F3=, canvas bg =#FFFFFF=, Inter loaded
+- LSP =mix credo= clean for new files (if credo configured) — at minimum no compiler warnings

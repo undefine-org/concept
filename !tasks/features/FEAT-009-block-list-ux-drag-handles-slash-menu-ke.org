@@ -1,0 +1,133 @@
+#+TITLE: Block list UX drag handles slash menu keyboard nav
+#+STATE: ITEM
+#+SESSION_ID: 14d493fa40896b02
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-04T22-27-34-274Z_14d493fa40896b02.jsonl]]
+#+CUSTOM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke
+#+DEPENDS: FEAT-008-lit-ora-block-web-component-with-lexical
+#+EFFORT: 1.5d
+#+LAYER: ui
+
+* Initial Message
+
+implement a pixel-perfect version of Notion. Use Ash as much as possible. This plan should cover the MVP version.
+
+* Intention & Purpose
+Notion-style block manipulation: hover handles =+= (insert below) and =⋮⋮= (drag/menu); slash =/= menu for type insertion; cross-block keyboard navigation (Up/Down moves focus into prev/next =<ora-block>=, Enter at end of paragraph creates new paragraph below, Backspace at start removes empty block and merges with previous). Drag-and-drop reorder via SortableJS pushing =:reorder_block= and =:reparent_block= server actions.
+
+* Context & Narrative
+This is the bulk of "Notion feel". All block-type-agnostic — pulls metadata from =Concept.Pages.BlockTypes.slash_menu_items/0=, so when FEAT-010/012 add types they appear in the slash menu automatically.
+
+* Scope
+** In-scope
+- =assets/js/components/ora-block-handle.js= Lit element rendered next to each =<ora-block>=: =+= and =⋮⋮= buttons with hover/focus styling; emits =add-below=, =open-menu=, =start-drag=
+- =assets/js/components/ora-slash-menu.js= Lit popover positioned below caret; receives item list as attribute; arrow keys + Enter; emits =select={detail: {type}}=
+- =assets/js/components/ora-block-actions.js= Lit popover (reuse Petal Dropdown styling): Duplicate (FUP, disabled), Delete, Turn into → submenu of types
+- =assets/js/hooks/block_list.js= LV hook on =<ul phx-hook="BlockList">= wraps SortableJS:
+  - On drop, push =:reorder_block= or =:reparent_block= with new neighbour ids; server computes fractional position
+  - Disable drag while a child block is held in lock by another user
+- =assets/js/hooks/block_keyboard.js= attached to =<ora-block>= host (composes with BlockEditor):
+  - Intercepts ArrowUp at line 0 → emit =nav-up= → LV moves focus to prev block via =push_event focus_block_id=
+  - ArrowDown at last line → =nav-down=
+  - Enter at end of paragraph (or any block with no children to consume Enter) → =insert_below_paragraph= server event
+  - Backspace at offset 0 of empty block → =delete_block_merge= server event
+- =ConceptWeb.PageLive= handlers:
+  - =:slash_menu_open= (with caret coords) → push state to client to render =<ora-slash-menu>=
+  - =:insert_block= (after_id, type) → =Concept.Pages.create_block!/1=, position computed via FractionalIndex.between
+  - =:reorder_block= (block_id, prev_id, next_id) → compute position, =reorder_block!=
+  - =:reparent_block= same with new parent
+  - =:delete_block_merge= → if block empty, archive and focus previous block; if previous is paragraph, append nothing
+  - =:turn_into= (block_id, new_type) → archive old, create new with same content if compatible (text-bearing types interchangeable; otherwise new with default)
+- "+" floating action above empty page creates first paragraph
+
+** Out-of-scope
+- Multi-block selection (FUP)
+- Nested drag for toggle children (sufficient for top-level reorder; toggle/columns nested children handled in FEAT-012)
+- Cmd-K palette (FEAT-014)
+
+* Existing Patterns
+- SortableJS w/ Phoenix LV hook pattern: =new Sortable(el, {animation:150, handle:'.drag-handle', onEnd: e => this.pushEvent("reorder", ...)})=
+- Petal Dropdown for context menu styling
+- =BlockTypes.slash_menu_items/0= already returns =[%{label, icon, keywords, group}]= per FEAT-006
+
+* Tests
+File: =test/concept_web/live/block_list_test.exs=, JS test =assets/test/slash-menu.test.js=.
+
+Scenarios:
+1. Hover row → handle becomes visible (CSS class assertion via DOM presence).
+2. Click =+= → server creates paragraph block below; sidebar block_count aggregate increments.
+3. Type =/h1= in slash menu → "Heading 1" filtered to top; Enter → block type changed to heading_1.
+4. Drag block 2 above block 1 → server receives reorder; positions update; broadcast to other tabs.
+5. Drag block into a different parent (toggle child slot) → reparent succeeds.
+6. ArrowDown on last line of block 1 focuses block 2 caret at start.
+7. Enter at end of empty paragraph creates new paragraph below; if block has text, splits content (Lexical native behavior — captured in BlockType callback for split-on-enter).
+8. Backspace at start of empty block deletes block and focuses previous; if previous has content, caret lands at its end.
+9. "Turn into Heading 2" via actions menu archives the paragraph and creates a heading_2 with same plain_text.
+10. JS: slash menu filters by keyword case-insensitively; Esc closes.
+
+* Implementation
+** ITEM Hover handles + actions popover (Lit + Petal styling)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke::handles
+:END:
+- =ora-block-handle.js= and =ora-block-actions.js= Lit elements.
+- Tailwind classes for hover affordance (=opacity-0 group-hover:opacity-100 transition=).
+- Server-rendered placeholders so handles appear before JS upgrade.
+
+** ITEM SortableJS BlockList hook
+:PROPERTIES:
+:CUSTOM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke::sortable
+:DEPENDS: FEAT-009-block-list-ux-drag-handles-slash-menu-ke::handles
+:END:
+- =hooks/block_list.js=. Disables drag on items whose child has =data-locked-by-other=.
+- =onEnd= computes new prev/next neighbour ids, pushes =:reorder_block= or =:reparent_block= to server.
+- Visual placeholder while dragging via Sortable default ghost class.
+
+** ITEM Slash menu component + LV wiring
+:PROPERTIES:
+:CUSTOM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke::slash-menu
+:DEPENDS: FEAT-009-block-list-ux-drag-handles-slash-menu-ke::handles
+:END:
+- =ora-slash-menu.js= consumes =items= JSON attribute set from server (=BlockTypes.slash_menu_items()=).
+- Triggered when =<ora-block>= editor emits =ora-block-slash= (Lit detects =/= keystroke at start of empty line).
+- Selecting an item pushes =:turn_into= (if current block empty) or =:insert_block= (if not).
+
+** ITEM Cross-block keyboard nav
+:PROPERTIES:
+:CUSTOM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke::keyboard-nav
+:DEPENDS: FEAT-009-block-list-ux-drag-handles-slash-menu-ke::handles
+:END:
+- =hooks/block_keyboard.js= composes with BlockEditor (LV supports multiple hooks via =phx-hook="BlockEditor BlockKeyboard"=).
+- Listens to =ora-block-arrow-{up,down}=, =ora-block-enter-at-end=, =ora-block-backspace-at-start=.
+- Server pushes =push_event "focus_block"= with block_id and offset (0 for start, -1 for end).
+- =<ora-block>= public method =focusStart()= / =focusEnd()=.
+
+** ITEM Server actions: insert/reorder/reparent/turn_into/delete_merge
+:PROPERTIES:
+:CUSTOM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke::server-actions
+:DEPENDS: FEAT-009-block-list-ux-drag-handles-slash-menu-ke::sortable FEAT-009-block-list-ux-drag-handles-slash-menu-ke::keyboard-nav FEAT-009-block-list-ux-drag-handles-slash-menu-ke::slash-menu
+:END:
+- =ConceptWeb.PageLive= =handle_event= clauses for each.
+- Compute neighbour-bounded positions via =Concept.Pages.FractionalIndex.between/2=.
+- =:turn_into= preserves =plain_text= when both old and new types are text-bearing (use =BlockType.default_content/0= seeded with =Concept.Lexical.from_plain_text/2=).
+
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-009-block-list-ux-drag-handles-slash-menu-ke::tests
+:DEPENDS: FEAT-009-block-list-ux-drag-handles-slash-menu-ke::server-actions
+:END:
+- All 9 LV scenarios in =block_list_test.exs= using =render_hook/3= to simulate hook events.
+- JS slash-menu unit test (scenario 10).
+
+* Edge Cases
+- Drag a locked-by-other block: SortableJS disables; server still validates and rejects with no-op.
+- Reorder to position before first sibling when first sibling has position "a" (lowest possible): FractionalIndex.before extends with new prefix.
+- Slash menu opening near viewport bottom: position above caret if not enough room below (handled by Lit element computing bounding rect).
+- Backspace merging: if previous block is non-text (divider, image), don't merge — just delete current empty block.
+- Concurrent insert: two users press =+= simultaneously; both succeed; positions distinct via fractional indexing (independent random midpoints).
+- Slash with text after =/=: only fires menu when caret is at start of empty paragraph; otherwise =/= is a literal character.
+
+* Acceptance Criteria
+- =mix test test/concept_web/live/block_list_test.exs= green (9 scenarios)
+- =cd assets && npm test= green (slash-menu unit test)
+- Manual: full Notion-style flow — type in paragraph, Enter, =/heading 1=, type heading text, drag heading above, Backspace into previous, slash again
+- Slash menu list mirrors =BlockTypes.slash_menu_items/0= length (4 in this FEAT, 12+ once FEAT-010 lands)
