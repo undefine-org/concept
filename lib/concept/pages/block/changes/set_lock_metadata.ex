@@ -13,9 +13,12 @@ defmodule Concept.Pages.Block.Changes.SetLockMetadata do
     if (changeset.context[:_validated_holder] || changeset.data.lock_state == :unlocked) or
          changeset.data.lock_holder_id == user_id do
       changeset
-      |> Ash.Changeset.change_attribute(:lock_holder_id, user_id)
-      |> Ash.Changeset.change_attribute(:lock_acquired_at, changeset.data.lock_acquired_at || now)
-      |> Ash.Changeset.change_attribute(:lock_expires_at, expires)
+      |> Ash.Changeset.force_change_attribute(:lock_holder_id, user_id)
+      |> Ash.Changeset.force_change_attribute(
+        :lock_acquired_at,
+        changeset.data.lock_acquired_at || now
+      )
+      |> Ash.Changeset.force_change_attribute(:lock_expires_at, expires)
     else
       Ash.Changeset.add_error(changeset, message: "lock_held_by_other", code: :lock_held_by_other)
     end

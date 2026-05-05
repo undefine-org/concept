@@ -80,4 +80,6 @@
   .ora-cover-swatch:hover { transform: scale(1.12); }
   .ora-cover-swatch-default { background: #fff; position: relative; }
   .ora-cover-swatch-default::after { content: '✕'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #aaa; font-size: 14px; }
+
+  [data-locked-by] { border-left: 2px solid var(--lock-color, var(--color-notion-blue)); padding-left: 8px; }
 }

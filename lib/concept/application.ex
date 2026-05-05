@@ -17,6 +17,7 @@ defmodule Concept.Application do
          Application.fetch_env!(:concept, Oban)
        )},
       {Phoenix.PubSub, name: Concept.PubSub},
+      ConceptWeb.Presence,
       # Start a worker by calling: Concept.Worker.start_link(arg)
       # {Concept.Worker, arg},
       # Start to serve requests, typically the last entry

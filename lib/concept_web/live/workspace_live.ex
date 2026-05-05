@@ -3,6 +3,7 @@ defmodule ConceptWeb.WorkspaceLive do
   use ConceptWeb, :live_view
 
   import ConceptWeb.Components.Sidebar
+  import ConceptWeb.Components.PresenceBar
 
   alias Concept.Accounts
   alias Concept.Pages
@@ -49,7 +50,8 @@ defmodule ConceptWeb.WorkspaceLive do
            workspace: ws,
            pages: pages,
            current_page: nil,
-           page_title: ws.name
+           page_title: ws.name,
+           show_palette: false
          )}
 
       {:error, _} ->
@@ -66,6 +68,7 @@ defmodule ConceptWeb.WorkspaceLive do
     case load_workspace(slug, user) do
       {:ok, ws} ->
         Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:pages")
+        Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:page:#{page_id}:presence")
         {:ok, pages} = Pages.list_tree(actor: user, tenant: ws.id)
 
         case Pages.get_page(page_id, actor: user, tenant: ws.id) do
@@ -75,7 +78,8 @@ defmodule ConceptWeb.WorkspaceLive do
                workspace: ws,
                pages: pages,
                current_page: page,
-               page_title: page.title
+               page_title: page.title,
+               show_palette: false
              )}
 
           _ ->
@@ -120,31 +124,60 @@ defmodule ConceptWeb.WorkspaceLive do
     handle_event("archive_page", %{"id" => id}, socket)
   end
 
+  def handle_info(:close_command_palette, socket) do
+    close_palette(socket)
+  end
+
+  def handle_info(:palette_new_page, socket) do
+    {:noreply, do_new_page(socket, nil)}
+  end
+
+  def handle_info(:palette_sign_out, socket) do
+    {:noreply, redirect(socket, to: ~p"/sign-out")}
+  end
+
+  def handle_info({:palette_navigate, page_id}, socket) do
+    slug = socket.assigns.workspace.slug
+    {:noreply, push_navigate(socket, to: ~p"/w/#{slug}/p/#{page_id}")}
+  end
+
   @impl true
-  def handle_event("new_page", _, socket) do
-    ws = socket.assigns.workspace
-    user = socket.assigns.current_user
+  def handle_info(
+        %Phoenix.Socket.Broadcast{event: "presence_diff", payload: _payload},
+        socket
+      ) do
+    if socket.assigns[:current_page] do
+      presence_list =
+        ConceptWeb.Presence.list(
+          "workspace:#{socket.assigns.workspace.id}:page:#{socket.assigns.current_page.id}:presence"
+        )
 
-    case Pages.create_page("", ws.id, nil, actor: user, tenant: ws.id) do
-      {:ok, page} ->
-        {:noreply, push_patch(socket, to: ~p"/w/#{ws.slug}/p/#{page.id}")}
+      users =
+        Enum.map(presence_list, fn {user_id, %{metas: metas}} ->
+          meta = List.first(metas)
 
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Failed to create page")}
+          %{
+            id: user_id,
+            display_name: meta.display_name,
+            color: meta.color,
+            online_at: meta.online_at
+          }
+        end)
+        |> Enum.uniq_by(& &1.id)
+
+      {:noreply, assign(socket, :presence_users, users)}
+    else
+      {:noreply, socket}
     end
   end
 
+  @impl true
+  def handle_event("new_page", _, socket) do
+    {:noreply, do_new_page(socket, nil)}
+  end
+
   def handle_event("new_child_page", %{"parent_id" => parent_id}, socket) do
-    ws = socket.assigns.workspace
-    user = socket.assigns.current_user
-
-    case Pages.create_page("", ws.id, parent_id, actor: user, tenant: ws.id) do
-      {:ok, page} ->
-        {:noreply, push_patch(socket, to: ~p"/w/#{ws.slug}/p/#{page.id}")}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Failed to create page")}
-    end
+    {:noreply, do_new_page(socket, parent_id)}
   end
 
   def handle_event("rename_page", %{"id" => id, "title" => title}, socket) do
@@ -187,9 +220,80 @@ defmodule ConceptWeb.WorkspaceLive do
   end
 
   @impl true
+  def handle_event("global_key", %{"key" => "k", "metaKey" => true}, socket) do
+    toggle_palette(socket)
+  end
+
+  def handle_event("global_key", %{"key" => "k", "ctrlKey" => true}, socket) do
+    toggle_palette(socket)
+  end
+
+  def handle_event("global_key", %{"key" => "Escape"}, socket) do
+    if socket.assigns[:show_palette] do
+      close_palette(socket)
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("global_key", _params, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("open_command_palette", _params, socket) do
+    open_palette(socket)
+  end
+
+  @impl true
+  def handle_event("close_command_palette", _params, socket) do
+    close_palette(socket)
+  end
+
+  defp do_new_page(socket, parent_id) do
+    ws = socket.assigns.workspace
+    user = socket.assigns.current_user
+
+    case Pages.create_page("", ws.id, parent_id, actor: user, tenant: ws.id) do
+      {:ok, page} ->
+        push_patch(socket, to: ~p"/w/#{ws.slug}/p/#{page.id}")
+
+      {:error, _} ->
+        put_flash(socket, :error, "Failed to create page")
+    end
+  end
+
+  defp toggle_palette(socket) do
+    if socket.assigns[:show_palette] do
+      close_palette(socket)
+    else
+      open_palette(socket)
+    end
+  end
+
+  defp open_palette(socket) do
+    {:noreply,
+     socket
+     |> assign(show_palette: true)
+     |> push_event("palette_state", %{open: true})}
+  end
+
+  defp close_palette(socket) do
+    {:noreply,
+     socket
+     |> assign(show_palette: false)
+     |> push_event("palette_state", %{open: false})}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex h-screen">
+    <div
+      id="workspace-root"
+      class="flex h-screen"
+      phx-hook="GlobalKeys"
+      phx-window-keydown="global_key"
+    >
       <.sidebar
         workspace={@workspace}
         pages={@pages}
@@ -211,24 +315,33 @@ defmodule ConceptWeb.WorkspaceLive do
           </div>
         <% else %>
           <div class="ora-page-canvas">
+            <.presence_bar users={@presence_users} />
             <h1 class="text-4xl font-bold mb-4">
               {@current_page.icon_emoji || "📄"}
               {if @current_page.title == "" || is_nil(@current_page.title),
                 do: "Untitled",
                 else: @current_page.title}
             </h1>
-            <%= live_render(@socket, ConceptWeb.PageEditorLive,
+            {live_render(@socket, ConceptWeb.PageEditorLive,
               id: "page-editor-#{@current_page.id}",
               session: %{
                 "workspace_id" => @workspace.id,
                 "page_id" => @current_page.id,
                 "user_id" => @current_user.id
               }
-            ) %>
+            )}
           </div>
         <% end %>
       </main>
     </div>
+
+    <.live_component
+      module={ConceptWeb.CommandPaletteLive}
+      id="command-palette"
+      workspace={@workspace}
+      current_user={@current_user}
+      show_palette={@show_palette}
+    />
     """
   end
 end

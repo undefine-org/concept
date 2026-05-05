@@ -75,9 +75,13 @@ defmodule Concept.Pages.Page do
       prepare build(sort: [parent_page_id: :asc, position: :asc])
     end
 
+    read :recent_pages do
+      prepare build(sort: [updated_at: :desc], limit: 10)
+    end
+
     read :search_titles do
       argument :query, :string, allow_nil?: false
-      filter expr(contains(fragment("lower(?)", title), fragment("lower(?)", ^arg(:query))))
+      filter expr(ilike(title, fragment("concat('%', ?::text, '%')", ^arg(:query))))
       prepare build(sort: [updated_at: :desc], limit: 20)
     end
   end

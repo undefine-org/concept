@@ -21,6 +21,10 @@ defmodule ConceptWeb.Router do
     plug :set_actor, :user
   end
 
+  pipeline :require_owner do
+    plug ConceptWeb.Plugs.RequireOwner
+  end
+
   scope "/", ConceptWeb do
     pipe_through :browser
 
@@ -93,13 +97,11 @@ defmodule ConceptWeb.Router do
     end
   end
 
-  if Application.compile_env(:concept, :dev_routes) do
-    import AshAdmin.Router
+  import AshAdmin.Router
 
-    scope "/admin" do
-      pipe_through :browser
+  scope "/admin" do
+    pipe_through [:browser, :require_owner]
 
-      ash_admin "/"
-    end
+    ash_admin "/"
   end
 end

@@ -32,13 +32,32 @@ export const BlockEditor = {
     this.handleEvent("lock_granted", ({ block_id }) => {
       if (block_id === this.el.getAttribute("block-id")) {
         this.el.removeAttribute("data-locked-by-other");
+        this.el.removeAttribute("data-locked-by");
+        this.el.style.removeProperty("--lock-color");
+        const editor = this.el.querySelector("[data-editor]");
+        if (editor) editor.setAttribute("contenteditable", "true");
       }
     });
 
-    this.handleEvent("lock_denied", ({ block_id }) => {
+    this.handleEvent("lock_denied", ({ block_id, user_id, color }) => {
       if (block_id === this.el.getAttribute("block-id")) {
         this.el.setReadOnly?.(true);
         this.el.setAttribute("data-locked-by-other", "true");
+        if (user_id) {
+          this.el.setAttribute("data-locked-by", user_id);
+          this.el.style.setProperty("--lock-color", color || "var(--color-notion-blue)");
+        }
+        const editor = this.el.querySelector("[data-editor]");
+        if (editor) editor.setAttribute("contenteditable", "false");
+      }
+    });
+
+    this.handleEvent("set_locked_by", ({ block_id, user_id, color }) => {
+      if (block_id === this.el.getAttribute("block-id")) {
+        this.el.setAttribute("data-locked-by", user_id);
+        this.el.style.setProperty("--lock-color", color || "var(--color-notion-blue)");
+        const editor = this.el.querySelector("[data-editor]");
+        if (editor) editor.setAttribute("contenteditable", "false");
       }
     });
 

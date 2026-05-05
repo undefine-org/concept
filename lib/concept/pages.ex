@@ -17,6 +17,7 @@ defmodule Concept.Pages do
       define :archive
       define :restore
       define :list_tree, action: :list_tree
+      define :recent_pages, action: :recent_pages
       define :search_titles, args: [:query]
       define :get_page, action: :read, get_by: :id
     end

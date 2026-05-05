@@ -4,6 +4,8 @@ defmodule ConceptWeb.PageEditorLive do
 
   alias Concept.Pages
 
+  require Logger
+
   @impl true
   def mount(_params, session, socket) do
     ws_id = session["workspace_id"]
@@ -14,6 +16,13 @@ defmodule ConceptWeb.PageEditorLive do
     ws = %{id: ws_id}
 
     Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws_id}:page:#{page_id}:blocks")
+    Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws_id}:page:#{page_id}:presence")
+
+    ConceptWeb.Presence.track(self(), "workspace:#{ws_id}:page:#{page_id}:presence", user.id, %{
+      display_name: user.email |> to_string |> String.split("@") |> hd,
+      online_at: System.system_time(:second),
+      color: ConceptWeb.Colors.for_user_id(user.id)
+    })
 
     blocks =
       case Pages.list_for_page(page_id, actor: user, tenant: ws_id) do
@@ -28,6 +37,7 @@ defmodule ConceptWeb.PageEditorLive do
       |> assign(:current_user, user)
       |> assign(:blocks, blocks)
       |> assign(:held_locks, %{})
+      |> assign(:presence_users, [])
 
     {:ok, socket}
   end
@@ -89,7 +99,10 @@ defmodule ConceptWeb.PageEditorLive do
         block = Enum.find(socket.assigns.blocks, &(&1.id == id))
 
         if block do
-          Pages.update_content(block, %{content: content}, actor: user, tenant: ws_id)
+          case Pages.update_content(block, content, actor: user, tenant: ws_id) do
+            {:ok, _} -> :ok
+            {:error, error} -> Logger.warning("Block save failed: #{inspect(error)}")
+          end
         end
 
         {:noreply, socket}
@@ -134,16 +147,35 @@ defmodule ConceptWeb.PageEditorLive do
     block = notification.data
     updater = notification.actor
 
-    if updater && updater.id != socket.assigns.current_user.id do
-      {:noreply, push_event(socket, "apply_remote", %{block_id: block.id, state: block.content})}
-    else
-      blocks =
-        Enum.map(socket.assigns.blocks, fn b ->
-          if b.id == block.id, do: block, else: b
-        end)
+    socket =
+      if updater && updater.id != socket.assigns.current_user.id do
+        socket =
+          cond do
+            block.lock_state == :locked && block.lock_holder_id != socket.assigns.current_user.id ->
+              push_event(socket, "set_locked_by", %{
+                block_id: block.id,
+                user_id: block.lock_holder_id,
+                color: ConceptWeb.Colors.for_user_id(block.lock_holder_id)
+              })
 
-      {:noreply, assign(socket, :blocks, blocks)}
-    end
+            block.lock_state == :unlocked ->
+              push_event(socket, "lock_granted", %{block_id: block.id})
+
+            true ->
+              socket
+          end
+
+        push_event(socket, "apply_remote", %{block_id: block.id, state: block.content})
+      else
+        socket
+      end
+
+    blocks =
+      Enum.map(socket.assigns.blocks, fn b ->
+        if b.id == block.id, do: block, else: b
+      end)
+
+    {:noreply, assign(socket, :blocks, blocks)}
   end
 
   @impl true
@@ -164,6 +196,32 @@ defmodule ConceptWeb.PageEditorLive do
     block = notification.data
     blocks = Enum.reject(socket.assigns.blocks, &(&1.id == block.id))
     {:noreply, assign(socket, :blocks, blocks)}
+  end
+
+  @impl true
+  def handle_info(
+        %Phoenix.Socket.Broadcast{event: "presence_diff", payload: _payload},
+        socket
+      ) do
+    presence_list =
+      ConceptWeb.Presence.list(
+        "workspace:#{socket.assigns.workspace.id}:page:#{socket.assigns.page_id}:presence"
+      )
+
+    users =
+      Enum.map(presence_list, fn {user_id, %{metas: metas}} ->
+        meta = List.first(metas)
+
+        %{
+          id: user_id,
+          display_name: meta.display_name,
+          color: meta.color,
+          online_at: meta.online_at
+        }
+      end)
+      |> Enum.uniq_by(& &1.id)
+
+    {:noreply, assign(socket, :presence_users, users)}
   end
 
   @impl true

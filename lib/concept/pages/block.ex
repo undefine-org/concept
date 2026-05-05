@@ -11,7 +11,8 @@ defmodule Concept.Pages.Block do
     authorizers: [Ash.Policy.Authorizer],
     extensions: [
       AshArchival.Resource,
-      AshStateMachine
+      AshStateMachine,
+      AshOban
     ],
     notifiers: [Ash.Notifier.PubSub]
 
@@ -48,6 +49,18 @@ defmodule Concept.Pages.Block do
     end
   end
 
+  oban do
+    triggers do
+      trigger :release_expired_locks do
+        action :release_lock
+        where expr(lock_state == :locked and lock_expires_at < now())
+        scheduler_cron "*/10 * * * *"
+        queue :locks
+        use_tenant_from_record? true
+      end
+    end
+  end
+
   actions do
     defaults [:read]
 
@@ -61,6 +74,7 @@ defmodule Concept.Pages.Block do
 
     update :update_content do
       accept [:content]
+      require_atomic? false
       change Concept.Pages.Block.Changes.RequireOwnLock
     end
 
@@ -85,7 +99,9 @@ defmodule Concept.Pages.Block do
       argument :user_id, :uuid, allow_nil?: false
       argument :ttl_seconds, :integer, default: 30
       accept []
+      require_atomic? false
       change transition_state(:locked)
+      change set_attribute(:lock_state, :locked)
       change Concept.Pages.Block.Changes.SetLockMetadata
     end
 
@@ -93,13 +109,17 @@ defmodule Concept.Pages.Block do
       argument :user_id, :uuid, allow_nil?: false
       argument :ttl_seconds, :integer, default: 30
       accept []
+      require_atomic? false
       change transition_state(:locked)
+      change set_attribute(:lock_state, :locked)
       change Concept.Pages.Block.Changes.SetLockMetadata
     end
 
     update :release_lock do
       accept []
+      require_atomic? false
       change transition_state(:unlocked)
+      change set_attribute(:lock_state, :unlocked)
       change set_attribute(:lock_holder_id, nil)
       change set_attribute(:lock_acquired_at, nil)
       change set_attribute(:lock_expires_at, nil)
