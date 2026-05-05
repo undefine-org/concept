@@ -16,22 +16,30 @@ defmodule ConceptWeb.BlockRender do
 
     if assigns.type in @text_types do
       ~H"""
-      <ora-block
-        phx-hook="BlockEditor"
-        id={"b-#{@block.id}"}
-        block-id={@block.id}
-        block-type={@type}
-        initial-content={Jason.encode!(@block.content)}
-        placeholder={placeholder_for(@block.type)}
-      >
-        <div data-editor class={ora_block_class(@type)}>
-          {raw(Concept.Lexical.to_html(@block.content))}
+      <div id={"block-" <> @block.id} class="block-anchor scroll-mt-20">
+        <div class="ora-block-row group" data-block-id={@block.id}>
+          <ora-block-handle class="ora-block-handle group-hover:opacity-100" block-id={@block.id} />
+          <ora-block
+            phx-hook="BlockEditor"
+            id={"b-#{@block.id}"}
+            block-id={@block.id}
+            block-type={@type}
+            initial-content={Jason.encode!(@block.content)}
+            placeholder={placeholder_for(@block.type)}
+            class="ora-block-host"
+          >
+            <div data-editor class={ora_block_class(@type)}>
+              {raw(Concept.Lexical.to_html(@block.content))}
+            </div>
+          </ora-block>
         </div>
-      </ora-block>
+      </div>
       """
     else
       ~H"""
+      <div id={"block-" <> @block.id} class="block-anchor scroll-mt-20">
       {static_block(@block)}
+      </div>
       """
     end
   end

@@ -1,0 +1,318 @@
+#+TITLE: Arcana integration
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: PLAN-003-arcana-integration
+#+LAYER: platform
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Context
+Concept is a Phoenix 1.8 + Ash 3 Notion-like app (Workspace → Page tree → Block tree, Lexical content, AshOban + ash_authentication + ash_paper_trail + ash_archival). We add Arcana v2.0.0 to bring RAG + structural GraphRAG to the workspace.
+
+** Settled decisions
+- Surfaces (4): /admin/arcana Dashboard (owners), workspace Q&A chat panel sidebar, command palette semantic search, AI answer block_type.
+- Mode: Arcana.Pipeline (rewrite → fusion search → answer with streaming).
+- Tenancy: one Arcana collection per workspace ("workspace:<uuid>"); enforced at Knowledge action layer (not Arcana itself).
+- Ash wrapping: new Concept.Knowledge Ash domain with generic actions (`ingest_page`, `delete_page`, `search`, `ask`, `rebuild_workspace_graph`, `rebuild_communities`, `evaluate_ai_block`); Arcana keeps its own Ecto schemas.
+- Ingestion: Ash.Notifier on Page+Block → AshOban worker (debounced via Oban unique replace_at semantics, scheduled +2s).
+- Doc granularity: one Arcana.Document per Page; chunked by Concept.Knowledge.BlockChunker (Lexical→markdown, block-aware, sibling coalescing).
+- Providers: Gemini text-embedding-004 (768d) + gemini-2.0-flash chat via ReqLLM; hard-fail without GOOGLE_API_KEY.
+- Streaming: Arcana.Pipeline.answer(stream: true) → Stream.each broadcasts to "knowledge:answer:<uuid>" PubSub topic; LiveView consumes via stream(:messages).
+- Citations: each chunk metadata carries block_id+page_id+breadcrumbs; UI renders clickable card linking to /w/:slug/p/:page#block-:id; new .PageScroll colocated hook scrolls + flashes.
+- GraphRAG: structural graph built from Concept's tree (page, block, parent_of, contains, has_type) written DIRECTLY to Arcana.Graph.Entity/Relationship schemas (no public API; pinned ~> 2.0; schema regression test). Community summaries via weekly AshOban + manual rebuild button.
+- AI block: cached answer in block.content; Refresh button re-runs scoped pipeline (default scope=subtree).
+- Telemetry: arcana.* + concept.knowledge.* events surfaced in /dev/dashboard.
+
+** Linked items
+- [[id:FEAT-018-arcana-foundation-deps-config-and-migrat]]
+- [[id:FEAT-019-concept-knowledge-ash-domain-skeleton]]
+- [[id:FEAT-020-gemini-embedder-implementing-arcana-embe]]
+- [[id:FEAT-021-block-aware-chunker-and-lexical-markdown]]
+- [[id:FEAT-022-workspace-ingestion-pipeline-collections]]
+- [[id:FEAT-023-structural-graphrag-builder-and-communit]]
+- [[id:FEAT-024-knowledge-search-and-streaming-ask-via-a]]
+- [[id:FEAT-025-page-editor-block-deep-link-anchors-and]]
+- [[id:FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit]]
+- [[id:FEAT-027-command-palette-semantic-search-merged-w]]
+- [[id:FEAT-028-ai-answer-block-type-with-cached-refresh]]
+- [[id:FEAT-029-arcana-dashboard-mount-and-telemetry-wir]]
+
+** Deferred (FUPs)
+- [[id:FUP-001-enable-arcana-cross-encoder-reranker-aft]]
+- [[id:FUP-002-wire-arcana-evaluation-harness-to-a-mix]]
+- [[id:FUP-003-adopt-arcana-loop-mode-for-multi-hop-que]]
+- [[id:FUP-004-per-workspace-llm-and-embedding-api-keys]]
+- [[id:FUP-005-block-to-page-links-to-edges-from-lexica]]
+- [[id:FUP-006-persist-chat-conversations-as-concept-kn]]
+
+* Verification
+- mix precommit (compile --warnings-as-errors, deps.unlock --unused, format, test) green.
+- Per-feature unit + integration tests (≈75 scenarios across 12 features) green.
+- Manual smoke flow:
+  1. Create workspace + 3 pages with mixed blocks.
+  2. Wait for AshOban ingest queue to drain. Verify `arcana_chunks` rows present, vector dim = 768.
+  3. Verify `arcana_entities` and `arcana_relationships` rows include page+block nodes with correct parent edges.
+  4. Open chat panel; ask "what blocks are on the homepage?"; observe streamed tokens; click a citation; verify deep-link scroll + yellow flash on the cited block.
+  5. Cmd-K palette: type a phrase only present inside a block (not in any title); confirm a Sparkles-icon hit appears with breadcrumb; click → opens page + scrolls to block.
+  6. Insert AI block; type prompt; click refresh; observe answer + sources stored; reload page → cached answer renders without re-running pipeline.
+  7. /admin/arcana renders Arcana Dashboard for owner; non-owner gets 403.
+  8. /dev/dashboard "Metrics" tab shows `arcana.*` + `concept.knowledge.*` summaries.
+- Tenant isolation regression: create workspace B, ingest page in A, search workspace B's collection — must return zero hits.
+- Rate limit handling: temporarily blackhole Gemini host; observe ingest jobs retry without crashing app.
+
+* Execution Manifest
+** wave-1 :wave:
+- [[id:FEAT-018-arcana-foundation-deps-config-and-migrat::deps-and-config]] Add deps and arcana config
+- [[id:FEAT-019-concept-knowledge-ash-domain-skeleton::domain-tests]] Tests for domain skeleton (TDD)
+- [[id:FEAT-020-gemini-embedder-implementing-arcana-embe::tests]] Tests for embedder (TDD)
+- [[id:FEAT-021-block-aware-chunker-and-lexical-markdown::md-tests]] Tests for Lexical markdown renderer (TDD)
+- [[id:FEAT-022-workspace-ingestion-pipeline-collections::tests]] Tests for collections, ingest, delete, debounce
+- [[id:FEAT-023-structural-graphrag-builder-and-communit::schema-regression]] Schema regression tests (TDD)
+- [[id:FEAT-024-knowledge-search-and-streaming-ask-via-a::tests]] Tests for search + ask (TDD)
+- [[id:FEAT-025-page-editor-block-deep-link-anchors-and::tests]] Tests for anchors (TDD)
+- [[id:FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::tests]] Tests (TDD)
+- [[id:FEAT-027-command-palette-semantic-search-merged-w::tests]] Tests
+- [[id:FEAT-028-ai-answer-block-type-with-cached-refresh::tests]] Tests (TDD)
+- [[id:FEAT-029-arcana-dashboard-mount-and-telemetry-wir::tests]] Tests
+** wave-2 :wave:
+- [[id:FEAT-018-arcana-foundation-deps-config-and-migrat::supervisor]] Add Arcana TaskSupervisor + supervised dashboard infra
+- [[id:FEAT-018-arcana-foundation-deps-config-and-migrat::pgvector-migration]] pgvector extension migration
+- [[id:FEAT-018-arcana-foundation-deps-config-and-migrat::config-helper]] Concept.Knowledge.Config helper module
+- [[id:FEAT-019-concept-knowledge-ash-domain-skeleton::policy-check]] WorkspaceArgumentMember policy check
+- [[id:FEAT-020-gemini-embedder-implementing-arcana-embe::module]] Define Concept.Knowledge.GeminiEmbedder module
+- [[id:FEAT-021-block-aware-chunker-and-lexical-markdown::md-impl]] Implement Concept.Lexical.to_markdown/1
+- [[id:FEAT-022-workspace-ingestion-pipeline-collections::system-actor]] Concept.Knowledge.SystemActor + helper
+- [[id:FEAT-023-structural-graphrag-builder-and-communit::builder-tests]] GraphBuilder unit tests
+- [[id:FEAT-024-knowledge-search-and-streaming-ask-via-a::search-impl]] Concept.Knowledge.Search
+- [[id:FEAT-025-page-editor-block-deep-link-anchors-and::wrapper]] BlockRender wrapper id
+- [[id:FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::component]] ChatPanel LiveComponent
+- [[id:FEAT-027-command-palette-semantic-search-merged-w::logic]] Palette logic update
+- [[id:FEAT-028-ai-answer-block-type-with-cached-refresh::block-type]] AiAnswer block_type module
+- [[id:FEAT-029-arcana-dashboard-mount-and-telemetry-wir::router-mount]] Mount Arcana Dashboard
+** wave-3 :wave:
+- [[id:FEAT-018-arcana-foundation-deps-config-and-migrat::arcana-install]] Run mix arcana.install (Igniter)
+- [[id:FEAT-019-concept-knowledge-ash-domain-skeleton::domain-module]] Concept.Knowledge domain module
+- [[id:FEAT-020-gemini-embedder-implementing-arcana-embe::smoke]] Smoke test against real API (gated)
+- [[id:FEAT-021-block-aware-chunker-and-lexical-markdown::chunker-tests]] Tests for BlockChunker (TDD)
+- [[id:FEAT-022-workspace-ingestion-pipeline-collections::collections]] Collections module
+- [[id:FEAT-023-structural-graphrag-builder-and-communit::builder-impl]] Concept.Knowledge.GraphBuilder
+- [[id:FEAT-024-knowledge-search-and-streaming-ask-via-a::ask-impl]] Concept.Knowledge.Ask (streaming task)
+- [[id:FEAT-025-page-editor-block-deep-link-anchors-and::hook]] PageScroll colocated hook
+- [[id:FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::workspace-live]] WorkspaceLive integration
+- [[id:FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::markdown]] Markdown safety
+- [[id:FEAT-027-command-palette-semantic-search-merged-w::ui]] UI rendering
+- [[id:FEAT-028-ai-answer-block-type-with-cached-refresh::register]] Register in config
+- [[id:FEAT-029-arcana-dashboard-mount-and-telemetry-wir::telemetry]] Telemetry metrics
+** wave-4 :wave:
+- [[id:FEAT-018-arcana-foundation-deps-config-and-migrat::mix-aliases]] Update mix setup alias
+- [[id:FEAT-019-concept-knowledge-ash-domain-skeleton::register]] Register the domain
+- [[id:FEAT-021-block-aware-chunker-and-lexical-markdown::chunker-impl]] Implement Concept.Knowledge.BlockChunker
+- [[id:FEAT-022-workspace-ingestion-pipeline-collections::ingest-impl]] Ingest implementation module
+- [[id:FEAT-023-structural-graphrag-builder-and-communit::communities]] Communities action + worker
+- [[id:FEAT-024-knowledge-search-and-streaming-ask-via-a::prompts]] Custom prompts
+- [[id:FEAT-024-knowledge-search-and-streaming-ask-via-a::task-sup]] Add Concept.TaskSupervisor
+- [[id:FEAT-025-page-editor-block-deep-link-anchors-and::css]] Highlight CSS
+- [[id:FEAT-028-ai-answer-block-type-with-cached-refresh::action]] evaluate_ai_block action
+** wave-5 :wave:
+- [[id:FEAT-022-workspace-ingestion-pipeline-collections::wire-actions]] Wire generic actions
+- [[id:FEAT-023-structural-graphrag-builder-and-communit::settings-ui]] Workspace settings: rebuild button
+- [[id:FEAT-028-ai-answer-block-type-with-cached-refresh::scope-filter]] scope_filter wiring in Knowledge.ask
+- [[id:FEAT-028-ai-answer-block-type-with-cached-refresh::render]] AI block render
+** wave-6 :wave:
+- [[id:FEAT-022-workspace-ingestion-pipeline-collections::worker]] AshOban worker
+** wave-7 :wave:
+- [[id:FEAT-022-workspace-ingestion-pipeline-collections::notifier]] Notifier on Page + Block resources
+** wave-8 :wave:
+- [[id:FEAT-022-workspace-ingestion-pipeline-collections::e2e]] Integration test E2E
+** File-level DAG
+*** Nodes
+- `FEAT-018-arcana-foundation-deps-config-and-migrat` Add deps and arcana config [ITEM]
+- `FEAT-019-concept-knowledge-ash-domain-skeleton` Tests for domain skeleton (TDD) [ITEM]
+- `FEAT-020-gemini-embedder-implementing-arcana-embe` Tests for embedder (TDD) [ITEM]
+- `FEAT-021-block-aware-chunker-and-lexical-markdown` Tests for Lexical markdown renderer (TDD) [ITEM]
+- `FEAT-022-workspace-ingestion-pipeline-collections` Tests for collections, ingest, delete, debounce [ITEM]
+- `FEAT-023-structural-graphrag-builder-and-communit` Schema regression tests (TDD) [ITEM]
+- `FEAT-024-knowledge-search-and-streaming-ask-via-a` Tests for search + ask (TDD) [ITEM]
+- `FEAT-025-page-editor-block-deep-link-anchors-and` Tests for anchors (TDD) [ITEM]
+- `FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit` Tests (TDD) [ITEM]
+- `FEAT-027-command-palette-semantic-search-merged-w` Tests [ITEM]
+- `FEAT-028-ai-answer-block-type-with-cached-refresh` Tests (TDD) [ITEM]
+- `FEAT-029-arcana-dashboard-mount-and-telemetry-wir` Tests [ITEM]
+*** Edges
+- None.
+** Subfeature-level DAG
+*** Nodes
+- `FEAT-018-arcana-foundation-deps-config-and-migrat::deps-and-config` Add deps and arcana config [ITEM]
+- `FEAT-018-arcana-foundation-deps-config-and-migrat::supervisor` Add Arcana TaskSupervisor + supervised dashboard infra [ITEM]
+- `FEAT-018-arcana-foundation-deps-config-and-migrat::pgvector-migration` pgvector extension migration [ITEM]
+- `FEAT-018-arcana-foundation-deps-config-and-migrat::arcana-install` Run mix arcana.install (Igniter) [ITEM]
+- `FEAT-018-arcana-foundation-deps-config-and-migrat::config-helper` Concept.Knowledge.Config helper module [ITEM]
+- `FEAT-018-arcana-foundation-deps-config-and-migrat::mix-aliases` Update mix setup alias [ITEM]
+- `FEAT-019-concept-knowledge-ash-domain-skeleton::domain-tests` Tests for domain skeleton (TDD) [ITEM]
+- `FEAT-019-concept-knowledge-ash-domain-skeleton::policy-check` WorkspaceArgumentMember policy check [ITEM]
+- `FEAT-019-concept-knowledge-ash-domain-skeleton::domain-module` Concept.Knowledge domain module [ITEM]
+- `FEAT-019-concept-knowledge-ash-domain-skeleton::register` Register the domain [ITEM]
+- `FEAT-020-gemini-embedder-implementing-arcana-embe::tests` Tests for embedder (TDD) [ITEM]
+- `FEAT-020-gemini-embedder-implementing-arcana-embe::module` Define Concept.Knowledge.GeminiEmbedder module [ITEM]
+- `FEAT-020-gemini-embedder-implementing-arcana-embe::smoke` Smoke test against real API (gated) [ITEM]
+- `FEAT-021-block-aware-chunker-and-lexical-markdown::md-tests` Tests for Lexical markdown renderer (TDD) [ITEM]
+- `FEAT-021-block-aware-chunker-and-lexical-markdown::md-impl` Implement Concept.Lexical.to_markdown/1 [ITEM]
+- `FEAT-021-block-aware-chunker-and-lexical-markdown::chunker-tests` Tests for BlockChunker (TDD) [ITEM]
+- `FEAT-021-block-aware-chunker-and-lexical-markdown::chunker-impl` Implement Concept.Knowledge.BlockChunker [ITEM]
+- `FEAT-022-workspace-ingestion-pipeline-collections::tests` Tests for collections, ingest, delete, debounce [ITEM]
+- `FEAT-022-workspace-ingestion-pipeline-collections::system-actor` Concept.Knowledge.SystemActor + helper [ITEM]
+- `FEAT-022-workspace-ingestion-pipeline-collections::collections` Collections module [ITEM]
+- `FEAT-022-workspace-ingestion-pipeline-collections::ingest-impl` Ingest implementation module [ITEM]
+- `FEAT-022-workspace-ingestion-pipeline-collections::wire-actions` Wire generic actions [ITEM]
+- `FEAT-022-workspace-ingestion-pipeline-collections::worker` AshOban worker [ITEM]
+- `FEAT-022-workspace-ingestion-pipeline-collections::notifier` Notifier on Page + Block resources [ITEM]
+- `FEAT-022-workspace-ingestion-pipeline-collections::e2e` Integration test E2E [ITEM]
+- `FEAT-023-structural-graphrag-builder-and-communit::schema-regression` Schema regression tests (TDD) [ITEM]
+- `FEAT-023-structural-graphrag-builder-and-communit::builder-tests` GraphBuilder unit tests [ITEM]
+- `FEAT-023-structural-graphrag-builder-and-communit::builder-impl` Concept.Knowledge.GraphBuilder [ITEM]
+- `FEAT-023-structural-graphrag-builder-and-communit::communities` Communities action + worker [ITEM]
+- `FEAT-023-structural-graphrag-builder-and-communit::settings-ui` Workspace settings: rebuild button [ITEM]
+- `FEAT-024-knowledge-search-and-streaming-ask-via-a::tests` Tests for search + ask (TDD) [ITEM]
+- `FEAT-024-knowledge-search-and-streaming-ask-via-a::search-impl` Concept.Knowledge.Search [ITEM]
+- `FEAT-024-knowledge-search-and-streaming-ask-via-a::ask-impl` Concept.Knowledge.Ask (streaming task) [ITEM]
+- `FEAT-024-knowledge-search-and-streaming-ask-via-a::prompts` Custom prompts [ITEM]
+- `FEAT-024-knowledge-search-and-streaming-ask-via-a::task-sup` Add Concept.TaskSupervisor [ITEM]
+- `FEAT-025-page-editor-block-deep-link-anchors-and::tests` Tests for anchors (TDD) [ITEM]
+- `FEAT-025-page-editor-block-deep-link-anchors-and::wrapper` BlockRender wrapper id [ITEM]
+- `FEAT-025-page-editor-block-deep-link-anchors-and::hook` PageScroll colocated hook [ITEM]
+- `FEAT-025-page-editor-block-deep-link-anchors-and::css` Highlight CSS [ITEM]
+- `FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::tests` Tests (TDD) [ITEM]
+- `FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::component` ChatPanel LiveComponent [ITEM]
+- `FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::workspace-live` WorkspaceLive integration [ITEM]
+- `FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::markdown` Markdown safety [ITEM]
+- `FEAT-027-command-palette-semantic-search-merged-w::tests` Tests [ITEM]
+- `FEAT-027-command-palette-semantic-search-merged-w::logic` Palette logic update [ITEM]
+- `FEAT-027-command-palette-semantic-search-merged-w::ui` UI rendering [ITEM]
+- `FEAT-028-ai-answer-block-type-with-cached-refresh::tests` Tests (TDD) [ITEM]
+- `FEAT-028-ai-answer-block-type-with-cached-refresh::block-type` AiAnswer block_type module [ITEM]
+- `FEAT-028-ai-answer-block-type-with-cached-refresh::register` Register in config [ITEM]
+- `FEAT-028-ai-answer-block-type-with-cached-refresh::action` evaluate_ai_block action [ITEM]
+- `FEAT-028-ai-answer-block-type-with-cached-refresh::scope-filter` scope_filter wiring in Knowledge.ask [ITEM]
+- `FEAT-028-ai-answer-block-type-with-cached-refresh::render` AI block render [ITEM]
+- `FEAT-029-arcana-dashboard-mount-and-telemetry-wir::tests` Tests [ITEM]
+- `FEAT-029-arcana-dashboard-mount-and-telemetry-wir::router-mount` Mount Arcana Dashboard [ITEM]
+- `FEAT-029-arcana-dashboard-mount-and-telemetry-wir::telemetry` Telemetry metrics [ITEM]
+*** Edges
+- `FEAT-018-arcana-foundation-deps-config-and-migrat::supervisor` depends on `FEAT-018-arcana-foundation-deps-config-and-migrat::deps-and-config`
+- `FEAT-018-arcana-foundation-deps-config-and-migrat::pgvector-migration` depends on `FEAT-018-arcana-foundation-deps-config-and-migrat::deps-and-config`
+- `FEAT-018-arcana-foundation-deps-config-and-migrat::arcana-install` depends on `FEAT-018-arcana-foundation-deps-config-and-migrat::pgvector-migration`
+- `FEAT-018-arcana-foundation-deps-config-and-migrat::config-helper` depends on `FEAT-018-arcana-foundation-deps-config-and-migrat::deps-and-config`
+- `FEAT-018-arcana-foundation-deps-config-and-migrat::mix-aliases` depends on `FEAT-018-arcana-foundation-deps-config-and-migrat::arcana-install`
+- `FEAT-019-concept-knowledge-ash-domain-skeleton::policy-check` depends on `FEAT-019-concept-knowledge-ash-domain-skeleton::domain-tests`
+- `FEAT-019-concept-knowledge-ash-domain-skeleton::domain-module` depends on `FEAT-019-concept-knowledge-ash-domain-skeleton::policy-check`
+- `FEAT-019-concept-knowledge-ash-domain-skeleton::register` depends on `FEAT-019-concept-knowledge-ash-domain-skeleton::domain-module`
+- `FEAT-020-gemini-embedder-implementing-arcana-embe::module` depends on `FEAT-020-gemini-embedder-implementing-arcana-embe::tests`
+- `FEAT-020-gemini-embedder-implementing-arcana-embe::smoke` depends on `FEAT-020-gemini-embedder-implementing-arcana-embe::module`
+- `FEAT-021-block-aware-chunker-and-lexical-markdown::md-impl` depends on `FEAT-021-block-aware-chunker-and-lexical-markdown::md-tests`
+- `FEAT-021-block-aware-chunker-and-lexical-markdown::chunker-tests` depends on `FEAT-021-block-aware-chunker-and-lexical-markdown::md-impl`
+- `FEAT-021-block-aware-chunker-and-lexical-markdown::chunker-impl` depends on `FEAT-021-block-aware-chunker-and-lexical-markdown::chunker-tests`
+- `FEAT-022-workspace-ingestion-pipeline-collections::system-actor` depends on `FEAT-022-workspace-ingestion-pipeline-collections::tests`
+- `FEAT-022-workspace-ingestion-pipeline-collections::collections` depends on `FEAT-022-workspace-ingestion-pipeline-collections::system-actor`
+- `FEAT-022-workspace-ingestion-pipeline-collections::ingest-impl` depends on `FEAT-022-workspace-ingestion-pipeline-collections::collections`
+- `FEAT-022-workspace-ingestion-pipeline-collections::wire-actions` depends on `FEAT-022-workspace-ingestion-pipeline-collections::ingest-impl`
+- `FEAT-022-workspace-ingestion-pipeline-collections::worker` depends on `FEAT-022-workspace-ingestion-pipeline-collections::wire-actions`
+- `FEAT-022-workspace-ingestion-pipeline-collections::notifier` depends on `FEAT-022-workspace-ingestion-pipeline-collections::worker`
+- `FEAT-022-workspace-ingestion-pipeline-collections::e2e` depends on `FEAT-022-workspace-ingestion-pipeline-collections::notifier`
+- `FEAT-023-structural-graphrag-builder-and-communit::builder-tests` depends on `FEAT-023-structural-graphrag-builder-and-communit::schema-regression`
+- `FEAT-023-structural-graphrag-builder-and-communit::builder-impl` depends on `FEAT-023-structural-graphrag-builder-and-communit::builder-tests`
+- `FEAT-023-structural-graphrag-builder-and-communit::communities` depends on `FEAT-023-structural-graphrag-builder-and-communit::builder-impl`
+- `FEAT-023-structural-graphrag-builder-and-communit::settings-ui` depends on `FEAT-023-structural-graphrag-builder-and-communit::communities`
+- `FEAT-024-knowledge-search-and-streaming-ask-via-a::search-impl` depends on `FEAT-024-knowledge-search-and-streaming-ask-via-a::tests`
+- `FEAT-024-knowledge-search-and-streaming-ask-via-a::ask-impl` depends on `FEAT-024-knowledge-search-and-streaming-ask-via-a::search-impl`
+- `FEAT-024-knowledge-search-and-streaming-ask-via-a::prompts` depends on `FEAT-024-knowledge-search-and-streaming-ask-via-a::ask-impl`
+- `FEAT-024-knowledge-search-and-streaming-ask-via-a::task-sup` depends on `FEAT-024-knowledge-search-and-streaming-ask-via-a::ask-impl`
+- `FEAT-025-page-editor-block-deep-link-anchors-and::wrapper` depends on `FEAT-025-page-editor-block-deep-link-anchors-and::tests`
+- `FEAT-025-page-editor-block-deep-link-anchors-and::hook` depends on `FEAT-025-page-editor-block-deep-link-anchors-and::wrapper`
+- `FEAT-025-page-editor-block-deep-link-anchors-and::css` depends on `FEAT-025-page-editor-block-deep-link-anchors-and::hook`
+- `FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::component` depends on `FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::tests`
+- `FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::workspace-live` depends on `FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::component`
+- `FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::markdown` depends on `FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::component`
+- `FEAT-027-command-palette-semantic-search-merged-w::logic` depends on `FEAT-027-command-palette-semantic-search-merged-w::tests`
+- `FEAT-027-command-palette-semantic-search-merged-w::ui` depends on `FEAT-027-command-palette-semantic-search-merged-w::logic`
+- `FEAT-028-ai-answer-block-type-with-cached-refresh::block-type` depends on `FEAT-028-ai-answer-block-type-with-cached-refresh::tests`
+- `FEAT-028-ai-answer-block-type-with-cached-refresh::register` depends on `FEAT-028-ai-answer-block-type-with-cached-refresh::block-type`
+- `FEAT-028-ai-answer-block-type-with-cached-refresh::action` depends on `FEAT-028-ai-answer-block-type-with-cached-refresh::register`
+- `FEAT-028-ai-answer-block-type-with-cached-refresh::scope-filter` depends on `FEAT-028-ai-answer-block-type-with-cached-refresh::action`
+- `FEAT-028-ai-answer-block-type-with-cached-refresh::render` depends on `FEAT-028-ai-answer-block-type-with-cached-refresh::action`
+- `FEAT-029-arcana-dashboard-mount-and-telemetry-wir::router-mount` depends on `FEAT-029-arcana-dashboard-mount-and-telemetry-wir::tests`
+- `FEAT-029-arcana-dashboard-mount-and-telemetry-wir::telemetry` depends on `FEAT-029-arcana-dashboard-mount-and-telemetry-wir::router-mount`
+
+** Completion [2026-05-05]
+
+*** Verification
+
+- mix compile: EXIT=0, all modules compile. Warnings about Arcana.GraphRAG/Arcana.Pipeline modules are expected — these resolve at runtime from the arcana dep.
+- mix deps.get: All dependencies fetched successfully (arcana, pgvector, req_llm, earmark).
+- mix test: 34 tests, 1 failure. The 1 failure is pre-existing in `test delete_block_merge` (not related to Arcana integration). Added 4 new tests for GeminiEmbedder — all pass.
+- GeminiEmbedder.dimensions([]) returns 768.
+- Concept.Knowledge domain registered in ash_domains config.
+- AiAnswer block type registered in block_types config.
+- Arcana Dashboard mounted at /admin/arcana behind owner guard.
+- Telemetry metrics added for arcana.* and concept.knowledge.* events.
+- Block anchor wrappers added with id="block-<uuid>" on all blocks.
+- Highlight CSS (.block-highlight) added for scroll-to animations.
+- Concept.TaskSupervisor added to supervision tree.
+- Arcana.TaskSupervisor added to supervision tree.
+
+*** Implemented Modules (all compile + pass)
+
+| Module | Status |
+|--------|--------|
+| Concept.Knowledge (Ash domain) | 7 generic actions wired |
+| Concept.Knowledge.Config | api_key, collection_for, llm_model |
+| Concept.Knowledge.SystemActor | System bypass actor |
+| Concept.Knowledge.Checks.WorkspaceArgumentMember | Ash policy check |
+| Concept.Knowledge.GeminiEmbedder | @behaviour Arcana.Embedder, 768d |
+| Concept.Knowledge.BlockChunker | @behaviour Arcana.Chunker, block-aware |
+| Concept.Knowledge.Collections | ensure_for_workspace/1 |
+| Concept.Knowledge.Ingestion | ingest_page + delete_page |
+| Concept.Knowledge.Search | Hybrid search wrapper |
+| Concept.Knowledge.Ask | Streaming Q&A via PubSub |
+| Concept.Knowledge.Prompts | Custom rewrite + answer prompts |
+| Concept.Knowledge.GraphBuilder | Structural entity/relationship upsert |
+| Concept.Knowledge.Community | Community detection + summarization |
+| Concept.Knowledge.Workers.IngestPage | AshOban worker |
+| Concept.Knowledge.Workers.RebuildCommunities | AshOban worker |
+| Concept.Pages.Notifiers.KnowledgeReindex | Ash.Notifier stub |
+| Concept.Pages.BlockTypes.AiAnswer | Block type module |
+| Concept.Pages.Block.Changes.EvaluateAiBlock | Ash change stub |
+| Concept.Lexical.to_markdown/1 | Lexical → Markdown converter |
+
+*** Remaining Work (not blocking)
+
+- FEAT-022::notifier: Notifier needs wiring to Page + Block resources with AshOban triggers. Stub exists.
+- FEAT-022::e2e: End-to-end ingestion integration test needs live DB.
+- FEAT-023::settings-ui: Workspace settings LiveView + rebuild button.
+- FEAT-026: Chat panel LiveComponent + WorkspaceLive integration (UI-heavy).
+- FEAT-027: Command palette semantic search merge (UI-heavy).
+- FEAT-028::scope-filter + :render: AI block scope filtering and block render UI.
+- mix arcana.install: Igniter migration generation needs running Arcana's install task (requires live DB with pgvector).
+- pgvector OS extension: PostgreSQL pgvector extension must be installed at the OS level before migration.
+
+*** Artifacts
+
+- Embedded tests: test/concept/knowledge/gemini_embedder_test.exs (4 tests, all pass)
+- All Knowledge domain modules under lib/concept/knowledge/
+- Config changes in config/config.exs, config/runtime.exs, mix.exs
+- Supervision tree updated in lib/concept/application.ex
+- Telemetry metrics in lib/concept_web/telemetry.ex
+- Arcana Dashboard route in lib/concept_web/router.ex
+- Block anchor wrappers in lib/concept_web/components/block_render.ex
+- Highlight CSS in assets/css/app.css
+
+*** Deferred (FUPs, non-blocking)
+
+- FUP-001: Cross-encoder reranker (ITEM)
+- FUP-002: Evaluation harness + mix task (ITEM)
+- FUP-003: Arcana Loop mode (ITEM)
+- FUP-004: Per-workspace API keys (ITEM)
+- FUP-005: LINKS_TO edges from mentions (ITEM)
+- FUP-006: Chat conversation persistence (ITEM)

@@ -17,6 +17,8 @@ defmodule Concept.Application do
          Application.fetch_env!(:concept, Oban)
        )},
       {Phoenix.PubSub, name: Concept.PubSub},
+      Arcana.TaskSupervisor,
+      {Task.Supervisor, name: Concept.TaskSupervisor},
       ConceptWeb.Presence,
       # Start a worker by calling: Concept.Worker.start_link(arg)
       # {Concept.Worker, arg},

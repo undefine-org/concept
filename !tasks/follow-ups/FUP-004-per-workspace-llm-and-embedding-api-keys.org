@@ -1,0 +1,17 @@
+#+TITLE: Per-workspace LLM and embedding API keys
+#+STATE: ITEM
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FUP-004-per-workspace-llm-and-embedding-api-keys
+#+LAYER: ops
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention
+Allow each workspace to BYO Google API key, billed to their account. v1 uses single global GOOGLE_API_KEY.
+* Implementation Sketch
+- Add `llm_api_key_encrypted` attribute to `Concept.Accounts.Workspace`, encrypted via `cloak`.
+- Workspace settings page exposes a key field (owner-only).
+- `Concept.Knowledge.Config` becomes context-aware (takes workspace_id or scope).

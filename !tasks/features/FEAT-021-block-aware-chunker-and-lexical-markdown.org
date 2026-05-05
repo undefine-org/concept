@@ -1,0 +1,151 @@
+#+TITLE: Block-aware chunker and Lexical markdown renderer
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FEAT-021-block-aware-chunker-and-lexical-markdown
+#+DEPENDS: FEAT-019-concept-knowledge-ash-domain-skeleton
+#+LAYER: domain
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention & Purpose
+Chunking dictates citation precision and retrieval quality. We supply a custom Arcana chunker that mirrors Concept's block tree: each top-level block becomes one chunk (with metadata pointing to its block_id), tiny sibling blocks are coalesced up to a token threshold, and container blocks (`columns`, `toggle`, `table`) are flattened depth-first while preserving their semantic role. Output also feeds the deep-link citations.
+
+* Context & Narrative
+`Concept.Lexical.plain_text/1` already exists but emits no structure or markdown — useless for citations because we need block boundaries. We extend with `Concept.Lexical.to_markdown/1` (block-aware, mark-aware). Then `Concept.Knowledge.BlockChunker` walks the loaded page tree (page → top-level blocks → containers → children). Output: list of chunks, each with `:text`, `:chunk_index`, `:token_count`, `:metadata` (block_id, page_id, workspace_id, block_type, breadcrumbs).
+
+Arcana's chunker behaviour: `@callback chunk(text :: String.t(), opts :: keyword) :: [chunk_map]`. We accept `opts` containing `[blocks: list, page: page_struct, workspace_id: id]` and IGNORE the `text` arg (we already have structured input from the ingest action). Arcana docs note this is acceptable for fully-custom chunkers — the chunker has full control.
+
+* Scope
+- IN: `Concept.Lexical.to_markdown/1` (with marks: bold, italic, underline, strike, code, links); `Concept.Knowledge.BlockChunker` rendering each block to markdown + assembling chunks; configurable thresholds (defaults: target ≤512 tokens, merge siblings <128 tokens); breadcrumb computation (page title chain).
+- OUT: chunking PDFs/files (Arcana default chunker handles those if we ever need them).
+
+* Existing Patterns (MUST follow)
+- `Concept.Lexical` module already implements `plain_text/1` and `to_html/1`. Add `to_markdown/1` alongside, using same defp render_node/walk_text pattern.
+- `Concept.Pages.BlockTypes` registry exposes `lookup/1` returning a module per block type. Use it to dispatch markdown rendering by type.
+- `Concept.Pages.Block` has `children` aggregate via `parent_block_id`. To build a tree from a flat list, group by `parent_block_id` then recurse from `nil`-parents.
+- `Concept.Pages.Page` has `parent_page_id`. Breadcrumbs = walk parents to root, collect titles.
+- Token estimation: rough `byte_size(text) / 4` is fine for v1; precise tokenization deferred (FUP).
+
+* Tests (file paths + scenarios)
+Test files: `test/concept/lexical_markdown_test.exs`, `test/concept/knowledge/block_chunker_test.exs`.
+Lexical fixtures: `test/support/lexical_fixtures.ex` (already present? if not, create).
+
+Lexical→markdown scenarios:
+1. Paragraph "hello" with bold "world" → `"hello **world**"`.
+2. heading_1 "T" → `"# T"`. heading_2 → `"## "`, heading_3 → `"### "`.
+3. Quote with paragraph child → `"> child"`.
+4. Code block w/ language python and content "x=1" → fenced ```python
+x=1
+``` (newlines).
+5. Bulleted list item "a" → `"- a"`. Numbered list item → `"1. a"` (rank by sibling order).
+6. Link `[text](url)` produced from Lexical link node.
+7. Combined marks (bold+italic+code) wrap in `***`code-style outermost first, then italic, then bold — pick STABLE order: code → bold → italic → underline → strike (matches HTML wrap order in existing `to_html/1`).
+
+Chunker scenarios (use a Page with 6 blocks: H1, paragraph (long), bulleted list with 3 items, code, columns container with 2 child paragraphs):
+1. Returns one chunk per top-level block when each block exceeds merge_threshold.
+2. Three short bulleted siblings (each <128 toks) merged into ONE chunk; metadata `block_ids: [list]`, `block_id` = first block's id.
+3. Columns container flattened: chunk text contains the markdown of all descendants in order.
+4. Each chunk has `metadata.page_id`, `metadata.workspace_id`, `metadata.breadcrumbs` (string like "Root › Subpage › This page"), `metadata.block_id`.
+5. `chunk_index` is sequential 0..N-1.
+6. Empty Lexical content (no plain text) is dropped from output (no zero-text chunks).
+7. Token count is `>= 1` and `<= ceil(byte_size(text)/3)`.
+8. Re-chunking the same input is deterministic (stable order, identical metadata).
+9. Block with a Lexical link is rendered as `[anchor](url)` in chunk text.
+
+* Implementation
+** ITEM Tests for Lexical markdown renderer (TDD)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-021-block-aware-chunker-and-lexical-markdown::md-tests
+:END:
+- File: `test/concept/lexical_markdown_test.exs`.
+- 7 scenarios with fixture EditorState maps.
+
+** ITEM Implement Concept.Lexical.to_markdown/1
+:PROPERTIES:
+:CUSTOM_ID: FEAT-021-block-aware-chunker-and-lexical-markdown::md-impl
+:DEPENDS: FEAT-021-block-aware-chunker-and-lexical-markdown::md-tests
+:END:
+- File: `lib/concept/lexical.ex`. Add `to_markdown/1` after `to_html/1`.
+- Pattern: walk root → children → newline-join.
+- Each node type → markdown via clauses; unknown types render their plain_text fallback.
+- Marks via `apply_md_format(text, fmt)`: code first (`` ` ``), then bold (`**`), italic (`*`), underline (`<u>` — markdown has no underline; use HTML inline), strike (`~~`).
+- Links: `[text](sanitized_url)`.
+
+** ITEM Tests for BlockChunker (TDD)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-021-block-aware-chunker-and-lexical-markdown::chunker-tests
+:DEPENDS: FEAT-021-block-aware-chunker-and-lexical-markdown::md-impl
+:END:
+- File: `test/concept/knowledge/block_chunker_test.exs`.
+- 9 scenarios. Use raw maps for Block structs (fields: id, type, content, parent_block_id, page_id, workspace_id) — no DB.
+
+** ITEM Implement Concept.Knowledge.BlockChunker
+:PROPERTIES:
+:CUSTOM_ID: FEAT-021-block-aware-chunker-and-lexical-markdown::chunker-impl
+:DEPENDS: FEAT-021-block-aware-chunker-and-lexical-markdown::chunker-tests
+:END:
+- File: `lib/concept/knowledge/block_chunker.ex`.
+- `@behaviour Arcana.Chunker`.
+- Module attributes: `@target_tokens 512`, `@merge_below 128`.
+- Public API: `chunk(_text_unused, opts)` reads `opts[:blocks]`, `opts[:page]`, `opts[:workspace_id]`, `opts[:breadcrumbs]`; returns list of chunk maps.
+
+  ```elixir
+  defmodule Concept.Knowledge.BlockChunker do
+    @behaviour Arcana.Chunker
+    @target 512
+    @merge_below 128
+
+    @impl true
+    def chunk(_ignored, opts) do
+      blocks = Keyword.fetch!(opts, :blocks)
+      page = Keyword.fetch!(opts, :page)
+      workspace_id = Keyword.fetch!(opts, :workspace_id)
+      breadcrumbs = Keyword.get(opts, :breadcrumbs, page.title)
+
+      tree = build_tree(blocks)
+
+      tree
+      |> Enum.map(&render_block(&1, %{depth: 0}))
+      |> Enum.reject(&(String.trim(&1.text) == ""))
+      |> coalesce_small()
+      |> Enum.with_index(0)
+      |> Enum.map(fn {%{text: t, block_ids: ids, primary_id: pid, type: type}, idx} ->
+        %{
+          text: t,
+          chunk_index: idx,
+          token_count: max(1, div(byte_size(t), 4)),
+          metadata: %{
+            "page_id" => page.id,
+            "workspace_id" => workspace_id,
+            "block_id" => pid,
+            "block_ids" => ids,
+            "block_type" => to_string(type),
+            "breadcrumbs" => breadcrumbs
+          }
+        }
+      end)
+    end
+
+    # build_tree/render_block/coalesce_small implementations: see test fixtures.
+  end
+  ```
+- `render_block` renders the block via `Concept.Lexical.to_markdown/1`, prepends type-specific prefix (`# `, `## `, `> `, `- `, etc.), and recursively renders children indented by 2 spaces per depth level for containers.
+- `coalesce_small`: walk siblings; if running buffer + next < @target AND next < @merge_below, append; else flush.
+
+* Edge Cases
+- Block with empty Lexical content (`%{}`): `to_markdown/1` returns `""`; chunker drops it (scenario 6).
+- Container with no children (`columns` count=0): renders an empty placeholder chunk → dropped.
+- Very long single block (paragraph > target tokens): emit as ONE chunk anyway (do not split mid-block; downstream Arcana default chunker would split text but we override). Note in moduledoc.
+- Unknown block_type: fall back to `Concept.Lexical.plain_text/1` only.
+- Cyclic block tree (parent_block_id loop) — already prevented by `Concept.Pages.Changes.PreventCycles` for pages; for blocks add a loop guard (`MapSet` of seen ids) raising on detection.
+
+* Acceptance Criteria
+- 7 markdown tests + 9 chunker tests pass.
+- `mix format --check-formatted` passes.
+- BlockChunker registered in `config :arcana, chunker: Concept.Knowledge.BlockChunker` (FEAT-018) and survives `Application.ensure_all_started(:arcana)`.
+- Manual IEx demo: chunk a fixture page, inspect output, confirm metadata includes `block_id` and `breadcrumbs`.
+
+NOTE [2026-05-05]: Lexical.to_markdown/1 implemented, BlockChunker with @behaviour Arcana.Chunker, block-aware chunking with sibling coalescing.

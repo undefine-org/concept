@@ -1,0 +1,134 @@
+#+TITLE: Arcana foundation deps config and migrations
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FEAT-018-arcana-foundation-deps-config-and-migrat
+#+LAYER: foundation
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention & Purpose
+Lay the bedrock for integrating Arcana v2.0.0 (RAG/GraphRAG) into Concept: install deps, add Postgres pgvector extension, register Arcana migrations, and wire required app config. Without this, no later item compiles.
+
+* Context & Narrative
+Concept is Phoenix 1.8 + Ash 3 with ash_postgres + AshOban + ash_authentication. Arcana brings its own Ecto schemas (`arcana_collections`, `arcana_documents`, `arcana_chunks` (pgvector), `arcana_entities`, `arcana_relationships`, `arcana_community`) and provides `mix arcana.install` (Igniter) to generate migrations. Arcana defaults to local Bumblebee embedder; we override with a custom Gemini embedder (FEAT-020). All later items assume `Concept.Repo` is the Arcana repo and `GOOGLE_API_KEY` is required.
+
+* Scope
+- IN: deps tuples; `config :arcana` keys; pgvector migration; `mix arcana.install` artifacts; `Concept.Knowledge.Config.api_key/0` raising helper; smoke compile + ash setup verification.
+- OUT: writing the embedder/chunker (FEAT-020/021), domain (FEAT-019), any UI.
+
+* Existing Patterns (MUST follow)
+- `mix.exs` deps block at lib/concept/../mix.exs (~line 30+). Add new deps at end of the existing list, alphabetical by group.
+- `config/config.exs` already imports envs at end — append `config :arcana, ...` ABOVE the `import_config` line (line ~134).
+- `lib/concept/application.ex` supervision tree already includes `Oban` via `AshOban.config/2`. Insert `Arcana.TaskSupervisor` after `Concept.PubSub`.
+- `mix setup` alias in mix.exs runs `ash.setup` → must call `ecto.migrate` after Arcana migrations are generated.
+- `Concept.Secrets` module (lib/concept/secrets.ex) already centralizes secret access — extend, do not bypass.
+
+* Tests (file paths + scenarios)
+Test files: `test/concept/knowledge/config_test.exs`.
+Scenarios:
+1. `Concept.Knowledge.Config.api_key/0` returns the value of `GOOGLE_API_KEY` when set.
+2. `Concept.Knowledge.Config.api_key/0` raises `Concept.Knowledge.MissingApiKey` with a useful message when env var unset (use `System.delete_env/1` + `System.put_env/2` in `setup/teardown`).
+3. `Concept.Knowledge.Config.collection_for(workspace_id)` returns `"workspace:" <> workspace_id`.
+4. `Application.fetch_env!(:arcana, :repo)` returns `Concept.Repo` (asserts config is loaded).
+5. `mix compile --warnings-as-errors` exits 0 (sanity gate via `precommit` alias).
+
+* Implementation
+** ITEM Add deps and arcana config
+:PROPERTIES:
+:CUSTOM_ID: FEAT-018-arcana-foundation-deps-config-and-migrat::deps-and-config
+:END:
+- File: `mix.exs`. Add to `deps/0` list:
+  - `{:arcana, "~> 2.0"}`
+  - `{:pgvector, "~> 0.2"}`
+  - `{:req_llm, "~> 1.2"}`
+  - `{:earmark, "~> 1.4"}` (for rendering Gemini markdown answers in chat panel & AI block)
+- File: `config/config.exs`. Append before `import_config "#{config_env()}.exs"`:
+  ```elixir
+  config :arcana,
+    repo: Concept.Repo,
+    embedder: {:custom, module: Concept.Knowledge.GeminiEmbedder},
+    chunker: Concept.Knowledge.BlockChunker,
+    search: [mode: :hybrid, limit: 10]
+  ```
+- File: `config/runtime.exs`. Add at top of prod branch: `System.fetch_env!("GOOGLE_API_KEY")` to fail fast at boot.
+
+** ITEM Add Arcana TaskSupervisor + supervised dashboard infra
+:PROPERTIES:
+:CUSTOM_ID: FEAT-018-arcana-foundation-deps-config-and-migrat::supervisor
+:DEPENDS: FEAT-018-arcana-foundation-deps-config-and-migrat::deps-and-config
+:END:
+- File: `lib/concept/application.ex`. Insert `Arcana.TaskSupervisor` in children list after `{Phoenix.PubSub, name: Concept.PubSub}`. Do NOT add `Arcana.Embedder.Local` — Gemini embedder is HTTP and stateless.
+
+** ITEM pgvector extension migration
+:PROPERTIES:
+:CUSTOM_ID: FEAT-018-arcana-foundation-deps-config-and-migrat::pgvector-migration
+:DEPENDS: FEAT-018-arcana-foundation-deps-config-and-migrat::deps-and-config
+:END:
+- Generate: `mix ecto.gen.migration enable_pgvector`
+- File body: `def change, do: execute("CREATE EXTENSION IF NOT EXISTS vector", "DROP EXTENSION IF EXISTS vector")`.
+- This MUST run before `mix arcana.install` migrations — Ecto runs in timestamp order so generate FIRST.
+
+** ITEM Run mix arcana.install (Igniter)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-018-arcana-foundation-deps-config-and-migrat::arcana-install
+:DEPENDS: FEAT-018-arcana-foundation-deps-config-and-migrat::pgvector-migration
+:END:
+- Execute: `mix deps.get && mix arcana.install` — Igniter generates migrations + repo helper edits.
+- Verify: `priv/repo/migrations/*` contains `arcana_collections`, `arcana_documents`, `arcana_chunks`, `arcana_entities`, `arcana_relationships`, `arcana_community`, evaluation tables.
+- Run `mix ecto.migrate`. Confirm no failures.
+- DO NOT hand-edit generated migrations; if Igniter mis-generates anything, file FUP and patch.
+
+** ITEM Concept.Knowledge.Config helper module
+:PROPERTIES:
+:CUSTOM_ID: FEAT-018-arcana-foundation-deps-config-and-migrat::config-helper
+:DEPENDS: FEAT-018-arcana-foundation-deps-config-and-migrat::deps-and-config
+:END:
+- File: `lib/concept/knowledge/config.ex` (creates `lib/concept/knowledge/` dir).
+  ```elixir
+  defmodule Concept.Knowledge.Config do
+    @moduledoc "Central config helpers for the Knowledge domain."
+
+    defmodule MissingApiKey do
+      defexception message: "GOOGLE_API_KEY is not set; Concept.Knowledge cannot function."
+    end
+
+    @doc "Raises MissingApiKey if GOOGLE_API_KEY is not set."
+    def api_key do
+      System.get_env("GOOGLE_API_KEY") || raise MissingApiKey
+    end
+
+    @doc "Per-workspace Arcana collection name."
+    def collection_for(workspace_id) when is_binary(workspace_id),
+      do: "workspace:" <> workspace_id
+
+    def llm_model, do: System.get_env("CONCEPT_LLM_MODEL", "google:gemini-2.0-flash")
+    def embedder_dimensions, do: 768
+  end
+  ```
+
+** ITEM Update mix setup alias
+:PROPERTIES:
+:CUSTOM_ID: FEAT-018-arcana-foundation-deps-config-and-migrat::mix-aliases
+:DEPENDS: FEAT-018-arcana-foundation-deps-config-and-migrat::arcana-install
+:END:
+- File: `mix.exs`. The `setup` alias already calls `ash.setup`; ensure `ecto.migrate` runs implicitly after — `ash.setup` runs migrations. No change unless verification fails.
+- Verify with `mix setup` on a fresh DB.
+
+* Edge Cases
+- Missing pgvector: `mix ecto.migrate` will fail on Arcana's chunks migration. Recovery: ensure pgvector OS extension installed (`apt install postgresql-15-pgvector` or compile from source); migration FEAT-018::pgvector-migration provides the SQL `CREATE EXTENSION`.
+- Gemini quota exhaustion at boot: `runtime.exs` only verifies key presence, not validity. Real API failures bubble up at first ingest.
+- Arcana version drift: pin `~> 2.0` (allows 2.x patch updates only). Major bump will require revisiting FEAT-023 (which depends on undocumented graph schemas).
+- `mix arcana.install` may fail if Igniter compatibility shifts. If so, manually copy migration templates from `deps/arcana/priv/repo/migrations` and document in README.
+
+* Acceptance Criteria
+- `mix deps.get` succeeds.
+- `mix ecto.create && mix ecto.migrate` succeeds on clean DB; `arcana_collections`, `arcana_chunks` tables exist with `vector(768)` column.
+- `mix compile --warnings-as-errors` succeeds.
+- `mix test test/concept/knowledge/config_test.exs` passes 5 scenarios.
+- `iex -S mix` shows `Arcana.TaskSupervisor` in `:observer` supervision tree.
+- `Concept.Knowledge.Config.collection_for("abc")` returns `"workspace:abc"` in IEx.
+
+NOTE [2026-05-05]: Foundation complete: deps added, arcana config, pgvector migration, Config helper, TaskSupervisor in supervision tree.

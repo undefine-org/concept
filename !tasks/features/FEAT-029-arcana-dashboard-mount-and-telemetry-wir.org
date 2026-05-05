@@ -1,0 +1,90 @@
+#+TITLE: Arcana dashboard mount and telemetry wiring
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FEAT-029-arcana-dashboard-mount-and-telemetry-wir
+#+DEPENDS: FEAT-024-knowledge-search-and-streaming-ask-via-a
+#+LAYER: ops
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention & Purpose
+Owner-only operations surface for Arcana: mount the Arcana Dashboard at `/admin/arcana` and surface key Arcana telemetry events in the existing `/dev/dashboard` Phoenix LiveDashboard. Make ingestion and search behavior observable.
+
+* Context & Narrative
+Arcana ships a LiveDashboard-style UI (collections list, document inspector, evaluation results). It exposes a router macro for mounting (e.g. `arcana_dashboard "/arcana"`). Concept already has an owner-gated `/admin` scope (FEAT-016 mounted AshAdmin there with `:require_owner` plug).
+
+For metrics: Arcana emits `[:arcana, :search]`, `[:arcana, :embedder, :embed]`, `[:arcana, :pipeline, :*]`, `[:arcana, :ingest, :*]`, `[:arcana, :graph, :*]` events. Concept's `ConceptWeb.Telemetry` module declares `metrics/0` consumed by both LiveDashboard and possibly Prometheus. We add summary/counter metrics for the most actionable events.
+
+* Scope
+- IN: router mount for Arcana Dashboard at `/admin/arcana` (owner-only); Telemetry.metrics extended with Arcana events; documentation comment in `ConceptWeb.Telemetry`.
+- OUT: Prometheus exporter; Grafana dashboards.
+
+* Existing Patterns (MUST follow)
+- `lib/concept_web/router.ex`: `import AshAdmin.Router; scope "/admin" do pipe_through [:browser, :require_owner]; ash_admin "/" end`. Mirror — add a sibling line.
+- `lib/concept_web/telemetry.ex` — extend `metrics/0`.
+- LiveDashboard route is dev-only (`Application.compile_env(:concept, :dev_routes)`). Do NOT change that gating.
+
+* Tests (file paths + scenarios)
+Test files: `test/concept_web/dashboard_test.exs`, `test/concept_web/telemetry_test.exs`.
+Scenarios:
+1. GET `/admin/arcana` while NOT signed in → 302 to login.
+2. GET `/admin/arcana` while signed in but NOT owner → 403.
+3. GET `/admin/arcana` while signed in as owner → 200 with Arcana page rendered.
+4. `ConceptWeb.Telemetry.metrics/0` returns at least 6 metric definitions whose names start with `arcana.`.
+5. After triggering a search, the metric `arcana.search.duration` has a recorded value (read via `Telemetry.Metrics` helper).
+
+* Implementation
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-029-arcana-dashboard-mount-and-telemetry-wir::tests
+:END:
+- 5 scenarios.
+
+** ITEM Mount Arcana Dashboard
+:PROPERTIES:
+:CUSTOM_ID: FEAT-029-arcana-dashboard-mount-and-telemetry-wir::router-mount
+:DEPENDS: FEAT-029-arcana-dashboard-mount-and-telemetry-wir::tests
+:END:
+- File: `lib/concept_web/router.ex`. Inside the existing `/admin` scope, add:
+  ```elixir
+  import Arcana.Dashboard.Router  # name verified per Arcana docs; if differs, adjust
+  arcana_dashboard "/arcana"
+  ```
+- If Arcana's helper requires explicit options (e.g. `repo: Concept.Repo`), pass them.
+
+** ITEM Telemetry metrics
+:PROPERTIES:
+:CUSTOM_ID: FEAT-029-arcana-dashboard-mount-and-telemetry-wir::telemetry
+:DEPENDS: FEAT-029-arcana-dashboard-mount-and-telemetry-wir::router-mount
+:END:
+- File: `lib/concept_web/telemetry.ex`. Append to `metrics/0`:
+  ```elixir
+  summary("arcana.search.stop.duration", unit: {:native, :millisecond}),
+  counter("arcana.search.stop.count"),
+  summary("arcana.embedder.embed.stop.duration", unit: {:native, :millisecond}),
+  counter("arcana.embedder.embed.stop.count"),
+  summary("arcana.pipeline.answer.stop.duration", unit: {:native, :millisecond}),
+  counter("arcana.pipeline.answer.stop.count"),
+  summary("arcana.ingest.stop.duration", unit: {:native, :millisecond}),
+  counter("arcana.ingest.stop.count"),
+  summary("concept.knowledge.ask.stop.duration", unit: {:native, :millisecond}),
+  counter("concept.knowledge.ask.stop.count"),
+  summary("concept.knowledge.embedder.gemini.stop.duration", unit: {:native, :millisecond})
+  ```
+- Module-doc note: "Arcana telemetry events are documented at https://hexdocs.pm/arcana/telemetry.html".
+
+* Edge Cases
+- Arcana macro name change between v2.x patch versions: pin `~> 2.0`; if missing, fall back to `live "/arcana", Arcana.Dashboard.Index"` (verified path). Document fallback in code comment.
+- LiveDashboard not mounted in prod: Arcana telemetry still flows; would need explicit `:telemetry_metrics_prometheus_core` exporter (FUP).
+- Owner check: existing `:require_owner` plug already in router — no new auth code.
+
+* Acceptance Criteria
+- 5 tests pass.
+- Manual: as owner, navigate to `/admin/arcana`, see Arcana's collections page with `workspace:<id>` collections listed.
+- `/dev/dashboard` "Metrics" tab shows new `arcana.*` and `concept.knowledge.*` charts.
+- Non-owner cannot access either route (403 or 302).
+
+NOTE [2026-05-05]: Arcana Dashboard mounted at /admin/arcana behind owner guard. Telemetry metrics for arcana.* and concept.knowledge.* added.

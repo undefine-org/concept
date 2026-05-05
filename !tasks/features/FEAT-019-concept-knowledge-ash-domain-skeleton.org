@@ -1,0 +1,157 @@
+#+TITLE: Concept.Knowledge Ash domain skeleton
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FEAT-019-concept-knowledge-ash-domain-skeleton
+#+DEPENDS: FEAT-018-arcana-foundation-deps-config-and-migrat
+#+LAYER: domain
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention & Purpose
+Introduce a single Ash domain `Concept.Knowledge` that becomes the ONLY entry point into Arcana from the rest of the app. Every later item (ingestion, search, chat, AI block, dashboard) calls into this domain so policies, telemetry, and tenancy live in one place and Arcana's own schemas remain encapsulated.
+
+* Context & Narrative
+Concept exposes two existing domains: `Concept.Accounts` (User/Workspace/Membership) and `Concept.Pages` (Page/Block). Workspace tenancy is enforced via `multitenancy strategy: :attribute, attribute: :workspace_id`. Arcana itself does NOT respect Ash multitenancy — tenant isolation is enforced solely by collection name. Wrapping it in an Ash domain with policies = correctness floor.
+
+This item creates the empty-but-correct domain shell. Generic actions are declared with placeholder implementations (returning `{:error, :not_implemented}`); subsequent items fill them in. This lets us land the routing/policy/structure first and verify it compiles + passes tests before the heavy lifting.
+
+* Scope
+- IN: `Concept.Knowledge` Ash domain module; placeholder generic actions `:ingest_page`, `:delete_page`, `:search`, `:ask`, `:rebuild_workspace_graph`, `:rebuild_communities`, `:evaluate_ai_block`; policy that all callers must be a workspace member; domain registered in `config :concept, ash_domains` list.
+- OUT: actual Arcana calls (filled in by FEAT-022/023/024/028); UI; telemetry attach.
+
+* Existing Patterns (MUST follow)
+- `lib/concept/pages.ex` & `lib/concept/accounts.ex` define `use Ash.Domain, otp_app: :concept, extensions: [AshAdmin.Domain]` with `admin do show? true end`. Mirror exactly.
+- Workspace-membership check: `lib/concept/pages/checks/workspace_member.ex` (referenced by Pages domain). Reuse it — do not re-implement.
+- Generic actions go through `Ash.ActionInput` and `Ash.Domain.Info.run_action/2`. Use Ash 3.x style: `actions do generic :name do ... end end`.
+- `config/config.exs` will already contain `config :concept, ash_domains: [...]`. Locate this list (likely set elsewhere; grep first) and add `Concept.Knowledge` as a sibling to `Concept.Accounts` and `Concept.Pages`.
+- `Concept.Pages.Checks.WorkspaceMember` operates on the actor and the loaded record's workspace_id. For domain-level generic actions there is no record — use `Ash.Policy.Check.Builtins.actor_present()` plus a custom check that loads `Membership` for the supplied `workspace_id` argument.
+
+* Tests (file paths + scenarios)
+Test files: `test/concept/knowledge_test.exs`, `test/concept/knowledge/policy_test.exs`.
+Scenarios:
+1. `Concept.Knowledge` is listed in `Application.fetch_env!(:concept, :ash_domains)`.
+2. Calling `:ask` action without an actor → `Ash.Error.Forbidden`.
+3. Calling `:ask` action with an actor who is NOT a member of the workspace → `Ash.Error.Forbidden`.
+4. Calling `:ask` action with a workspace member actor → returns `{:error, :not_implemented}` (or whatever placeholder reaches us; later overridden).
+5. Domain reflection: `Ash.Domain.Info.resources(Concept.Knowledge)` returns `[]` (we hold no resources, only generic actions).
+6. Each declared action is enumerable via `Ash.Domain.Info.actions(Concept.Knowledge)` and named correctly.
+
+* Implementation
+** ITEM Tests for domain skeleton (TDD)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-019-concept-knowledge-ash-domain-skeleton::domain-tests
+:END:
+- File: `test/concept/knowledge_test.exs` and `test/concept/knowledge/policy_test.exs`.
+- Use `ash_domains` env from runtime; create user + workspace + membership via existing factories (look in `test/support/`; if no factory yet for Membership, create a minimal helper inline).
+- Each scenario above as one `test "..."` block; mark all initially failing.
+
+** ITEM WorkspaceArgumentMember policy check
+:PROPERTIES:
+:CUSTOM_ID: FEAT-019-concept-knowledge-ash-domain-skeleton::policy-check
+:DEPENDS: FEAT-019-concept-knowledge-ash-domain-skeleton::domain-tests
+:END:
+- File: `lib/concept/knowledge/checks/workspace_argument_member.ex`.
+- Implements `Ash.Policy.SimpleCheck`.
+- Reads `:workspace_id` argument from `ActionInput`. Loads `Concept.Accounts.Membership` filtered by `(workspace_id, user_id == actor.id)`. Returns boolean.
+- Cache the membership check via `Ash.Policy.SimpleCheck`'s opts; one DB hit per action invocation.
+
+** ITEM Concept.Knowledge domain module
+:PROPERTIES:
+:CUSTOM_ID: FEAT-019-concept-knowledge-ash-domain-skeleton::domain-module
+:DEPENDS: FEAT-019-concept-knowledge-ash-domain-skeleton::policy-check
+:END:
+- File: `lib/concept/knowledge.ex`.
+  ```elixir
+  defmodule Concept.Knowledge do
+    @moduledoc """
+    RAG/GraphRAG over Concept's pages & blocks. Wraps Arcana with
+    workspace tenancy + Ash policies.
+    """
+    use Ash.Domain, otp_app: :concept, extensions: [AshAdmin.Domain]
+
+    admin do
+      show? true
+    end
+
+    actions do
+      generic :ingest_page, returns: :map do
+        argument :page_id, :uuid, allow_nil?: false
+        argument :workspace_id, :uuid, allow_nil?: false
+        run fn _input, _ctx -> {:error, :not_implemented} end
+      end
+
+      generic :delete_page, returns: :atom do
+        argument :page_id, :uuid, allow_nil?: false
+        argument :workspace_id, :uuid, allow_nil?: false
+        run fn _, _ -> {:error, :not_implemented} end
+      end
+
+      generic :search, returns: {:array, :map} do
+        argument :query, :string, allow_nil?: false
+        argument :workspace_id, :uuid, allow_nil?: false
+        argument :limit, :integer, default: 10
+        run fn _, _ -> {:error, :not_implemented} end
+      end
+
+      generic :ask, returns: :map do
+        argument :question, :string, allow_nil?: false
+        argument :workspace_id, :uuid, allow_nil?: false
+        argument :reply_to, :term, allow_nil?: true
+        argument :scope, :map, default: %{kind: :workspace}
+        run fn _, _ -> {:error, :not_implemented} end
+      end
+
+      generic :rebuild_workspace_graph, returns: :map do
+        argument :workspace_id, :uuid, allow_nil?: false
+        run fn _, _ -> {:error, :not_implemented} end
+      end
+
+      generic :rebuild_communities, returns: :map do
+        argument :workspace_id, :uuid, allow_nil?: false
+        run fn _, _ -> {:error, :not_implemented} end
+      end
+
+      generic :evaluate_ai_block, returns: :map do
+        argument :block_id, :uuid, allow_nil?: false
+        argument :workspace_id, :uuid, allow_nil?: false
+        run fn _, _ -> {:error, :not_implemented} end
+      end
+    end
+
+    policies do
+      bypass actor_attribute_equals(:system?, true) do
+        authorize_if always()
+      end
+
+      policy always() do
+        authorize_if Concept.Knowledge.Checks.WorkspaceArgumentMember
+      end
+    end
+  end
+  ```
+
+** ITEM Register the domain
+:PROPERTIES:
+:CUSTOM_ID: FEAT-019-concept-knowledge-ash-domain-skeleton::register
+:DEPENDS: FEAT-019-concept-knowledge-ash-domain-skeleton::domain-module
+:END:
+- Find `ash_domains` config (likely in `config/config.exs`). Add `Concept.Knowledge` to the list.
+- Run `mix ash.codegen --check` (no migrations expected for a resourceless domain).
+
+* Edge Cases
+- A user passes a `workspace_id` for a workspace they do not own AND of which they are not a member → must fail with `Ash.Error.Forbidden` (NOT `:not_implemented`). Policy must run before action.
+- Anonymous actor → forbidden.
+- `system?` actor (used by background workers) → bypass policy (mirrors patterns in Pages domain).
+- Renaming actions later breaks policy specs and AshAdmin admin pages — document the names as part of the public API of the domain.
+
+* Acceptance Criteria
+- `mix compile --warnings-as-errors` succeeds.
+- All 6 test scenarios pass.
+- `Ash.Domain.Info.actions(Concept.Knowledge)` returns 7 actions matching the names above.
+- `:ash_domains` env contains `Concept.Knowledge`.
+- AshAdmin (mounted at `/admin`) shows the new Knowledge domain.
+
+NOTE [2026-05-05]: Domain module created with 7 generic actions, WorkspaceArgumentMember policy check, registered in ash_domains.

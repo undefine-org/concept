@@ -1,0 +1,124 @@
+#+TITLE: Workspace Q and A chat panel sidebar with streaming
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit
+#+DEPENDS: FEAT-024-knowledge-search-and-streaming-ask-via-a FEAT-025-page-editor-block-deep-link-anchors-and
+#+LAYER: ui
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention & Purpose
+The flagship Arcana surface: a right-side chat panel pinned to `WorkspaceLive` where users ask questions about their workspace and watch streamed answers with clickable citations. Session-persistent across page navigations within the workspace.
+
+* Context & Narrative
+`ConceptWeb.WorkspaceLive` already manages workspace + page selection, with PageEditorLive `live_render`'d into the main column. We add a new LiveComponent `ConceptWeb.WorkspaceLive.ChatPanel` mounted in a collapsible right sidebar. The component subscribes to `"knowledge:answer:<answer_id>"` topics on demand, accumulates tokens into a LiveView `stream(:messages, ...)`, and renders user/assistant turns with citation cards.
+
+UX:
+- Toggle button in the workspace top bar (icon `hero-sparkles`).
+- Panel: 360px wide, slides in from right, contains chat history, input at bottom, "New chat" button.
+- User turn: bubble with their question.
+- Assistant turn: streamed markdown rendering (Earmark, FEAT-018), followed by a `Sources` section with citation cards `<a href="/w/.../p/<page>#block-<bid>">› Page › ... › snippet</a>`.
+- Empty state: "Ask anything about your workspace" with example prompts.
+
+State: per WorkspaceLive session, in-memory only. Persistence to DB deferred to FUP (would need a `Concept.Knowledge.Conversation` resource).
+
+* Scope
+- IN: `ChatPanel` LiveComponent; PubSub plumbing for streaming; markdown rendering of full answers; citation cards; empty state; toggle button.
+- OUT: chat history persistence; multi-turn conversation memory (each question stands alone in v1); voice input.
+
+* Existing Patterns (MUST follow)
+- `<Layouts.app flash={@flash} current_scope={...}>` wraps LiveView templates per AGENTS.md.
+- `<.icon name="hero-..." />` for icons.
+- LiveView streams: `stream(socket, :messages, [...])` with `phx-update="stream"` on parent and unique DOM id per child.
+- `phx-debounce`, `phx-mounted`, `phx-window-keydown` patterns from existing CommandPaletteLive.
+- LiveComponent if scoped to `WorkspaceLive`; AGENTS.md says avoid LiveComponents unless strong reason — here the strong reason is encapsulation of subscribe/handle_info isolated from the parent LV's many concerns. **However**, LiveComponents do not handle PubSub `handle_info`. Therefore: keep panel as a LiveComponent for rendering, but `Phoenix.PubSub.subscribe/2` happens in WorkspaceLive's `handle_info` for `{:knowledge_token, ...}` and forwards via `send_update/2` to the panel. (Acceptable per AGENTS.md guidance.)
+
+* Tests (file paths + scenarios)
+Test files: `test/concept_web/live/workspace_chat_panel_test.exs`.
+Scenarios:
+1. Toggle button toggles panel visibility (`assert has_element?` on `#chat-panel.open`).
+2. Submitting a question appends a user message immediately (optimistic) and a placeholder assistant message.
+3. Receiving `{:knowledge_token, id, "hello"}` appends to the assistant message text.
+4. Receiving `{:knowledge_done, id, %{sources: [s1, s2]}}` finalizes the message with two citation cards.
+5. Citation card has `href="/w/<slug>/p/<page>#block-<bid>"` (use ~p sigil + block_id).
+6. New chat button clears stream + resets state.
+7. Submitting empty question is a no-op.
+8. Receiving `{:knowledge_error, id, reason}` swaps the assistant placeholder for an error bubble.
+9. Tenant isolation: a workspace member cannot pose questions for a workspace they are not a member of (route forbidden).
+10. PubSub messages for unrelated topics are ignored by the LV (no crash).
+
+* Implementation
+** ITEM Tests (TDD)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::tests
+:END:
+- File: `test/concept_web/live/workspace_chat_panel_test.exs`. 10 scenarios.
+
+** ITEM ChatPanel LiveComponent
+:PROPERTIES:
+:CUSTOM_ID: FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::component
+:DEPENDS: FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::tests
+:END:
+- File: `lib/concept_web/live/workspace_live/chat_panel.ex`.
+- `use ConceptWeb, :live_component`.
+- assigns: `:open?`, `:messages` (stream), `:active_answer_id`, `:workspace`.
+- Handles `phx-submit="ask"`, `phx-click="new_chat"`, `phx-click="toggle"`.
+- Renders:
+  ```heex
+  <aside id="chat-panel" class={["fixed right-0 top-0 h-full w-[360px] bg-white shadow-xl transition-transform", (@open? && "translate-x-0") || "translate-x-full"]}>
+    <header class="flex items-center justify-between p-4 border-b">
+      <h2 class="text-sm font-semibold">Ask</h2>
+      <button phx-click="toggle" phx-target={@myself}><.icon name="hero-x-mark" class="w-5 h-5"/></button>
+    </header>
+    <div id="chat-messages" phx-update="stream" class="overflow-y-auto h-[calc(100%-160px)] p-4 space-y-4">
+      <div class="hidden only:block text-sm text-gray-400">Ask anything about your workspace</div>
+      <div :for={{id, msg} <- @streams.messages} id={id}>
+        <.message msg={msg} workspace={@workspace}/>
+      </div>
+    </div>
+    <form phx-submit="ask" phx-target={@myself} class="absolute bottom-0 left-0 right-0 p-4 border-t bg-white">
+      <input name="q" placeholder="Ask anything..." class="w-full border rounded-md px-3 py-2"/>
+    </form>
+  </aside>
+  ```
+- `<.message>` private component renders user|assistant variants. Assistant variant pipes content through `Earmark.as_html!/2` (raw-render via `{raw(...)}`).
+- Citation card list rendered when `msg.sources` non-empty.
+
+** ITEM WorkspaceLive integration
+:PROPERTIES:
+:CUSTOM_ID: FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::workspace-live
+:DEPENDS: FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::component
+:END:
+- File: `lib/concept_web/live/workspace_live.ex`.
+- Add toggle button in top bar with `phx-click={JS.push("toggle_chat")}`.
+- `handle_event("toggle_chat", _, socket)` flips `:chat_open?` assign and `send_update`s ChatPanel.
+- `handle_event("ask", %{"q" => q}, socket)` calls `Concept.Knowledge.ask/3` → gets answer_id + topic → `Phoenix.PubSub.subscribe(Concept.PubSub, topic)` → forwards to panel `send_update`.
+- `handle_info({:knowledge_token, id, t}, socket)` and `{:knowledge_done, id, payload}` and `{:knowledge_error, ...}` forward via `send_update(ChatPanel, id: ..., msg: ...)`.
+
+** ITEM Markdown safety
+:PROPERTIES:
+:CUSTOM_ID: FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::markdown
+:DEPENDS: FEAT-026-workspace-q-and-a-chat-panel-sidebar-wit::component
+:END:
+- Earmark sanitization is OFF by default. Wrap with `Earmark.as_html!(text, %Earmark.Options{escape: true, smartypants: false})`. No raw HTML in answers.
+- Test: assistant message containing `<script>alert(1)</script>` renders escaped (assert `~r/&lt;script&gt;/`).
+
+* Edge Cases
+- User sends a second question before the first finishes: each gets its own answer_id; both stream concurrently. UI shows both placeholders updating; OK.
+- Browser closes mid-stream: server task continues, broadcasts ignored, no leak.
+- Earmark fails on weird input: rescue and render plain text.
+- Workspace switch while panel open: panel resets; active subscriptions cancelled (`Phoenix.PubSub.unsubscribe`).
+- Long answers (>10k chars): rendering hot; debounce token append at 50ms intervals (use `Process.send_after`).
+- Empty workspace: still allow asking; will return "I don't know" — UI renders gracefully with no sources.
+
+* Acceptance Criteria
+- 10 tests pass.
+- Manual: open `/w/<slug>`, click sparkles icon, ask "what blocks are on the homepage?", watch tokens stream, click a citation, page navigates and scrolls to block (FEAT-025 verified end-to-end).
+- No N+1 on chat panel render (use Streams correctly).
+- Tailwind classes only; no `@apply`.
+- Required screenshot artifact: `.local/screenshots/chat-panel-open.png` showing panel open with one user/assistant exchange and a clicked citation flash.
+
+NOTE [2026-05-05]: Foundation in place (PubSub streaming, Ask module). ChatPanel LiveComponent and WorkspaceLive integration deferred to full UI implementation.

@@ -24,6 +24,7 @@ config :concept, ConceptWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4279"))]
 
 if config_env() == :prod do
+  System.fetch_env!("GOOGLE_API_KEY")
   database_url =
     System.get_env("DATABASE_URL") ||
       raise """

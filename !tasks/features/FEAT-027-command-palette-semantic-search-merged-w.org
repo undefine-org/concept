@@ -1,0 +1,91 @@
+#+TITLE: Command palette semantic search merged with title search
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FEAT-027-command-palette-semantic-search-merged-w
+#+DEPENDS: FEAT-024-knowledge-search-and-streaming-ask-via-a
+#+LAYER: ui
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention & Purpose
+Promote `CommandPaletteLive` from title-only fuzzy search to hybrid: existing keyword title search PLUS `Concept.Knowledge.search` (vector + graph fusion). Results merge, dedupe by page, and rank with title hits prioritized first within a small budget, then top semantic hits.
+
+* Context & Narrative
+Existing `lib/concept_web/live/command_palette_live.ex` calls `Concept.Pages.search_titles(query)` to populate results. We add a parallel call to `Concept.Knowledge.search`. Merging logic: title hits dedupe with semantic hits at the (page_id) level; the FIRST occurrence wins (so a title hit shadows a deeper block hit on the same page). Each result stores `:source` (`:title | :semantic`) so the UI can show a small indicator.
+
+Latency budget: 350ms for whole palette refresh. Title search is local; semantic search ~150-300ms (Gemini embed query + vector search). We run both concurrently via `Task.async_stream` and accept partial results if semantic is slow.
+
+* Scope
+- IN: parallel `Task.async_stream` over [title_search, semantic_search]; result merger; UI: snippet + breadcrumb + source indicator; navigation to `/w/<slug>/p/<page>#block-<bid>` for semantic hits with block_id.
+- OUT: typo-tolerant title search (Postgres trigram); per-result preview popover.
+
+* Existing Patterns (MUST follow)
+- `Concept.Pages.search_titles/1` already returns Page structs; do not change its signature.
+- `Phoenix.LiveView.JS.navigate` / `<.link navigate=...>` for navigation, NOT `live_redirect`.
+- AGENTS.md: `<.icon name="hero-...">` for source indicators (e.g., `hero-document-text` for title hit, `hero-sparkles` for semantic).
+
+* Tests (file paths + scenarios)
+Test files: `test/concept_web/live/command_palette_test.exs` (extend existing if present).
+Scenarios:
+1. Query "x" returns title results when only titles match; no semantic results when knowledge index is empty.
+2. With ingested workspace, query that matches block content but not title returns a semantic hit with `block_id` and breadcrumb.
+3. Query matches both a title AND a deeper block on the same page → page appears once (title hit wins, source `:title`).
+4. Empty query returns recent pages (existing behavior preserved).
+5. Click on a semantic hit navigates to `/w/<slug>/p/<page>#block-<bid>`.
+6. Click on a title hit navigates to `/w/<slug>/p/<page>` (no anchor).
+7. Semantic search timeout (mock 1s sleep) → palette renders title hits without blocking; semantic hits arrive on follow-up `:async` event.
+8. User without workspace membership cannot trigger semantic search (Knowledge action policy enforces).
+
+* Implementation
+** ITEM Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-027-command-palette-semantic-search-merged-w::tests
+:END:
+- File: `test/concept_web/live/command_palette_test.exs`. 8 scenarios.
+
+** ITEM Palette logic update
+:PROPERTIES:
+:CUSTOM_ID: FEAT-027-command-palette-semantic-search-merged-w::logic
+:DEPENDS: FEAT-027-command-palette-semantic-search-merged-w::tests
+:END:
+- File: `lib/concept_web/live/command_palette_live.ex`.
+- New private `search_async/3` returning `Task` ref using `Phoenix.LiveView.AsyncResult`:
+  ```elixir
+  socket
+  |> assign_async(:title_results, fn -> {:ok, %{title_results: Pages.search_titles(q, ...)}} end)
+  |> assign_async(:semantic_results, fn ->
+    case Concept.Knowledge.search(q, workspace_id, actor: user, limit: 8) do
+      {:ok, hits} -> {:ok, %{semantic_results: hits}}
+      _ -> {:ok, %{semantic_results: []}}
+    end
+  end)
+  ```
+- Merge in render: title hits first (max 4), then semantic hits whose page_id not already represented (max 6).
+
+** ITEM UI rendering
+:PROPERTIES:
+:CUSTOM_ID: FEAT-027-command-palette-semantic-search-merged-w::ui
+:DEPENDS: FEAT-027-command-palette-semantic-search-merged-w::logic
+:END:
+- File: same. Update palette body section to render `<.result>` rows. Each row shows: source icon (`hero-document-text` or `hero-sparkles`), page emoji + title, breadcrumb (light grey), snippet (semantic only), keyboard arrow indicator.
+- Semantic href: `~p"/w/#{@workspace.slug}/p/#{hit.metadata.page_id}#block-#{hit.metadata.block_id}"`.
+- Title href: `~p"/w/#{@workspace.slug}/p/#{page.id}"`.
+- Loading state: while async pending, show spinner row at the bottom.
+
+* Edge Cases
+- `Concept.Knowledge.search` not yet ingested any pages → returns empty list, palette degrades to title-only.
+- Workspace just created (no collection): `Collections.ensure_for_workspace` is called by ingest paths only; semantic search hitting a missing collection should return empty list gracefully (Search module catches `Ecto.NoResultsError` → `[]`).
+- Very long query (>500 chars): truncate to 500 client-side AND server-side before passing to Gemini.
+- Hit with stale `block_id` (block was archived after indexing, before reindex): clicking still navigates; PageEditorLive shows page, anchor not found, hook silently no-ops (FEAT-025 edge case). FUP: filter dead block hits via Ash query.
+- Concurrent typing: cancel previous async tasks via `cancel_async/2`.
+
+* Acceptance Criteria
+- 8 test scenarios pass.
+- Manual: type a phrase only present in a block body → palette returns the page with that block as a "Sparkles" hit; click → page opens, scrolls to block.
+- Title search latency unchanged (no regression).
+- Semantic search latency budget honored: visible loading spinner if >150ms; results swap in seamlessly.
+
+NOTE [2026-05-05]: Search module ready. Palette merge logic deferred to full UI implementation.

@@ -1,0 +1,19 @@
+#+TITLE: Block-to-page LINKS_TO edges from Lexical mention nodes
+#+STATE: ITEM
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FUP-005-block-to-page-links-to-edges-from-lexica
+#+LAYER: ingestion
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention
+Once Concept supports @-mention links between pages, extend GraphBuilder to insert LINKS_TO edges. Boosts fusion search by capturing user-intended relations.
+* Prerequisites
+- Lexical "mention" node implemented with target page_id payload.
+- Concept.Lexical extracts mention page_ids from EditorState.
+* Tasks
+- Update `GraphBuilder.upsert_page_graph` to upsert LINKS_TO relationships from each block to mentioned pages.
+- Update community summaries to weight LINKS_TO higher than CONTAINS.

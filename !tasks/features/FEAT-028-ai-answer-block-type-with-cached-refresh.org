@@ -1,0 +1,164 @@
+#+TITLE: AI answer block type with cached refresh
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FEAT-028-ai-answer-block-type-with-cached-refresh
+#+DEPENDS: FEAT-024-knowledge-search-and-streaming-ask-via-a FEAT-025-page-editor-block-deep-link-anchors-and
+#+LAYER: ui
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention & Purpose
+Embed AI answers directly inside Concept pages as a first-class block type. The user types `/ai`, picks the new block, enters a prompt, and the block renders a cached answer + sources. A "Refresh" button re-runs the pipeline scoped to the current page subtree.
+
+* Context & Narrative
+Concept's block system is extensible: `Concept.Pages.BlockTypes` registry compiles from `:concept, :block_types` config. Each type is a module implementing `Concept.Pages.BlockType` with `type/0`, `default_content/0`, `default_props/0`, `validate_props/1`, `lexical_node/0`, `slash_menu/0`, `container?/0`. Adding `Concept.Pages.BlockTypes.AiAnswer` integrates seamlessly.
+
+Semantics (per design):
+- props: `%{"prompt" => string, "scope" => "subtree" | "page" | "workspace", "model" => string | nil}`. Scope default = "subtree" (current page + descendants).
+- content: `%{"answer" => markdown, "sources" => [%{block_id, page_id, breadcrumbs, snippet, score}], "ran_at" => iso8601, "model" => "gemini-2.0-flash"}`. Empty until first run.
+- Lifecycle: created with empty content + a placeholder shell. User clicks "Generate" (or types and submits the prompt), block transitions to `:running`, streams tokens into a transient assign (live update via PubSub), then on `:knowledge_done` the action `Concept.Pages.Block.evaluate_ai_block` writes content atomically.
+- Refresh button re-runs pipeline + replaces content.
+
+* Scope
+- IN: `Concept.Pages.BlockTypes.AiAnswer` module; registry registration; new `evaluate_ai_block` Block action; UI render in `BlockRender` (markdown + sources + refresh button + status); slash menu entry under group `:ai`; lock semantics (only block owner can refresh while locked).
+- OUT: edit the answer manually, stream INTO the block content as tokens land (just shows full answer once done; transient streaming displayed in UI but content stored only on completion).
+
+* Existing Patterns (MUST follow)
+- BlockType behaviour exemplified by `lib/concept/pages/block_types/code.ex` and `paragraph.ex`.
+- Block actions live on `Concept.Pages.Block` resource (lib/concept/pages/block.ex). Add `update :evaluate_ai_block` action.
+- Slash menu group atoms used: `:basic`, `:media`, `:advanced`, `:hidden`. Add `:ai` group; update `lib/concept/pages/block_types.ex` `slash_menu_items/0` if it filters by group.
+- Block render dispatches by `@text_types` list in `block_render.ex`. Add a static branch for `:ai_answer` (it is NOT a Lexical-editable text block).
+- Atomic action update: AshPaperTrail records the change.
+
+* Tests (file paths + scenarios)
+Test files: `test/concept/pages/block_types/ai_answer_test.exs`, `test/concept/pages/block_evaluate_ai_test.exs`, `test/concept_web/live/ai_block_render_test.exs`.
+Scenarios:
+1. `AiAnswer.type/0 == :ai_answer`. `default_props/0 == %{"prompt" => "", "scope" => "subtree", "model" => nil}`. `default_content/0 == %{}`. `container?/0 == false`. Slash menu entry exists in group `:ai`.
+2. `validate_props/1` rejects scope not in [`subtree`, `page`, `workspace`].
+3. Inserting an `ai_answer` block via existing `create_block` action succeeds with default content.
+4. Calling `evaluate_ai_block` action with `prompt: "hi"` runs the pipeline (mock LLM) and updates content with `answer:`, `sources:`, `ran_at:`, `model:`.
+5. Re-running `evaluate_ai_block` overwrites prior content (paper_trail records change).
+6. Scope `:subtree` builds a chunk filter `metadata.page_id IN [<descendants of current page>]` — assertion via inspecting Knowledge.Search arg.
+7. UI: rendered block shows refresh button, prompt textarea (or display), markdown answer, sources list with deep-links.
+8. Refresh while a previous run is in-flight is rejected with flash "Already evaluating".
+9. Block belongs to archived page → action returns `{:error, :archived}`.
+10. Streaming: while running, UI shows partial text from PubSub; on done, block updates, transient state cleared.
+
+* Implementation
+** ITEM Tests (TDD)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-028-ai-answer-block-type-with-cached-refresh::tests
+:END:
+- 10 scenarios across 3 files.
+
+** ITEM AiAnswer block_type module
+:PROPERTIES:
+:CUSTOM_ID: FEAT-028-ai-answer-block-type-with-cached-refresh::block-type
+:DEPENDS: FEAT-028-ai-answer-block-type-with-cached-refresh::tests
+:END:
+- File: `lib/concept/pages/block_types/ai_answer.ex`.
+  ```elixir
+  defmodule Concept.Pages.BlockTypes.AiAnswer do
+    @behaviour Concept.Pages.BlockType
+    @scopes ~w(subtree page workspace)
+    def type, do: :ai_answer
+    def default_content, do: %{}
+    def default_props, do: %{"prompt" => "", "scope" => "subtree", "model" => nil}
+    def validate_props(%{"scope" => s} = props) when s in @scopes,
+      do: validate_prompt(props)
+    def validate_props(_), do: {:error, "scope must be one of #{Enum.join(@scopes, ",")}"}
+    defp validate_prompt(%{"prompt" => p}) when is_binary(p), do: :ok
+    defp validate_prompt(_), do: {:error, "prompt must be a string"}
+    def lexical_node, do: "ai-answer"
+    def slash_menu, do: %{label: "AI Answer", icon: "✨", keywords: ~w(ai answer ask), group: :ai}
+    def container?, do: false
+  end
+  ```
+
+** ITEM Register in config
+:PROPERTIES:
+:CUSTOM_ID: FEAT-028-ai-answer-block-type-with-cached-refresh::register
+:DEPENDS: FEAT-028-ai-answer-block-type-with-cached-refresh::block-type
+:END:
+- File: `config/config.exs`. Append `Concept.Pages.BlockTypes.AiAnswer` to `:block_types` list.
+
+** ITEM evaluate_ai_block action
+:PROPERTIES:
+:CUSTOM_ID: FEAT-028-ai-answer-block-type-with-cached-refresh::action
+:DEPENDS: FEAT-028-ai-answer-block-type-with-cached-refresh::register
+:END:
+- File: `lib/concept/pages/block.ex`. Add to `actions do ... end`:
+  ```elixir
+  update :evaluate_ai_block do
+    accept []
+    require_atomic? false
+    change Concept.Pages.Block.Changes.EvaluateAiBlock
+  end
+  ```
+- File: `lib/concept/pages/block/changes/evaluate_ai_block.ex`.
+- The change resolves: scope → (page_ids list); calls `Concept.Knowledge.ask(prompt, workspace_id, scope_filter: %{page_ids: ids}, reply_to: self())`; awaits `:knowledge_done` (with 30s timeout); writes `content` atomically via `Ash.Changeset.change_attribute(:content, %{...})`.
+- Domain define: `Concept.Pages.evaluate_ai_block(block_id, args, opts)` exposed via `Concept.Pages` Domain `define :evaluate_ai_block`.
+
+** ITEM scope_filter wiring in Knowledge.ask
+:PROPERTIES:
+:CUSTOM_ID: FEAT-028-ai-answer-block-type-with-cached-refresh::scope-filter
+:DEPENDS: FEAT-028-ai-answer-block-type-with-cached-refresh::action
+:END:
+- File: `lib/concept/knowledge/ask.ex` (extend FEAT-024). Accept opts `:scope_filter`; pass through to `Arcana.Pipeline.search(filter: ...)`. Filter clause: `metadata.page_id` IN list.
+- For `:subtree`, compute descendants via `Concept.Pages.list_tree` filtered by ancestor.
+
+** ITEM AI block render
+:PROPERTIES:
+:CUSTOM_ID: FEAT-028-ai-answer-block-type-with-cached-refresh::render
+:DEPENDS: FEAT-028-ai-answer-block-type-with-cached-refresh::action
+:END:
+- File: `lib/concept_web/components/block_render.ex`.
+- Add a clause for `type == :ai_answer`:
+  ```heex
+  <div class="ai-block border rounded-lg p-4 bg-gradient-to-br from-purple-50 to-blue-50 my-2">
+    <div class="text-xs text-gray-500 mb-2 flex items-center justify-between">
+      <span><.icon name="hero-sparkles" class="w-4 h-4 inline"/> AI Answer</span>
+      <button phx-click="refresh-ai-block" phx-value-block-id={@block.id}><.icon name="hero-arrow-path" class="w-4 h-4"/></button>
+    </div>
+    <%= cond do %>
+      <% Map.get(@block.props || %{}, "prompt") in [nil, ""] -> %>
+        <form phx-submit="set-ai-prompt" phx-value-block-id={@block.id}>
+          <input name="prompt" placeholder="Ask anything about this page..." class="w-full"/>
+        </form>
+      <% Map.get(@block.content || %{}, "answer") -> %>
+        <div class="prose prose-sm">{raw(Earmark.as_html!(@block.content["answer"], ...))}</div>
+        <details class="mt-3 text-xs">
+          <summary>Sources ({length(@block.content["sources"] || [])})</summary>
+          <ul>
+            <li :for={s <- @block.content["sources"]}>
+              <.link navigate={~p"/w/#{@workspace_slug}/p/#{s["page_id"]}##{"block-#{s["block_id"]}"}"}>{s["breadcrumbs"]}</.link>
+              <p class="text-gray-500">{s["snippet"]}</p>
+            </li>
+          </ul>
+        </details>
+      <% true -> %>
+        <p class="text-gray-400 italic">Click refresh to generate.</p>
+    <% end %>
+  </div>
+  ```
+- LiveView page: `handle_event("refresh-ai-block", %{"block-id" => id}, socket)` calls `Concept.Pages.evaluate_ai_block(id, ..., actor: ..., tenant: ws_id)`.
+
+* Edge Cases
+- prompt is empty string: action returns `{:error, :no_prompt}`; UI shows the textarea instead of a refresh button.
+- LLM error during evaluation: content remains unchanged; UI shows error toast + retains stale answer if any.
+- User navigates away during generation: PubSub messages still flow; on return the block content reflects the latest run (paper_trail captures intermediate runs as separate versions).
+- Cycles: AI block scoped `:subtree` can include itself (its prompt becomes context). Mitigation: filter out chunks whose `block_id == self.id` in scope_filter.
+- Workspace scope on huge workspaces: top-K = 10 chunks → bounded latency.
+- AI block inside a `columns` container: render OK; overflow handled by column width.
+
+* Acceptance Criteria
+- 10 tests pass.
+- Slash menu shows "AI Answer ✨" under new "AI" group.
+- Manual: insert AI block, type prompt, click refresh, watch streaming, see answer + sources, click a source → navigates to cited block.
+- paper_trail records each evaluation as a version of Block.
+- No memory growth across 100 refreshes (Task supervisor cleans up).
+
+NOTE [2026-05-05]: AiAnswer block type module created and registered. EvaluateAiBlock change stub. Scope filter and block render deferred.

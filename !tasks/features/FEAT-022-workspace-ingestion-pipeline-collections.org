@@ -1,0 +1,151 @@
+#+TITLE: Workspace ingestion pipeline collections actions and AshOban worker
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FEAT-022-workspace-ingestion-pipeline-collections
+#+DEPENDS: FEAT-019-concept-knowledge-ash-domain-skeleton FEAT-020-gemini-embedder-implementing-arcana-embe FEAT-021-block-aware-chunker-and-lexical-markdown
+#+LAYER: ingestion
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention & Purpose
+Make Concept's content searchable. On every page/block create/update/destroy, schedule a debounced background job that re-ingests the affected page into Arcana under the per-workspace collection. This fully implements `Concept.Knowledge.ingest_page` and `:delete_page`.
+
+* Context & Narrative
+Concept already runs Oban + AshOban. `Concept.Pages.Page` and `Concept.Pages.Block` resources need a `notifiers` clause that triggers an AshOban-scheduled worker. Arcana's ingest is synchronous and can take seconds for a large page; therefore it MUST run in a background job.
+
+We adopt this strategy:
+1. **Per-page job key**: `{:ingest_page, page_id}` is the unique-args key. Pending jobs collapse via Oban's `unique` constraint with `replace: [scheduled: [:scheduled_at]]` — successive saves within the debounce window do not duplicate jobs; the latest save's `scheduled_at` wins.
+2. **Debounce**: schedule for `now + 2s`. Multiple updates within 2s collapse.
+3. **Block change → page resolution**: a block's `page_id` is used as the job key. Reparenting a block from page A to page B emits TWO jobs (one for each page) via two notifier invocations.
+4. **Delete cascades**: archiving a page enqueues a delete job; on completion no chunks remain.
+5. **Tenant context**: workers run with `actor: %SystemActor{system?: true}, tenant: workspace_id` to bypass member policies.
+
+* Scope
+- IN: `Concept.Knowledge.Collections.ensure_for_workspace/1`; `:ingest_page` and `:delete_page` action implementations; `Concept.Knowledge.Workers.IngestPage` AshOban worker; notifier wiring on Page+Block resources; `Concept.Knowledge.SystemActor` struct; full integration test ingesting a fixture page and verifying chunk count + metadata.
+- OUT: structural graph (FEAT-023), search/ask (FEAT-024).
+
+* Existing Patterns (MUST follow)
+- `lib/concept/pages/block.ex` already has an `oban` block with a trigger (`release_expired_locks`) using `use_tenant_from_record? true`. Mirror this exact pattern for `ingest_page` triggers.
+- `lib/concept/accounts/changes/run_onboarding.ex` shows the change-then-after pattern for chained actions.
+- `Ash.Notifier` modules go in `lib/concept/<domain>/notifiers/`. Notifier dispatches by action name; we add `Concept.Pages.Notifiers.KnowledgeReindex`.
+- AshOban triggers run via the existing `Oban` supervised in `Concept.Application`.
+- Arcana ingest call: `Arcana.ingest(text, repo: Concept.Repo, collection: name, source_id: "page:<id>", chunker_opts: [blocks: blocks, page: page, workspace_id: ws_id, breadcrumbs: bc], embed_opts: [intent: :document])`.
+
+* Tests (file paths + scenarios)
+Test files: `test/concept/knowledge/ingestion_test.exs`, `test/concept/knowledge/workers/ingest_page_test.exs`, `test/concept/knowledge/collections_test.exs`.
+Use `Mox` for mocking `Arcana` calls? — NO; Arcana writes to our same Repo so use real Arcana with mocked GeminiEmbedder (via `Mox` impl of `Arcana.Embedder` registered for tests).
+
+Scenarios:
+1. `Concept.Knowledge.Collections.ensure_for_workspace/1` is idempotent: two calls return the same `Arcana.Collection` row id.
+2. Ingesting a page with 4 blocks creates exactly N chunks where N = chunker output count; chunks have `metadata.workspace_id == ws.id`.
+3. Re-ingesting the same page deletes prior `Arcana.Document` (by source_id) and inserts fresh.
+4. Ingesting page in workspace A then querying workspace B's collection returns 0 chunks (tenant isolation).
+5. `:delete_page` action removes all chunks for that page; vector search returns zero hits.
+6. Updating a block calls the notifier, schedules an Oban job; running the job re-ingests; verify with `Oban.Testing.assert_enqueued/1`.
+7. Two block updates within 1s schedule ONE job (debounce + unique replace).
+8. Reparenting a block from page A to page B schedules jobs for both pages.
+9. Worker run as system actor: bypasses Knowledge member policy (no Forbidden).
+10. Worker on missing page (page archived between schedule and run) → returns `{:ok, :no_op}`, does not crash.
+
+* Implementation
+** ITEM Tests for collections, ingest, delete, debounce
+:PROPERTIES:
+:CUSTOM_ID: FEAT-022-workspace-ingestion-pipeline-collections::tests
+:END:
+- File: `test/concept/knowledge/ingestion_test.exs`, `workers/ingest_page_test.exs`, `collections_test.exs`.
+- Set up Mox embedder returning deterministic 768-vec from text hash. Configure via `config :arcana, embedder: Concept.Knowledge.MockEmbedder` in `config/test.exs`.
+
+** ITEM Concept.Knowledge.SystemActor + helper
+:PROPERTIES:
+:CUSTOM_ID: FEAT-022-workspace-ingestion-pipeline-collections::system-actor
+:DEPENDS: FEAT-022-workspace-ingestion-pipeline-collections::tests
+:END:
+- File: `lib/concept/knowledge/system_actor.ex`. Defstruct `[system?: true]`. Used as `actor:` for system-context calls. Aligns with existing `bypass actor_attribute_equals(:system?, true)` clauses in domains.
+
+** ITEM Collections module
+:PROPERTIES:
+:CUSTOM_ID: FEAT-022-workspace-ingestion-pipeline-collections::collections
+:DEPENDS: FEAT-022-workspace-ingestion-pipeline-collections::system-actor
+:END:
+- File: `lib/concept/knowledge/collections.ex`.
+  ```elixir
+  def ensure_for_workspace(workspace_id) do
+    name = Concept.Knowledge.Config.collection_for(workspace_id)
+    Arcana.Collection.get_or_create(name, Concept.Repo, "Concept workspace #{workspace_id}")
+  end
+  ```
+
+** ITEM Ingest implementation module
+:PROPERTIES:
+:CUSTOM_ID: FEAT-022-workspace-ingestion-pipeline-collections::ingest-impl
+:DEPENDS: FEAT-022-workspace-ingestion-pipeline-collections::collections
+:END:
+- File: `lib/concept/knowledge/ingestion.ex`.
+- `ingest_page(page_id, workspace_id)`:
+  1. Load Page via `Concept.Pages.get_page!(page_id, tenant: workspace_id, actor: %SystemActor{})`.
+  2. Load all non-archived blocks via `Concept.Pages.list_for_page(page_id, tenant: workspace_id, actor: %SystemActor{})`.
+  3. Compute breadcrumbs by walking parent_page_id.
+  4. Ensure collection.
+  5. `delete_page(page_id, workspace_id)` to remove prior chunks.
+  6. Render full page markdown (concat of block markdowns) for the document body.
+  7. Call `Arcana.ingest(markdown, repo: Concept.Repo, collection: name, source_id: "page:#{page_id}", metadata: %{...}, chunker: Concept.Knowledge.BlockChunker, chunker_opts: [blocks: blocks, page: page, workspace_id: ws_id, breadcrumbs: bc], embed_opts: [intent: :document])`.
+- `delete_page(page_id, workspace_id)`:
+  1. Look up collection by name.
+  2. `Concept.Repo.delete_all(from d in Arcana.Document, where: d.collection_id == ^col.id and d.source_id == ^"page:#{page_id}")` — chunks cascade via FK on_delete.
+
+** ITEM Wire generic actions
+:PROPERTIES:
+:CUSTOM_ID: FEAT-022-workspace-ingestion-pipeline-collections::wire-actions
+:DEPENDS: FEAT-022-workspace-ingestion-pipeline-collections::ingest-impl
+:END:
+- File: `lib/concept/knowledge.ex`. Replace placeholders for `:ingest_page` and `:delete_page` with `run fn input, _ctx -> Concept.Knowledge.Ingestion.ingest_page(input.arguments.page_id, input.arguments.workspace_id) end`.
+
+** ITEM AshOban worker
+:PROPERTIES:
+:CUSTOM_ID: FEAT-022-workspace-ingestion-pipeline-collections::worker
+:DEPENDS: FEAT-022-workspace-ingestion-pipeline-collections::wire-actions
+:END:
+- File: `lib/concept/knowledge/workers/ingest_page.ex`. Use `AshOban.Trigger`-style worker; queue `:knowledge_ingest`; unique `keys: [:page_id], states: [:available, :scheduled, :retryable], period: 60`; replace `scheduled_at` on collision; debounce via `schedule_in: 2`.
+- Update `config :concept, Oban` queues to add `knowledge_ingest: 4` (4 concurrent ingests per node).
+- `perform/1` calls Knowledge `:ingest_page` action with `actor: %Concept.Knowledge.SystemActor{system?: true}, tenant: workspace_id`.
+- Errors: 400 from Gemini → `{:discard, reason}`; transient → `{:error, reason}` (Oban retries default 25× w/ exponential backoff).
+
+** ITEM Notifier on Page + Block resources
+:PROPERTIES:
+:CUSTOM_ID: FEAT-022-workspace-ingestion-pipeline-collections::notifier
+:DEPENDS: FEAT-022-workspace-ingestion-pipeline-collections::worker
+:END:
+- File: `lib/concept/pages/notifiers/knowledge_reindex.ex`.
+- `use Ash.Notifier`. Implements `notify/1` clauses on `:create | :update | :destroy` for Page and Block.
+- Page change → enqueue ingest_page job for `record.id`.
+- Block change → enqueue for `record.page_id` (post-change). On reparent: also for the old page (via change_set previous_data).
+- Page archive → enqueue `delete_page`.
+- Add `notifiers [Concept.Pages.Notifiers.KnowledgeReindex]` to BOTH `lib/concept/pages/page.ex` and `lib/concept/pages/block.ex` resource blocks.
+
+** ITEM Integration test E2E
+:PROPERTIES:
+:CUSTOM_ID: FEAT-022-workspace-ingestion-pipeline-collections::e2e
+:DEPENDS: FEAT-022-workspace-ingestion-pipeline-collections::notifier
+:END:
+- File: `test/concept/knowledge/end_to_end_test.exs`.
+- Create user + workspace, create 3 pages with mix of blocks; let notifiers schedule jobs; drain Oban via `Oban.drain_queue(queue: :knowledge_ingest)`; assert `Arcana.search(query, collection: ws_col) |> length() > 0` and metadata block_ids belong to expected blocks.
+
+* Edge Cases
+- Page archive while job pending: worker loads via Pages action which returns `nil` due to `archive base_filter? true`; worker treats as deletion (calls `delete_page`), returns `{:ok, :archived}`.
+- Block in archived state: `Block.archive` filters from queries; chunker only sees live blocks (correct).
+- Ingestion failure mid-batch (Gemini transient): job retries; previous chunks already deleted ⇒ search returns empty during retry window. Acceptable.
+- Notifier fires inside a transaction that later rolls back: AshOban `notify_via :pubsub` mode is in-transaction-safe (uses Oban's transactional insert — Oban must be configured with same Repo, which it is).
+- Multi-node deployment: Oban distributes per-node; `unique` constraint at Postgres prevents duplicate jobs across nodes.
+- Lock state changes (Block locks) trigger needless reindex: skip in notifier when only `lock_state | lock_holder_id | lock_acquired_at | lock_expires_at` changed (use `Ash.Resource.Change.in_diff?`).
+
+* Acceptance Criteria
+- All 10 unit + integration scenarios pass.
+- `mix test test/concept/knowledge/end_to_end_test.exs` finishes <30s with mock embedder.
+- Creating a page in a LiveView session causes a chunk to appear in `arcana_chunks` (manual smoke).
+- `Oban.Web` (if mounted) shows the `knowledge_ingest` queue active.
+- `:telemetry` `[:arcana, :ingest, :stop]` fires on every successful job run.
+
+NOTE [2026-05-05]: Collections.ensure_for_workspace, Ingestion.ingest_page + delete_page, IngestPage AshOban worker, KnowledgeReindex notifier stub. Domain actions wired.

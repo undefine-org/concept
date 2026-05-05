@@ -1,0 +1,182 @@
+#+TITLE: Knowledge search and streaming ask via Arcana Pipeline
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FEAT-024-knowledge-search-and-streaming-ask-via-a
+#+DEPENDS: FEAT-022-workspace-ingestion-pipeline-collections FEAT-023-structural-graphrag-builder-and-communit
+#+LAYER: retrieval
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention & Purpose
+Implement the `:search` and `:ask` generic actions on `Concept.Knowledge`. `:search` returns ranked chunks for the command palette. `:ask` runs the Arcana Pipeline (rewrite → fusion search → answer streaming) and emits tokens via Phoenix.PubSub for any subscribed LiveView.
+
+* Context & Narrative
+Per research, `Arcana.Pipeline` accepts `collection: name` runtime opt and `Arcana.Pipeline.answer(ctx, stream: true)` returns `{:ok, stream}`. We do not control the chat model token-level — we simply iterate the stream and broadcast.
+
+The PubSub topic convention: `"knowledge:answer:" <> answer_id` where answer_id is a per-question UUID handed back to the LiveView. The LiveView subscribes BEFORE invoking `:ask`. The action runs the Pipeline INSIDE a `Task` so it does not block the caller; on each token broadcast `{:knowledge_token, answer_id, token}`; on completion broadcast `{:knowledge_done, answer_id, %{sources: [...], full_answer: text, model: m}}`.
+
+Citations: each retrieved chunk has `metadata.block_id` and `metadata.page_id`. We pass them through to the `:done` payload so LiveView renders citation cards.
+
+* Scope
+- IN: `Concept.Knowledge.Search` (sync hybrid search returning chunks); `Concept.Knowledge.Ask` (async streaming task + PubSub); custom prompts for rewrite + answer; error handling; `:search` and `:ask` action wiring.
+- OUT: UI consumption (FEAT-026 chat panel, FEAT-027 palette, FEAT-028 AI block).
+
+* Existing Patterns (MUST follow)
+- Phoenix.PubSub already running (`Concept.PubSub`).
+- Existing pub_sub blocks in Pages domain publish to `"workspace:<id>:pages"`. Knowledge uses a DIFFERENT topic family (`"knowledge:..."`) to avoid collisions.
+- Tasks supervised under `Concept.TaskSupervisor` (does not exist? check; if not, add to application.ex children: `{Task.Supervisor, name: Concept.TaskSupervisor}`).
+- `Req.LLM` is the underlying LLM client used by Arcana; we pass `llm: {Concept.Knowledge.Config.llm_model(), api_key: api_key}` per call.
+
+* Tests (file paths + scenarios)
+Test files: `test/concept/knowledge/search_test.exs`, `test/concept/knowledge/ask_test.exs`.
+Use `Concept.Knowledge.MockLLM` (impl of Arcana's LLM behaviour) producing a deterministic streamed answer.
+
+Scenarios:
+1. `:search` with a query returns `>=1` chunk after a fixture workspace is ingested; results sorted by score desc; each has `:text, :score, :metadata` keys.
+2. `:search` honors `limit` argument.
+3. `:search` over workspace A returns 0 hits when query content lives only in workspace B (tenant isolation).
+4. `:ask` returns immediately with `{:ok, %{answer_id: uuid, topic: "knowledge:answer:<uuid>"}}`.
+5. After subscribing to topic, caller receives `{:knowledge_token, answer_id, token}` ≥1 time and exactly one `{:knowledge_done, answer_id, payload}` with `payload.sources` non-empty when retrieval succeeds.
+6. Empty retrieval (no matching chunks) → still emits `{:knowledge_done, answer_id, %{answer: "I don't know based on this workspace.", sources: []}}`.
+7. LLM transient error → `{:knowledge_error, answer_id, reason}` is broadcast; no crash.
+8. Member of different workspace cannot subscribe + ask (policy at action layer rejects).
+9. Custom prompt override: passing `prompt: fn ... end` flows through to Pipeline.answer.
+10. Telemetry `[:concept, :knowledge, :ask, :start | :stop]` events fired with `answer_id` and durations.
+
+* Implementation
+** ITEM Tests for search + ask (TDD)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-024-knowledge-search-and-streaming-ask-via-a::tests
+:END:
+- Files above; mock embedder + mock LLM via `config/test.exs`.
+
+** ITEM Concept.Knowledge.Search
+:PROPERTIES:
+:CUSTOM_ID: FEAT-024-knowledge-search-and-streaming-ask-via-a::search-impl
+:DEPENDS: FEAT-024-knowledge-search-and-streaming-ask-via-a::tests
+:END:
+- File: `lib/concept/knowledge/search.ex`.
+  ```elixir
+  def search(query, workspace_id, opts) do
+    name = Concept.Knowledge.Config.collection_for(workspace_id)
+    Arcana.GraphRAG.fusion_search(query,
+      repo: Concept.Repo,
+      collection: name,
+      limit: Keyword.get(opts, :limit, 10),
+      mode: :hybrid
+    )
+    |> case do
+      {:ok, results} -> {:ok, Enum.map(results, &serialize/1)}
+      err -> err
+    end
+  end
+  ```
+- `serialize/1` produces `%{text:, score:, metadata: %{block_id, page_id, breadcrumbs, block_type}}`.
+- Wire `:search` action in `Concept.Knowledge` (FEAT-019).
+
+** ITEM Concept.Knowledge.Ask (streaming task)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-024-knowledge-search-and-streaming-ask-via-a::ask-impl
+:DEPENDS: FEAT-024-knowledge-search-and-streaming-ask-via-a::search-impl
+:END:
+- File: `lib/concept/knowledge/ask.ex`.
+  ```elixir
+  def ask(question, workspace_id, opts) do
+    answer_id = Ash.UUID.generate()
+    topic = "knowledge:answer:" <> answer_id
+    Task.Supervisor.start_child(Concept.TaskSupervisor, fn ->
+      run_pipeline(answer_id, topic, question, workspace_id, opts)
+    end)
+    {:ok, %{answer_id: answer_id, topic: topic}}
+  end
+
+  defp run_pipeline(answer_id, topic, question, ws_id, opts) do
+    name = Concept.Knowledge.Config.collection_for(ws_id)
+
+    :telemetry.span([:concept, :knowledge, :ask], %{answer_id: answer_id}, fn ->
+      try do
+        ctx =
+          Arcana.Pipeline.new(question, repo: Concept.Repo, collections: [name])
+          |> Arcana.Pipeline.rewrite()
+          |> Arcana.Pipeline.search()
+          |> Arcana.Pipeline.answer(stream: true,
+              llm: {Concept.Knowledge.Config.llm_model(),
+                    api_key: Concept.Knowledge.Config.api_key()})
+
+        case ctx.answer do
+          {:ok, stream} ->
+            full =
+              stream
+              |> Stream.map(fn token ->
+                Phoenix.PubSub.broadcast(Concept.PubSub, topic,
+                  {:knowledge_token, answer_id, token})
+                token
+              end)
+              |> Enum.join()
+
+            sources =
+              ctx.chunks
+              |> Enum.map(fn c -> %{
+                  block_id: c.metadata["block_id"],
+                  page_id: c.metadata["page_id"],
+                  breadcrumbs: c.metadata["breadcrumbs"],
+                  snippet: String.slice(c.text, 0, 240),
+                  score: c.score
+                } end)
+
+            Phoenix.PubSub.broadcast(Concept.PubSub, topic,
+              {:knowledge_done, answer_id,
+                %{answer: full, sources: sources, model: Concept.Knowledge.Config.llm_model()}})
+            {:ok, %{measurements: %{}}}
+
+          {:error, reason} ->
+            Phoenix.PubSub.broadcast(Concept.PubSub, topic,
+              {:knowledge_error, answer_id, reason})
+            {{:error, reason}, %{}}
+        end
+      rescue
+        e ->
+          Phoenix.PubSub.broadcast(Concept.PubSub, topic,
+            {:knowledge_error, answer_id, Exception.message(e)})
+          reraise e, __STACKTRACE__
+      end
+    end)
+  end
+  ```
+- Wire `:ask` action in `Concept.Knowledge`.
+
+** ITEM Custom prompts
+:PROPERTIES:
+:CUSTOM_ID: FEAT-024-knowledge-search-and-streaming-ask-via-a::prompts
+:DEPENDS: FEAT-024-knowledge-search-and-streaming-ask-via-a::ask-impl
+:END:
+- File: `lib/concept/knowledge/prompts.ex`. Module-level functions:
+  - `rewrite_prompt(query)` — concise standalone-question rewrite tuned for Concept's notion-style content.
+  - `answer_prompt(chunks, query)` — instructs model to (a) cite sources by `[block-<id>]`, (b) say "I don't know" when chunks insufficient, (c) preserve markdown formatting.
+- Pass via `Arcana.Pipeline.rewrite(prompt: &Prompts.rewrite_prompt/1)` and `answer(prompt: &Prompts.answer_prompt/2)`.
+
+** ITEM Add Concept.TaskSupervisor
+:PROPERTIES:
+:CUSTOM_ID: FEAT-024-knowledge-search-and-streaming-ask-via-a::task-sup
+:DEPENDS: FEAT-024-knowledge-search-and-streaming-ask-via-a::ask-impl
+:END:
+- File: `lib/concept/application.ex`. Add `{Task.Supervisor, name: Concept.TaskSupervisor}` to children list (after `Arcana.TaskSupervisor`).
+
+* Edge Cases
+- LiveView disconnects mid-stream: Task continues to broadcast (no consumer, harmless). On reconnect, LiveView re-subscribes BUT cannot replay; document this — partial answers are lost on disconnect. FUP: add a buffered ETS keyed by answer_id with TTL to allow replay.
+- LLM rate limit: Pipeline returns `{:error, :rate_limited}`; we broadcast `:knowledge_error`.
+- Empty workspace: search returns `[]`; Pipeline.answer with no chunks → uses fallback prompt → "I don't know based on this workspace."
+- Question contains PII / sensitive content: out of scope for v1; no redaction.
+- Caller passes `reply_to: pid`: optional; if present, also `send/2` the same messages directly to the pid (useful for tests).
+
+* Acceptance Criteria
+- 10 test scenarios pass.
+- `Concept.Knowledge.search/3` and Ash action `:search` parity (one wraps the other).
+- `Concept.Knowledge.ask/3` returns within 50ms (synchronous setup) and emits first token within ~3s on a real Gemini call (manual smoke).
+- No leaked Tasks after `Concept.TaskSupervisor` shutdown.
+- `:telemetry` events `[:concept, :knowledge, :ask, :start|:stop]` measurable in `/dev/dashboard`.
+
+NOTE [2026-05-05]: Search (hybrid fusion), Ask (streaming via PubSub + TaskSupervisor), Prompts (rewrite + answer). Domain actions wired.

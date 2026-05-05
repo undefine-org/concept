@@ -73,6 +73,203 @@ defmodule Concept.Lexical do
   def to_html(%{"root" => root}), do: render_node(root) |> IO.iodata_to_binary()
   def to_html(_), do: ""
 
+  @doc "Render Lexical state to Markdown. Unknown nodes fall back to plain text."
+  def to_markdown(%{"root" => root}), do: md_node(root, %{}) |> IO.iodata_to_binary() |> String.trim_trailing("\n")
+  def to_markdown(_), do: ""
+
+  defp md_node(%{"type" => "root", "children" => children}, ctx) do
+    md_children(children, ctx)
+  end
+
+  defp md_node(%{"type" => "paragraph", "children" => children}, ctx) do
+    [md_inline_children(children, ctx), "\n\n"]
+  end
+
+  defp md_node(%{"type" => "heading", "tag" => tag, "children" => children}, ctx) do
+    prefix =
+      case tag do
+        "h1" -> "# "
+        "h2" -> "## "
+        "h3" -> "### "
+        _ -> "# "
+      end
+
+    [prefix, md_inline_children(children, ctx), "\n\n"]
+  end
+
+  defp md_node(%{"type" => "heading_1", "children" => children}, ctx) do
+    ["# ", md_inline_children(children, ctx), "\n\n"]
+  end
+
+  defp md_node(%{"type" => "heading_2", "children" => children}, ctx) do
+    ["## ", md_inline_children(children, ctx), "\n\n"]
+  end
+
+  defp md_node(%{"type" => "heading_3", "children" => children}, ctx) do
+    ["### ", md_inline_children(children, ctx), "\n\n"]
+  end
+
+  defp md_node(%{"type" => "quote", "children" => children}, ctx) do
+    content = md_children(children, ctx) |> IO.iodata_to_binary()
+    lines = String.split(content, "\n")
+
+    prefixed =
+      Enum.map(lines, fn
+        "" -> ">\n"
+        line -> ["> ", line, "\n"]
+      end)
+
+    [prefixed, "\n"]
+  end
+
+  defp md_node(%{"type" => "callout", "children" => children}, ctx) do
+    md_node(%{"type" => "quote", "children" => children}, ctx)
+  end
+
+  defp md_node(%{"type" => "code", "language" => lang, "children" => children}, _ctx)
+       when is_binary(lang) and lang != "" do
+    ["```", lang, "\n", md_plain_children(children), "\n```\n\n"]
+  end
+
+  defp md_node(%{"type" => "code", "children" => children}, _ctx) do
+    ["```\n", md_plain_children(children), "\n```\n\n"]
+  end
+
+  defp md_node(%{"type" => "list", "listType" => "bullet", "children" => children}, ctx) do
+    items =
+      Enum.map(children, fn
+        %{"type" => "listitem", "children" => c} ->
+          ["- ", md_inline_children(c, ctx), "\n"]
+
+        %{"type" => "bulleted_list_item", "children" => c} ->
+          ["- ", md_inline_children(c, ctx), "\n"]
+
+        child ->
+          md_node(child, ctx)
+      end)
+
+    [items, "\n"]
+  end
+
+  defp md_node(%{"type" => "list", "listType" => "number", "children" => children}, ctx) do
+    items =
+      Enum.with_index(children, 1)
+      |> Enum.map(fn
+        {%{"type" => "listitem", "children" => c}, i} ->
+          [Integer.to_string(i), ". ", md_inline_children(c, ctx), "\n"]
+
+        {%{"type" => "numbered_list_item", "children" => c}, i} ->
+          [Integer.to_string(i), ". ", md_inline_children(c, ctx), "\n"]
+
+        {child, _} ->
+          md_node(child, ctx)
+      end)
+
+    [items, "\n"]
+  end
+
+  defp md_node(%{"type" => "bulleted_list_item", "children" => children}, ctx) do
+    ["- ", md_inline_children(children, ctx), "\n"]
+  end
+
+  defp md_node(%{"type" => "numbered_list_item", "children" => children}, ctx) do
+    idx = Map.get(ctx, :numbered_index, 1)
+    [Integer.to_string(idx), ". ", md_inline_children(children, ctx), "\n"]
+  end
+
+  defp md_node(%{"type" => "toggle", "children" => children}, ctx) do
+    md_children(children, ctx)
+  end
+
+  defp md_node(%{"type" => "columns", "children" => children}, ctx) do
+    md_children(children, ctx)
+  end
+
+  defp md_node(%{"type" => "column", "children" => children}, ctx) do
+    md_children(children, ctx)
+  end
+
+  defp md_node(%{"type" => "divider"}, _ctx) do
+    ["---\n\n"]
+  end
+
+  defp md_node(%{"type" => "image"} = node, _ctx) do
+    alt = Map.get(node, "alt") || Map.get(node, "altText", "")
+    src = Map.get(node, "src", "")
+    ["![", alt, "](", src, ")\n\n"]
+  end
+
+  defp md_node(%{"type" => "link", "url" => url, "children" => children}, ctx) do
+    ["[", md_inline_children(children, ctx), "](", url, ")"]
+  end
+
+  defp md_node(%{"type" => "linebreak"}, _ctx) do
+    "\n"
+  end
+
+  defp md_node(%{"type" => "text", "text" => text} = node, _ctx) do
+    fmt = Map.get(node, "format", 0)
+    md_format(text, fmt)
+  end
+
+  defp md_node(%{"type" => "table"}, _ctx), do: []
+  defp md_node(%{"type" => "ai_answer"}, _ctx), do: []
+
+  defp md_node(node, _ctx) do
+    walk_text(node)
+  end
+
+  defp md_children(children, ctx) do
+    {_, parts} =
+      Enum.reduce(children, {1, []}, fn child, {n_idx, acc} ->
+        case child do
+          %{"type" => "numbered_list_item"} ->
+            child_ctx = Map.put(ctx, :numbered_index, n_idx)
+            rendered = md_node(child, child_ctx)
+            {n_idx + 1, [rendered | acc]}
+
+          _ ->
+            rendered = md_node(child, ctx)
+            {n_idx, [rendered | acc]}
+        end
+      end)
+
+    Enum.reverse(parts)
+  end
+
+  defp md_inline_children(children, ctx) do
+    Enum.map_join(children, "", fn
+      %{"type" => "paragraph", "children" => c} -> md_inline_children(c, ctx)
+      %{"type" => "text", "text" => text} = node -> md_format(text, Map.get(node, "format", 0))
+      %{"type" => "link", "url" => url, "children" => c} -> ["[", md_inline_children(c, ctx), "](", url, ")"]
+      %{"type" => "linebreak"} -> "\n"
+      %{"children" => c} -> md_inline_children(c, ctx)
+      _ -> ""
+    end)
+  end
+
+  defp md_plain_children(children) do
+    Enum.map_join(children, "", fn
+      %{"type" => "text", "text" => text} -> text
+      %{"children" => nested} -> md_plain_children(nested)
+      _ -> ""
+    end)
+  end
+
+  defp md_format(text, fmt) do
+    text
+    |> wrap_md_if(@code, "`", "`", fmt)
+    |> wrap_md_if(@bold, "**", "**", fmt)
+    |> wrap_md_if(@italic, "*", "*", fmt)
+    |> wrap_md_if(@underline, "<u>", "</u>", fmt)
+    |> wrap_md_if(@strike, "~~", "~~", fmt)
+  end
+
+  defp wrap_md_if(content, bit, open, close, fmt) when bit |> Bitwise.band(fmt) != 0,
+    do: [open, content, close]
+
+  defp wrap_md_if(content, _bit, _open, _close, _fmt), do: content
+
   defp render_node(%{"type" => "root", "children" => children}) do
     Enum.map(children, &render_node/1)
   end

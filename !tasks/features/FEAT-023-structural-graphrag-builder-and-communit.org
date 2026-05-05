@@ -1,0 +1,126 @@
+#+TITLE: Structural GraphRAG builder and community summaries
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FEAT-023-structural-graphrag-builder-and-communit
+#+DEPENDS: FEAT-022-workspace-ingestion-pipeline-collections
+#+LAYER: ingestion
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention & Purpose
+Concept's data is a graph: pages contain pages and blocks; blocks contain blocks; users author them. We feed THAT structure directly into Arcana's GraphRAG schemas — bypassing LLM-based entity extraction entirely. Result: free, deterministic, complete graph that powers Arcana's Fusion Search (vector ∪ graph traversal) for richer retrieval.
+
+This is the riskiest item: we write to Arcana's *internal* schemas (`Arcana.Graph.Entity`, `Arcana.Graph.Relationship`) without a public API. We pin the version (`~> 2.0`) and add a regression test that asserts on schema fields so a major Arcana upgrade fails loudly.
+
+* Context & Narrative
+Arcana's default GraphRAG flow extracts entities + relations via an LLM — costly, lossy, redundant when the structure is already explicit in the source data. Microsoft's GraphRAG paper shows that *community summaries* (LLM-summarize each cluster) materially improve global-question quality. We retain this single LLM-driven step but make it on-demand: weekly via AshOban OR manual button in workspace settings.
+
+The structural graph captures:
+
+```
+Workspace --HAS_PAGE-->     Page
+Page      --PARENT_OF-->    Page         (parent_page_id)
+Page      --CONTAINS  -->   Block        (page_id, parent_block_id IS NULL)
+Block     --PARENT_OF-->    Block        (parent_block_id)
+Block     --HAS_TYPE -->    BlockType    (atom-keyed entity)
+Block     --AUTHORED_BY-->  User         (paper_trail.created_by? — defer if missing)
+```
+
+Each `Arcana.Graph.Entity` row gets `kind: "page" | "block" | "block_type"`, `name: title or block.type`, `metadata: %{breadcrumbs, page_id, ...}`, `collection_id` of the workspace.
+
+* Scope
+- IN: per-page graph upsert called from `ingest_page` AFTER chunking; workspace-level `rebuild_workspace_graph` action (full rebuild from Pages); `rebuild_communities` action invoking Arcana's community-detection + LLM summary; AshOban scheduled job (weekly) + manual trigger; workspace settings button (owner-only); regression tests against schema shape.
+- OUT: Block→Page LINKS_TO edges based on Lexical mentions (defer to FUP — needs Lexical mention spec in Concept).
+
+* Existing Patterns (MUST follow)
+- AshOban triggers in `Concept.Pages.Block` (oban block) — mirror for `Concept.Knowledge.Workers.RebuildCommunities`.
+- All Arcana writes go through `Concept.Repo` (already configured as Arcana's repo).
+- Workspace settings page: not yet present — gated behind `:require_owner` plug; the LV addition lives in this item.
+- AshAdmin domain visibility (`admin do show? true end`) already on Knowledge — owner-only access already enforced via `/admin` scope.
+
+* Tests (file paths + scenarios)
+Test files: `test/concept/knowledge/graph_builder_test.exs`, `test/concept/knowledge/community_test.exs`, `test/concept/knowledge/graph_schema_regression_test.exs`.
+
+Scenarios:
+1. Building a page with 3 blocks + 1 child page produces 4 block entities + 2 page entities + 4 PARENT_OF/CONTAINS relationships + 3 HAS_TYPE relationships.
+2. Re-ingesting a page upserts entities (idempotent on (kind, source_id) within collection) and removes orphaned relationships.
+3. Archiving a block removes the entity + its incident relationships.
+4. Reparenting a block moves the PARENT_OF edge (delete old, insert new).
+5. Cross-workspace isolation: workspace A's entities never show up under workspace B's collection_id.
+6. `rebuild_workspace_graph` over a 30-page workspace produces stable graph identical to incremental builds.
+7. `rebuild_communities` runs Arcana's Leiden clustering + summary; produces ≥1 `arcana_community` row with `summary: <<_::binary>>`.
+8. Community summary LLM call is mocked (`Concept.Knowledge.MockLLM`) returning fixture text; test asserts summary is stored.
+9. Schema regression: `Arcana.Graph.Entity.__schema__(:fields)` includes `[:id, :kind, :name, :metadata, :collection_id]` (assertion fails loudly on Arcana upgrade if fields drift).
+10. Settings "Rebuild knowledge graph" button enqueues a `RebuildCommunities` job (LiveView click test).
+
+* Implementation
+** ITEM Schema regression tests (TDD)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-023-structural-graphrag-builder-and-communit::schema-regression
+:END:
+- File: `test/concept/knowledge/graph_schema_regression_test.exs`.
+- Pin assumed fields. Document the assumption: "If this test fails, read the Arcana CHANGELOG and update GraphBuilder."
+
+** ITEM GraphBuilder unit tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-023-structural-graphrag-builder-and-communit::builder-tests
+:DEPENDS: FEAT-023-structural-graphrag-builder-and-communit::schema-regression
+:END:
+- File: `test/concept/knowledge/graph_builder_test.exs`. 6 scenarios above.
+
+** ITEM Concept.Knowledge.GraphBuilder
+:PROPERTIES:
+:CUSTOM_ID: FEAT-023-structural-graphrag-builder-and-communit::builder-impl
+:DEPENDS: FEAT-023-structural-graphrag-builder-and-communit::builder-tests
+:END:
+- File: `lib/concept/knowledge/graph_builder.ex`.
+- Public:
+  - `upsert_page_graph(page, blocks, collection_id, workspace_id)`
+  - `delete_page_graph(page_id, collection_id)`
+  - `rebuild_workspace_graph(workspace_id)`
+- Implementation strategy:
+  - Use `Concept.Repo.insert_all(Arcana.Graph.Entity, rows, on_conflict: {:replace_all_except, [:id, :inserted_at]}, conflict_target: [:collection_id, :kind, :source_id])`. (Verify Arcana's entity schema has `:source_id`; if not, file FUP and use `(collection_id, kind, name)`.)
+  - Same for `Arcana.Graph.Relationship` keyed on `(collection_id, source_id, target_id, kind)`.
+  - Ordering: insert entities first, then relationships referring to entity ids returned via `RETURNING id`.
+- Wire from `Concept.Knowledge.Ingestion.ingest_page` (FEAT-022): after chunk insert, call `GraphBuilder.upsert_page_graph(page, blocks, collection.id, workspace_id)`.
+
+** ITEM Communities action + worker
+:PROPERTIES:
+:CUSTOM_ID: FEAT-023-structural-graphrag-builder-and-communit::communities
+:DEPENDS: FEAT-023-structural-graphrag-builder-and-communit::builder-impl
+:END:
+- File: `lib/concept/knowledge/community.ex`.
+- `rebuild_communities(workspace_id)` calls `Arcana.GraphRAG.detect_communities(repo: Concept.Repo, collection: name)` then `Arcana.GraphRAG.summarize_communities(...)` (verify exact module names against Arcana source — research report says functions live in `Arcana.GraphRAG`; if names differ, adjust without changing this contract).
+- Worker: `lib/concept/knowledge/workers/rebuild_communities.ex`. Uses queue `:knowledge_communities` (concurrency 1). Schedule: cron weekly via AshOban.
+- Wire `:rebuild_workspace_graph` and `:rebuild_communities` actions in `lib/concept/knowledge.ex` (FEAT-019 placeholders).
+
+** ITEM Workspace settings: rebuild button
+:PROPERTIES:
+:CUSTOM_ID: FEAT-023-structural-graphrag-builder-and-communit::settings-ui
+:DEPENDS: FEAT-023-structural-graphrag-builder-and-communit::communities
+:END:
+- File: `lib/concept_web/live/workspace_settings_live.ex`. New LV at `/w/:workspace_slug/settings` (owner-only via `live_user_required` + a custom owner check).
+- Add route in router under authenticated_routes.
+- Renders one button `<.button phx-click="rebuild-graph">Rebuild knowledge graph</.button>`. Click handler enqueues the `RebuildCommunities` worker; flashes "Scheduled".
+- `<Layouts.app flash={@flash} current_scope={@current_scope}>` wrapper per AGENTS.md.
+
+* Edge Cases
+- Arcana 2.x bumps schema fields: regression test catches it; GraphBuilder is the SINGLE place that needs patching.
+- Block authored_by: paper_trail captures `created_by` only if Concept stores it — currently `paper_trail` is in deps but no `actor:` capture is wired on Block creation. AUTHORED_BY edges are skipped in v1; FUP to wire actor capture.
+- Empty workspace (no pages): `rebuild_workspace_graph` is a no-op returning `{:ok, %{entities: 0, relationships: 0}}`.
+- Concurrent ingest of same page: Postgres unique constraint on conflict_target serializes upserts; later wins. Acceptable.
+- Community summary cost: each summary is one LLM call; a workspace with 50 communities = 50 calls. Worker uses `:knowledge_communities` queue with concurrency=1 to throttle.
+- Community summary mid-run + page edit: the next `rebuild_communities` will reflect the new edges. No locking needed.
+- Arcana lacking `summarize_communities` (or different name): fall back to Markdown-style "list of nodes in community" stored in summary field — keeps the system functional even if the public API is incomplete.
+
+* Acceptance Criteria
+- 10 test scenarios pass.
+- `arcana_entities` and `arcana_relationships` populated after ingesting a fixture page (manual smoke).
+- "Rebuild knowledge graph" button on `/w/:slug/settings` enqueues a job; Oban Web shows it executing.
+- Schema regression test fails loudly on a hypothetical Arcana 3.0 (manual: change a field in test, observe failure).
+- `Arcana.GraphRAG.fusion_search(...)` called from FEAT-024 returns nodes plus chunks.
+
+NOTE [2026-05-05]: GraphBuilder with entity/relationship upsert, Community module with detect + summarize, RebuildCommunities worker.

@@ -1,0 +1,17 @@
+#+TITLE: Wire Arcana evaluation harness to a mix task and seed test cases
+#+STATE: ITEM
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FUP-002-wire-arcana-evaluation-harness-to-a-mix
+#+LAYER: ops
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention
+Use `Arcana.Evaluation` to track retrieval quality over time. Seed ~30 question/expected-answer pairs against a fixture workspace.
+* Tasks
+- `mix concept.knowledge.eval` task running `Arcana.Evaluation.run/1`.
+- Persist runs; surface in /admin/arcana.
+- Block release if MRR@10 regresses.

@@ -1,0 +1,19 @@
+#+TITLE: Adopt Arcana Loop mode for multi-hop questions
+#+STATE: ITEM
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FUP-003-adopt-arcana-loop-mode-for-multi-hop-que
+#+LAYER: retrieval
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention
+After Pipeline mode is stable, evaluate adopting `Arcana.Loop` for queries needing multi-hop reasoning. Provides agentic retrieval with custom tools.
+* Custom tools to expose
+- `fetch_page(page_id)` — full markdown
+- `list_children(page_id)` — page tree branch
+- `find_blocks_of_type(workspace_id, type)` — e.g. all to-do items
+* Concerns
+- Non-determinism vs Pipeline; cost; make per-action: simple Q&A → Pipeline; "deep research" toggle → Loop.

@@ -99,9 +99,10 @@ defmodule ConceptWeb.Router do
 
   import AshAdmin.Router
 
-  scope "/admin" do
-    pipe_through [:browser, :require_owner]
+    scope "/admin" do
+      pipe_through [:browser, :require_owner]
 
-    ash_admin "/"
-  end
+      ash_admin "/"
+      # arcana_dashboard "/arcana"
+    end
 end

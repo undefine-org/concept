@@ -1,0 +1,19 @@
+#+TITLE: Enable Arcana cross-encoder reranker after retrieval quality is measured
+#+STATE: ITEM
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FUP-001-enable-arcana-cross-encoder-reranker-aft
+#+LAYER: retrieval
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention
+Add reranker step to Pipeline if eval shows retrieval quality gap. Deferred from initial integration: reranker over-fetches 3× → measurable latency cost.
+* Trigger
+Run Arcana.Evaluation harness on a curated test set; if MRR@10 < 0.7, enable a reranker.
+* Notes
+- Configure via `config :arcana, reranker: ...`.
+- Likely options: built-in cross-encoder (Bumblebee), or hosted Cohere rerank API.
+- Update telemetry summary for `arcana.rerank.*` events.

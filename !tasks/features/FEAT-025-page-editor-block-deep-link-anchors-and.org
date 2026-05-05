@@ -1,0 +1,109 @@
+#+TITLE: Page editor block deep-link anchors and PageScroll hook
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FEAT-025-page-editor-block-deep-link-anchors-and
+#+DEPENDS: FEAT-018-arcana-foundation-deps-config-and-migrat
+#+LAYER: ui
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention & Purpose
+Citations from the chat panel and AI block must scroll to the cited block on click. We add stable `id="block-<uuid>"` anchors to every rendered block and a colocated JS hook that, on mount and on `phx:page-loading-stop`, scrolls the URL hash target into view with a brief highlight animation.
+
+* Context & Narrative
+`ConceptWeb.BlockRender` (lib/concept_web/components/block_render.ex) is the single function component dispatching to per-type templates. Each text block already gets `id="b-#{@block.id}"` on the `<ora-block>` web component. We add a SECOND outer wrapper `<div id="block-<uuid>">` so citations remain stable even if the inner editor element changes. Static (non-text) blocks need the same treatment.
+
+`PageEditorLive` is rendered via `live_render` from `WorkspaceLive`. Adding a colocated `:type={Phoenix.LiveView.ColocatedHook}` script registered with the BlockEditor target, OR registering a new external hook `PageScroll`, is the choice. Per AGENTS.md, colocated hooks belong in HEEx and are auto-bundled — choose colocated.
+
+* Scope
+- IN: outer `<div id="block-<uuid>">` wrapper around every block (text + static); CSS class for fade-highlight animation; colocated `.PageScroll` hook on PageEditorLive root reading `location.hash` on mount and on Phoenix navigation; smooth scrollIntoView; 1.5s yellow highlight class toggled on the matched element.
+- OUT: link previews/popovers; collaborative cursor of "currently viewed block".
+
+* Existing Patterns (MUST follow)
+- `app.css` uses Tailwind v4 import syntax with sources from `lib/concept_web`. Add the highlight CSS rule there.
+- `BlockEditor` external hook lives in `assets/js/`. Colocated hooks under `:type={Phoenix.LiveView.ColocatedHook}` per AGENTS.md.
+- AGENTS.md mandates `<.icon name="hero-..." />`, no `Heroicons` modules.
+
+* Tests (file paths + scenarios)
+Test files: `test/concept_web/live/page_editor_anchor_test.exs`.
+Scenarios:
+1. Rendering a page with 3 blocks produces HTML containing `id="block-<uuid>"` for each block in order.
+2. Static blocks (image, divider) receive the wrapper.
+3. Hash navigation `~p"/w/#{slug}/p/#{page.id}#block-#{bid}"` arrives in the LV with the block visible (`assert has_element?(view, "#block-" <> bid)`).
+4. CSS class `block-highlight` is defined in compiled stylesheet (smoke check by reading `priv/static/assets/app.css` after `mix tailwind concept`).
+5. Hook script tag is present in rendered HTML (assert `~r/PageScroll/` in render).
+
+* Implementation
+** ITEM Tests for anchors (TDD)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-025-page-editor-block-deep-link-anchors-and::tests
+:END:
+- File: `test/concept_web/live/page_editor_anchor_test.exs`. 5 scenarios.
+
+** ITEM BlockRender wrapper id
+:PROPERTIES:
+:CUSTOM_ID: FEAT-025-page-editor-block-deep-link-anchors-and::wrapper
+:DEPENDS: FEAT-025-page-editor-block-deep-link-anchors-and::tests
+:END:
+- File: `lib/concept_web/components/block_render.ex`.
+- Wrap both branches (text/static) with `<div id={"block-" <> @block.id} class="block-anchor scroll-mt-20">...</div>` (`scroll-mt-20` keeps Tailwind sticky-header offset right).
+
+** ITEM PageScroll colocated hook
+:PROPERTIES:
+:CUSTOM_ID: FEAT-025-page-editor-block-deep-link-anchors-and::hook
+:DEPENDS: FEAT-025-page-editor-block-deep-link-anchors-and::wrapper
+:END:
+- File: `lib/concept_web/live/page_editor_live.ex`.
+- Locate root `<div id="page-editor-root" phx-hook=".PageScroll" ...>`.
+- Add at the end of the template:
+  ```heex
+  <script :type={Phoenix.LiveView.ColocatedHook} name=".PageScroll">
+    export default {
+      mounted() { this.handleHash(); },
+      updated() { this.handleHash(); },
+      handleHash() {
+        const hash = window.location.hash;
+        if (!hash || !hash.startsWith("#block-")) return;
+        const el = document.getElementById(hash.slice(1));
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("block-highlight");
+        setTimeout(() => el.classList.remove("block-highlight"), 1500);
+      }
+    }
+  </script>
+  ```
+- Listen to `phx:navigate` to re-run handleHash after `push_patch` navigations.
+
+** ITEM Highlight CSS
+:PROPERTIES:
+:CUSTOM_ID: FEAT-025-page-editor-block-deep-link-anchors-and::css
+:DEPENDS: FEAT-025-page-editor-block-deep-link-anchors-and::hook
+:END:
+- File: `assets/css/app.css`. Append:
+  ```css
+  .block-highlight {
+    background-color: rgb(254 240 138 / 0.4); /* yellow-200/40 */
+    transition: background-color 800ms ease-in-out;
+    border-radius: 4px;
+  }
+  ```
+- Per AGENTS.md: NEVER use `@apply`; raw CSS only.
+
+* Edge Cases
+- Hash points to a block that no longer exists: `getElementById` returns null; hook silently no-ops.
+- LV reconnect after disconnect: `mounted()` re-runs and rescrolls — fine.
+- User scrolls manually before the hook fires: `scrollIntoView({block:"center"})` is mildly disruptive; debounce: only scroll if `Math.abs(el.getBoundingClientRect().top - window.innerHeight/2) > 200`.
+- Block is inside a collapsed `toggle` container: hook can't expand it. Document as known limitation in v1; FUP to expand ancestor toggles.
+- Multiple blocks selected (in editor): hook only highlights the URL-target one.
+
+* Acceptance Criteria
+- All 5 tests pass.
+- Manual: visit `/w/<slug>/p/<page>#block-<id>`, page scrolls block into view, yellow flash for 1.5s.
+- `mix assets.build` produces app.css containing `.block-highlight` rule.
+- No console errors on hash mismatch.
+
+NOTE [2026-05-05]: BlockRender anchor wrappers (id="block-<uuid>") on all blocks, highlight CSS (.block-highlight). PageScroll hook deferred to full implementation.

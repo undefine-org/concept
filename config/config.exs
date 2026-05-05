@@ -64,7 +64,7 @@ config :spark,
 config :concept,
   ecto_repos: [Concept.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true],
-  ash_domains: [Concept.Accounts, Concept.Pages]
+  ash_domains: [Concept.Accounts, Concept.Pages, Concept.Knowledge]
 
 # Configure the endpoint
 config :concept, ConceptWeb.Endpoint,
@@ -127,7 +127,14 @@ config :concept, :block_types, [
   Concept.Pages.BlockTypes.Table,
   Concept.Pages.BlockTypes.TableCell,
   Concept.Pages.BlockTypes.Columns,
-  Concept.Pages.BlockTypes.Column
-]
+  Concept.Pages.BlockTypes.Column,
+    Concept.Pages.BlockTypes.AiAnswer
+  ]
+
+config :arcana,
+  repo: Concept.Repo,
+  embedder: {:custom, module: Concept.Knowledge.GeminiEmbedder},
+  chunker: Concept.Knowledge.BlockChunker,
+  search: [mode: :hybrid, limit: 10]
 
 import_config "#{config_env()}.exs"

@@ -1,0 +1,19 @@
+#+TITLE: Persist chat conversations as Concept.Knowledge.Conversation resource
+#+STATE: ITEM
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FUP-006-persist-chat-conversations-as-concept-kn
+#+LAYER: ui
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention
+v1 chat is in-memory only. Add an Ash resource for conversations and messages so users can revisit/share past Q&As. Multi-turn memory becomes possible.
+* Resources
+- `Concept.Knowledge.Conversation` (workspace-tenanted, belongs_to user)
+- `Concept.Knowledge.Message` (belongs_to conversation, role, content, sources jsonb)
+* UI
+- Chat panel: list past conversations; "New chat" creates new resource.
+- Stream tokens append to a `:streaming` attribute; finalize on done.

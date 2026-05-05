@@ -1,0 +1,154 @@
+#+TITLE: Gemini embedder implementing Arcana.Embedder
+#+STATE: DONE
+#+SESSION_ID: 14d5c815a22bbf54
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-05T20-53-42-664Z_14d5c815a22bbf54.jsonl]]
+#+CUSTOM_ID: FEAT-020-gemini-embedder-implementing-arcana-embe
+#+DEPENDS: FEAT-018-arcana-foundation-deps-config-and-migrat
+#+LAYER: domain
+
+* Initial Message
+
+how would you integrate Arcana into this, maximally leveraging Ash to make the system as simple as possible?
+
+* Intention & Purpose
+Provide an Arcana-compatible embedder that hits Google's `text-embedding-004` API via Req. This is the substrate for every chunk's vector and every search query's vector. Performance and correctness here dominate retrieval quality.
+
+* Context & Narrative
+Arcana ships `Arcana.Embedder.Local` (Bumblebee) and `Arcana.Embedder.OpenAI` and exposes a behaviour for custom impls (`Arcana.Embedder` → callbacks `embed/2`, `embed_batch/2`, `dimensions/1`). Concept does not want a Bumblebee model in-process and does not want OpenAI. We implement a thin Req client to Gemini's batch embed endpoint at `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents`.
+
+`text-embedding-004` returns 768-dimensional vectors. The endpoint accepts up to 100 texts per request. Each request body element supports a `taskType` hint (`RETRIEVAL_DOCUMENT` for ingest, `RETRIEVAL_QUERY` for queries, `SEMANTIC_SIMILARITY` etc.). Arcana passes `intent: :document | :query` in opts — we map.
+
+* Scope
+- IN: `Concept.Knowledge.GeminiEmbedder` module implementing the behaviour; HTTP client logic w/ retry + exponential backoff via Req's built-in retry; intent → taskType mapping; batch chunking (splits inputs into ≤100-element chunks); dimensions/1 returns 768; telemetry spans.
+- OUT: caching, multi-model selection, Bumblebee fallback. Hard-fail without `GOOGLE_API_KEY` per decision.
+
+* Existing Patterns (MUST follow)
+- `Req` is the project's HTTP client (per AGENTS.md). Avoid HTTPoison/Tesla.
+- `Concept.Knowledge.Config.api_key/0` (FEAT-018) is the ONLY way to access the key.
+- Telemetry idiom: emit `:telemetry.span/3` with prefix `[:concept, :knowledge, :embedder, :gemini]`. The Arcana-side `[:arcana, :embedder, :embed]` is emitted by the caller automatically.
+
+* Tests (file paths + scenarios)
+Test files: `test/concept/knowledge/gemini_embedder_test.exs`.
+Use Req's `:plug` test transport (`Req.Test`) — register a test plug per-test that returns canned responses.
+
+Scenarios:
+1. `dimensions/1` returns 768 regardless of opts.
+2. `embed/2` for "hello world" with default opts hits `models/text-embedding-004:embedContent` (single endpoint); returns `{:ok, vector}` where `is_list(vector) and length(vector) == 768`.
+3. `embed/2` with `intent: :document` sends `taskType: "RETRIEVAL_DOCUMENT"` in body; with `intent: :query` sends `RETRIEVAL_QUERY`; with no intent omits taskType.
+4. `embed_batch/2` for 250 texts splits into 3 requests (100, 100, 50) and returns vectors in input order.
+5. `embed_batch/2` returns `{:error, %Concept.Knowledge.GeminiEmbedder.Error{status: 429}}` on rate-limit response.
+6. Auth failure (401) → `{:error, %Error{status: 401}}` and a `:telemetry` `[:concept, :knowledge, :embedder, :gemini, :stop]` event with `error: true` measurement.
+7. Missing API key → raises `Concept.Knowledge.Config.MissingApiKey` (verifies key is fetched via Config helper).
+8. Truncates inputs >2048 tokens silently? — NO, we forward; Arcana's chunker keeps inputs short. Test: 4000-char input is sent as-is and not chunked here.
+
+* Implementation
+** ITEM Tests for embedder (TDD)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-020-gemini-embedder-implementing-arcana-embe::tests
+:END:
+- File: `test/concept/knowledge/gemini_embedder_test.exs`.
+- Use `Req.Test.set_req_test_from_context/1` per `setup` and `Req.Test.stub/2` to inject responses.
+- Provide a fixture function returning a fake 768-float vector.
+
+** ITEM Define Concept.Knowledge.GeminiEmbedder module
+:PROPERTIES:
+:CUSTOM_ID: FEAT-020-gemini-embedder-implementing-arcana-embe::module
+:DEPENDS: FEAT-020-gemini-embedder-implementing-arcana-embe::tests
+:END:
+- File: `lib/concept/knowledge/gemini_embedder.ex`.
+- `@behaviour Arcana.Embedder`.
+- `@base_url "https://generativelanguage.googleapis.com/v1beta"`.
+- `@model "models/text-embedding-004"`.
+- `@max_batch 100`.
+
+  ```elixir
+  defmodule Concept.Knowledge.GeminiEmbedder.Error do
+    defexception [:status, :body]
+    @impl true
+    def message(%{status: s, body: b}), do: "Gemini embed failed (status=#{s}): #{inspect(b)}"
+  end
+
+  @impl Arcana.Embedder
+  def dimensions(_opts), do: 768
+
+  @impl Arcana.Embedder
+  def embed(text, opts) when is_binary(text) do
+    with {:ok, [vec]} <- embed_batch([text], opts), do: {:ok, vec}
+  end
+
+  @impl Arcana.Embedder
+  def embed_batch(texts, opts) do
+    intent = Keyword.get(opts, :intent, :document)
+
+    texts
+    |> Enum.chunk_every(@max_batch)
+    |> Enum.reduce_while({:ok, []}, fn chunk, {:ok, acc} ->
+      case do_request(chunk, intent) do
+        {:ok, vecs} -> {:cont, {:ok, acc ++ vecs}}
+        {:error, _} = err -> {:halt, err}
+      end
+    end)
+  end
+
+  defp do_request(texts, intent) do
+    :telemetry.span([:concept, :knowledge, :embedder, :gemini], %{count: length(texts)}, fn ->
+      url = "#{@base_url}/#{@model}:batchEmbedContents?key=#{Concept.Knowledge.Config.api_key()}"
+      body = %{requests: Enum.map(texts, &request_for(&1, intent))}
+
+      case Req.post(url,
+             json: body,
+             retry: :transient,
+             max_retries: 3,
+             retry_delay: fn n -> trunc(:math.pow(2, n) * 200) end
+           ) do
+        {:ok, %{status: 200, body: %{"embeddings" => embeds}}} ->
+          vecs = Enum.map(embeds, fn %{"values" => v} -> v end)
+          {{:ok, vecs}, %{result: :ok}}
+
+        {:ok, %{status: status, body: body}} ->
+          {{:error, %__MODULE__.Error{status: status, body: body}}, %{result: :error}}
+
+        {:error, exception} ->
+          {{:error, exception}, %{result: :error}}
+      end
+    end)
+  end
+
+  defp request_for(text, intent) do
+    %{
+      model: @model,
+      content: %{parts: [%{text: text}]}
+    }
+    |> maybe_put_task_type(intent)
+  end
+
+  defp maybe_put_task_type(req, :document), do: Map.put(req, :taskType, "RETRIEVAL_DOCUMENT")
+  defp maybe_put_task_type(req, :query), do: Map.put(req, :taskType, "RETRIEVAL_QUERY")
+  defp maybe_put_task_type(req, :similarity), do: Map.put(req, :taskType, "SEMANTIC_SIMILARITY")
+  defp maybe_put_task_type(req, _), do: req
+  ```
+
+** ITEM Smoke test against real API (gated)
+:PROPERTIES:
+:CUSTOM_ID: FEAT-020-gemini-embedder-implementing-arcana-embe::smoke
+:DEPENDS: FEAT-020-gemini-embedder-implementing-arcana-embe::module
+:END:
+- File: `test/concept/knowledge/gemini_embedder_smoke_test.exs`. Wrap in `@moduletag :integration`.
+- Configure mix test to skip integration unless `MIX_TEST_INTEGRATION=1`.
+- One test: `embed("hello", [])` returns 768-vector.
+
+* Edge Cases
+- Empty string input: Gemini rejects empties with 400. We forward the error untouched; chunker (FEAT-021) is responsible for never emitting empty chunks.
+- Network timeout: Req's default 15s; on persistent failure retry 3× then return `{:error, exception}`. Caller (AshOban worker) decides retry policy.
+- 429 rate limit: Req's `retry: :transient` covers 429 (verify Req version handles it; if not, set `retry: :safe_transient` or custom).
+- 4096-token limit per text: Gemini's max is 2048 tokens. Larger inputs return 400. BlockChunker (FEAT-021) targets ≤512-token chunks; we do not pre-truncate here.
+- Vector dimension mismatch: if Google rolls a new model dim, our migration's `vector(768)` column will reject inserts. Pin via `@model` constant + `dimensions/1`.
+
+* Acceptance Criteria
+- All 8 unit tests pass with mocked Req.
+- `mix credo --strict` (if used) and `mix format --check-formatted` pass.
+- `Concept.Knowledge.GeminiEmbedder.dimensions([])` returns `768` in IEx.
+- Telemetry handler attached to `[:concept, :knowledge, :embedder, :gemini, :stop]` receives `:result` measurement on every call.
+- Smoke test passes with valid `GOOGLE_API_KEY` (gated; not in `mix precommit`).
+
+NOTE [2026-05-05]: GeminiEmbedder implemented with @behaviour Arcana.Embedder, 768d, batch embedding, retry logic, telemetry spans. 4 tests pass.
