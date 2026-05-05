@@ -40,7 +40,6 @@ defmodule ConceptWeb.Router do
   scope "/", ConceptWeb do
     pipe_through :browser
 
-
     auth_routes AuthController, Concept.Accounts.User, path: "/auth"
     sign_out_route AuthController
 

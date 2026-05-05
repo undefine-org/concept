@@ -64,7 +64,7 @@ config :spark,
 config :concept,
   ecto_repos: [Concept.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true],
-  ash_domains: [Concept.Accounts]
+  ash_domains: [Concept.Accounts, Concept.Pages]
 
 # Configure the endpoint
 config :concept, ConceptWeb.Endpoint,
@@ -108,4 +108,26 @@ config :phoenix, :json_library, Jason
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
+config :concept, :block_types, [
+  Concept.Pages.BlockTypes.Paragraph,
+  Concept.Pages.BlockTypes.Heading1,
+  Concept.Pages.BlockTypes.Heading2,
+  Concept.Pages.BlockTypes.Heading3,
+  Concept.Pages.BlockTypes.BulletedListItem,
+  Concept.Pages.BlockTypes.NumberedListItem,
+  Concept.Pages.BlockTypes.ToDo,
+  Concept.Pages.BlockTypes.Quote,
+  Concept.Pages.BlockTypes.Divider,
+  Concept.Pages.BlockTypes.Code,
+  Concept.Pages.BlockTypes.Callout,
+  Concept.Pages.BlockTypes.Toggle,
+  Concept.Pages.BlockTypes.Image,
+  Concept.Pages.BlockTypes.Bookmark,
+  Concept.Pages.BlockTypes.Equation,
+  Concept.Pages.BlockTypes.Table,
+  Concept.Pages.BlockTypes.TableCell,
+  Concept.Pages.BlockTypes.Columns,
+  Concept.Pages.BlockTypes.Column
+]
+
 import_config "#{config_env()}.exs"

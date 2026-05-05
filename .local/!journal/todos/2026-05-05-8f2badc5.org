@@ -1,0 +1,11 @@
+#+TITLE: Session 14d582ec4a1df8be Todos
+#+DATE: 2026-05-05
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Verify
+
+** DONE Compile and validate
+:PROPERTIES:
+:TASK_ID: verify
+:STATUS: completed
+:END:

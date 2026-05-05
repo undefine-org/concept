@@ -15,7 +15,10 @@ defmodule ConceptWeb.HomeLive do
     <div class="min-h-screen bg-white flex flex-col items-center justify-center gap-8 px-6">
       <div class="text-center space-y-4 max-w-xl">
         <div class="text-6xl">📝</div>
-        <h1 class="text-5xl font-bold tracking-tight" style="font-family: Inter, system-ui, sans-serif;">
+        <h1
+          class="text-5xl font-bold tracking-tight"
+          style="font-family: Inter, system-ui, sans-serif;"
+        >
           Concept
         </h1>
         <p class="text-lg text-notion-text-light">
@@ -27,17 +30,32 @@ defmodule ConceptWeb.HomeLive do
       </div>
       <div class="flex gap-3 pt-2">
         <%= if @current_user do %>
-          <.link navigate={~p"/w"} class="px-4 py-2 bg-notion-text text-white rounded-md font-medium" data-testid="enter-workspace">
+          <.link
+            navigate={~p"/w"}
+            class="px-4 py-2 bg-notion-text text-white rounded-md font-medium"
+            data-testid="enter-workspace"
+          >
             Enter your workspace →
           </.link>
-          <.link href={~p"/sign-out"} method="delete" class="px-4 py-2 border border-notion-divider rounded-md font-medium">
+          <.link
+            href={~p"/sign-out"}
+            method="delete"
+            class="px-4 py-2 border border-notion-divider rounded-md font-medium"
+          >
             Sign out
           </.link>
         <% else %>
-          <.link navigate={~p"/register"} class="px-4 py-2 bg-notion-text text-white rounded-md font-medium" data-testid="get-started">
+          <.link
+            navigate={~p"/register"}
+            class="px-4 py-2 bg-notion-text text-white rounded-md font-medium"
+            data-testid="get-started"
+          >
             Get started
           </.link>
-          <.link navigate={~p"/sign-in"} class="px-4 py-2 border border-notion-divider rounded-md font-medium">
+          <.link
+            navigate={~p"/sign-in"}
+            class="px-4 py-2 border border-notion-divider rounded-md font-medium"
+          >
             Sign in
           </.link>
         <% end %>

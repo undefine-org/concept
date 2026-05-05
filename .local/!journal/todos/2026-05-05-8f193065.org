@@ -1,0 +1,53 @@
+#+TITLE: Session 14d582eab9ddf8ba Todos
+#+DATE: 2026-05-05
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Investigate
+
+** DONE Read existing stubs and APIs
+:PROPERTIES:
+:TASK_ID: read-stubs
+:STATUS: completed
+:END:
+
+Read workspace_live.ex stub, router.ex routes, Accounts Workspace APIs, Pages list_tree/get_page APIs, Page resource pub_sub config, core_components.ex exports.
+
+* Implement
+
+** DONE Create Sidebar function component
+:PROPERTIES:
+:TASK_ID: sidebar
+:STATUS: completed
+:DEPENDS: read-stubs
+:END:
+
+Create lib/concept_web/components/sidebar.ex with workspace header, search input (inert), + New page button, live_component for PageTree, user footer with sign-out.
+
+** DONE Create PageTree live_component
+:PROPERTIES:
+:TASK_ID: page-tree
+:STATUS: completed
+:DEPENDS: read-stubs
+:END:
+
+Create lib/concept_web/components/page_tree.ex with nested ul rendering, expanded MapSet, disclosure triangles, emoji prefix, hover affordances (+ and archive), navigation clicks.
+
+** DONE Replace WorkspaceLive stub
+:PROPERTIES:
+:TASK_ID: workspace-live
+:STATUS: completed
+:DEPENDS: read-stubs
+:END:
+
+Replace lib/concept_web/live/workspace_live.ex with full LV implementing index/workspace/page actions, pubsub subscription, handle_info for ash_pubsub, handle_event for new_page/new_child_page/rename_page/archive_page, render with two-column layout.
+
+* Verify
+
+** DONE Compile and route checks
+:PROPERTIES:
+:TASK_ID: verify-compile
+:STATUS: completed
+:DEPENDS: sidebar page-tree workspace-live
+:END:
+
+Run mix compile, mix phx.routes. Verify routes still present. Fix any compile errors.

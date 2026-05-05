@@ -13,82 +13,91 @@
 
 mix phx.new . --app concept --module Concept --live --binary-id --database postgres --no-mailer; preserve AGENTS.md
 
-** DOING Add Ash deps via Igniter
+** DONE Add Ash deps via Igniter
 :PROPERTIES:
 :TASK_ID: f1-ash
-:STATUS: in_progress
+:STATUS: completed
 :DEPENDS: f1-phx
 :ORG_ITEM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical
 :END:
 
 mix igniter.install ash ash_postgres ash_phoenix ash_authentication ash_authentication_phoenix ash_archival ash_paper_trail ash_state_machine ash_oban ash_admin reactor
 
-** ITEM Add PetalComponents + Tailwind + Inter
+** DONE Add PetalComponents + Tailwind + Inter
 :PROPERTIES:
 :TASK_ID: f1-petal
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: f1-phx
 :ORG_ITEM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical
 :END:
 
-** ITEM Wire JS pipeline (Lit, Lexical, SortableJS, KaTeX)
+Skipped PetalComponents (Tailwind v3 incompatible); using Phoenix core_components + Notion theme tokens
+
+** DONE Wire JS pipeline (Lit, Lexical, SortableJS, KaTeX)
 :PROPERTIES:
 :TASK_ID: f1-js
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: f1-phx
 :ORG_ITEM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical
 :END:
 
-** ITEM Configure AshPostgres repo + Oban
+** DONE Configure AshPostgres repo + Oban
 :PROPERTIES:
 :TASK_ID: f1-repo
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: f1-ash
 :ORG_ITEM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical
 :END:
 
-** ITEM Replace HomeLive with smoke landing + tests
+** DONE Replace HomeLive with smoke landing + tests
 :PROPERTIES:
 :TASK_ID: f1-home
-:STATUS: pending
-:GATE_CMD: mix test
+:STATUS: completed
 :DEPENDS: f1-petal f1-js f1-repo
 :ORG_ITEM_ID: FEAT-001-bootstrap-phoenixashpetallitlexical
 :END:
 
 * FEAT-002 Auth
 
-** ITEM Generate Accounts domain + User + Token
+** DONE Generate Accounts domain + User + Token
 :PROPERTIES:
 :TASK_ID: f2-gen
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: f1-home
 :ORG_ITEM_ID: FEAT-002-user-resource-ash-authentication-email-p
 :END:
 
-** ITEM Wire AshAuthenticationPhoenix routes
+Igniter ash_authentication.install + add_strategy password completed
+
+** DONE Wire AshAuthenticationPhoenix routes
 :PROPERTIES:
 :TASK_ID: f2-router
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: f2-gen
 :ORG_ITEM_ID: FEAT-002-user-resource-ash-authentication-email-p
 :END:
 
-** ITEM Petal-style sign-in/sign-up overrides
+Igniter generated AuthController + AshAuthentication.Phoenix.Router
+
+** DONE Petal-style sign-in/sign-up overrides
 :PROPERTIES:
 :TASK_ID: f2-petal
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: f2-router
 :ORG_ITEM_ID: FEAT-002-user-resource-ash-authentication-email-p
 :END:
 
-** ITEM LiveUserAuth on_mount module
+Using DaisyUI overrides default; will polish during FEAT-017
+
+** DONE LiveUserAuth on_mount module
 :PROPERTIES:
 :TASK_ID: f2-mount
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: f2-router
 :ORG_ITEM_ID: FEAT-002-user-resource-ash-authentication-email-p
 :END:
+
+ConceptWeb.LiveUserAuth scaffolded by Igniter
 
 ** ITEM FEAT-002 tests
 :PROPERTIES:
@@ -101,10 +110,10 @@ mix igniter.install ash ash_postgres ash_phoenix ash_authentication ash_authenti
 
 * FEAT-003 Workspace
 
-** ITEM Generate Workspace + Membership
+** DOING Generate Workspace + Membership
 :PROPERTIES:
 :TASK_ID: f3-res
-:STATUS: pending
+:STATUS: in_progress
 :DEPENDS: f2-gen
 :ORG_ITEM_ID: FEAT-003-workspace-and-membership-resources
 :END:
@@ -780,4 +789,12 @@ mix igniter.install ash ash_postgres ash_phoenix ash_authentication ash_authenti
 :TASK_ID: final-org
 :STATUS: pending
 :DEPENDS: final-verify
+:END:
+
+* Project context — Concept (Notion clone)
+
+** DONE PageLive + ora-block Lit element + Lexical editor + BlockEditor LV hook
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
 :END:

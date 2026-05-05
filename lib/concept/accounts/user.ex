@@ -169,6 +169,9 @@ defmodule Concept.Accounts.User do
       # validates that the password matches the confirmation
       validate AshAuthentication.Strategy.Password.PasswordConfirmationValidation
 
+      # Auto-create personal workspace + owner membership
+      change Concept.Accounts.Changes.RunOnboarding
+
       metadata :token, :string do
         description "A JWT that can be used to authenticate the user."
         allow_nil? false

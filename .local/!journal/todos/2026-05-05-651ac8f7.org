@@ -1,0 +1,13 @@
+#+TITLE: Session 14d582eb935df8bc Todos
+#+DATE: 2026-05-05
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Verify
+
+** DONE Compile and integration test
+:PROPERTIES:
+:TASK_ID: verify
+:STATUS: completed
+:END:
+
+mix compile, esbuild test, manual browser verification.
