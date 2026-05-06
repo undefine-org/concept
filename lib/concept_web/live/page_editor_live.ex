@@ -12,7 +12,9 @@ defmodule ConceptWeb.PageEditorLive do
     page_id = session["page_id"]
     user_id = session["user_id"]
 
-    user = socket.assigns[:current_user] || %{id: user_id, email: session["user_email"] || "unknown"}
+    user =
+      socket.assigns[:current_user] || %{id: user_id, email: session["user_email"] || "unknown"}
+
     ws = %{id: ws_id}
 
     Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws_id}:page:#{page_id}:blocks")
@@ -69,15 +71,30 @@ defmodule ConceptWeb.PageEditorLive do
     user = socket.assigns.current_user
     ws_id = socket.assigns.workspace.id
 
-    case Pages.acquire_lock(id, %{user_id: user.id, ttl_seconds: 30}, actor: user, tenant: ws_id) do
+    block = Enum.find(socket.assigns.blocks, &(&1.id == id))
+
+    self_held? =
+      Map.get(socket.assigns.held_locks, id) ||
+        (block && block.lock_state == :locked && block.lock_holder_id == user.id)
+
+    lock_result =
+      cond do
+        self_held? ->
+          Pages.refresh_lock(id, %{user_id: user.id, ttl_seconds: 30}, actor: user, tenant: ws_id)
+
+        block && block.lock_state == :locked ->
+          {:error, :lock_held_by_other}
+
+        true ->
+          Pages.acquire_lock(id, %{user_id: user.id, ttl_seconds: 30}, actor: user, tenant: ws_id)
+      end
+
+    case lock_result do
       {:ok, _} ->
         {:noreply,
          socket
          |> assign(:held_locks, Map.put(socket.assigns.held_locks, id, true))
          |> push_event("lock_granted", %{block_id: id})}
-
-      {:error, %{constraint: "lock_held_by_other"}} ->
-        {:noreply, push_event(socket, "lock_denied", %{block_id: id})}
 
       _ ->
         {:noreply, push_event(socket, "lock_denied", %{block_id: id})}
@@ -133,7 +150,10 @@ defmodule ConceptWeb.PageEditorLive do
 
     case Pages.create_block(page_id, :paragraph, ws_id, nil, actor: user, tenant: ws_id) do
       {:ok, block} ->
-        {:noreply, assign(socket, :blocks, [block])}
+        {:noreply,
+         socket
+         |> assign(:blocks, [block])
+         |> push_event("focus_block_caret", %{block_id: block.id, position: "start"})}
 
       {:error, error} ->
         {:noreply, put_flash(socket, :error, "Could not create block: #{inspect(error)}")}
@@ -161,10 +181,14 @@ defmodule ConceptWeb.PageEditorLive do
             Concept.Pages.FractionalIndex.after_(source.position)
           end
 
-        case Pages.create_block(page_id, :paragraph, ws_id, nil,
-               %{position: position}, actor: user, tenant: ws_id) do
+        case Pages.create_block(page_id, :paragraph, ws_id, nil, %{position: position},
+               actor: user,
+               tenant: ws_id
+             ) do
           {:ok, new_block} ->
-            push_event(socket, "focus_block_caret", %{
+            socket
+            |> assign(:blocks, List.insert_at(blocks, source_idx + 1, new_block))
+            |> push_event("focus_block_caret", %{
               block_id: new_block.id,
               position: "start"
             })
@@ -287,15 +311,17 @@ defmodule ConceptWeb.PageEditorLive do
         socket
       ) do
     block = notification.data
-    current_user_id = socket.assigns.current_user.id
 
-    # Skip self-broadcast (we already added the block in add_first_block etc.)
-    # Also skip if block already exists in the list
-    if notification.actor_id == current_user_id or
-         Enum.any?(socket.assigns.blocks, &(&1.id == block.id)) do
+    # Dedup: handle_event paths (add_first_block, insert_paragraph_below)
+    # already inserted the block locally; broadcast is the path for *other*
+    # users' inserts.
+    if Enum.any?(socket.assigns.blocks, &(&1.id == block.id)) do
       {:noreply, socket}
     else
-      blocks = socket.assigns.blocks ++ [block]
+      blocks =
+        (socket.assigns.blocks ++ [block])
+        |> Enum.sort_by(& &1.position)
+
       {:noreply, assign(socket, :blocks, blocks)}
     end
   end

@@ -21,6 +21,7 @@ defmodule ConceptWeb.BlockRender do
           <ora-block-handle class="ora-block-handle group-hover:opacity-100" block-id={@block.id} />
           <ora-block
             phx-hook="BlockEditor"
+            phx-update="ignore"
             id={"b-#{@block.id}"}
             block-id={@block.id}
             block-type={@type}
@@ -38,7 +39,7 @@ defmodule ConceptWeb.BlockRender do
     else
       ~H"""
       <div id={"block-" <> @block.id} class="block-anchor scroll-mt-20">
-      {static_block(@block)}
+        {static_block(@block)}
       </div>
       """
     end

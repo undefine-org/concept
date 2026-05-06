@@ -147,9 +147,9 @@ defmodule Concept.Pages.Block do
     module ConceptWeb.Endpoint
     prefix "workspace"
 
-    publish_all :create, ["*", :workspace_id, "page", :page_id, "blocks"], event: "block_created"
-    publish_all :update, ["*", :workspace_id, "page", :page_id, "blocks"], event: "block_updated"
-    publish :archive, ["*", :workspace_id, "page", :page_id, "blocks"], event: "block_archived"
+    publish_all :create, [:workspace_id, "page", :page_id, "blocks"], event: "block_created"
+    publish_all :update, [:workspace_id, "page", :page_id, "blocks"], event: "block_updated"
+    publish :archive, [:workspace_id, "page", :page_id, "blocks"], event: "block_archived"
   end
 
   multitenancy do
