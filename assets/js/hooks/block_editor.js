@@ -2,6 +2,36 @@
  * Phoenix LiveView hook attached to <ora-block>.
  * Bridges custom DOM events to server pushes and vice versa.
  */
+
+// Module-level queue of focus_block_caret payloads received before the
+// target BlockEditor hook has mounted. The server pushes focus_block_caret
+// immediately after inserting a new block; the new block's hook may not
+// be attached yet, in which case any already-mounted hook receives the
+// event and stashes it here. The new hook consumes its entry on mount.
+const _pendingFocus = new Map(); // block_id -> { position, ts }
+const PENDING_FOCUS_TTL_MS = 5000;
+
+function _applyCaret(el, position) {
+  try {
+    if (position === "start") {
+      el.focusStart?.();
+    } else if (position === "end") {
+      el.focusEnd?.();
+    }
+  } catch (err) {
+    console.warn("BlockEditor: focus_block_caret failed", err);
+  }
+}
+
+function _consumePendingFocus(blockId, el) {
+  if (!blockId) return;
+  const pending = _pendingFocus.get(blockId);
+  if (!pending) return;
+  _pendingFocus.delete(blockId);
+  if (Date.now() - pending.ts > PENDING_FOCUS_TTL_MS) return;
+  _applyCaret(el, pending.position);
+}
+
 export const BlockEditor = {
   mounted() {
     this.el = this.el;
@@ -49,17 +79,17 @@ export const BlockEditor = {
     // Handle server-pushed focus_block_caret event
     this.handleEvent("focus_block_caret", ({ block_id, position }) => {
       if (block_id === this.el.getAttribute("block-id")) {
-        try {
-          if (position === "start") {
-            this.el.focusStart();
-          } else if (position === "end") {
-            this.el.focusEnd();
-          }
-        } catch (err) {
-          console.warn("BlockEditor: focus_block_caret failed", err);
-        }
+        _applyCaret(this.el, position);
+      } else {
+        // Target block's hook isn't mounted yet — stash for its mount.
+        _pendingFocus.set(block_id, { position, ts: Date.now() });
       }
     });
+
+    // Consume any pending focus payload that arrived before this hook
+    // attached (e.g. server pushed focus_block_caret immediately after
+    // inserting the block this hook is now bound to).
+    _consumePendingFocus(this.el.getAttribute("block-id"), this.el);
 
     // Server-pushed events
     this.handleEvent("lock_granted", ({ block_id }) => {

@@ -1,5 +1,5 @@
 import { LitElement, html } from "lit";
-import { $getSelection, $isRangeSelection } from "lexical";
+import { $getSelection, $isRangeSelection, KEY_ENTER_COMMAND, COMMAND_PRIORITY_CRITICAL } from "lexical";
 import { createBlockEditor } from "../lexical/registry.js";
 import { parseInitial, serialize } from "../lexical/state.js";
 import { moveCaretToStart, moveCaretToEnd } from "../lexical/commands.js";
@@ -43,6 +43,24 @@ export class OraBlock extends LitElement {
       this._editor.setEditorState(state);
     }
 
+    this._editor.registerCommand(
+      KEY_ENTER_COMMAND,
+      (event) => {
+        if (this._isAtEnd()) {
+          event?.preventDefault();
+          this.dispatchEvent(
+            new CustomEvent("ora-block-enter-at-end", {
+              bubbles: true,
+              composed: true,
+            }),
+          );
+          return true;
+        }
+        return false;
+      },
+      COMMAND_PRIORITY_CRITICAL,
+    );
+
     this._editor.registerUpdateListener(({ editorState, prevEditorState, tags }) => {
       if (this._applyingRemote) return;
       if (editorState === prevEditorState) return;
@@ -62,10 +80,6 @@ export class OraBlock extends LitElement {
       if (e.key === "ArrowDown" && this._isAtEnd()) {
         e.preventDefault();
         this.dispatchEvent(new CustomEvent("ora-block-arrow-down", { bubbles: true }));
-      }
-      if (e.key === "Enter" && !e.shiftKey && this._isAtEnd()) {
-        e.preventDefault();
-        this.dispatchEvent(new CustomEvent("ora-block-enter-at-end", { bubbles: true }));
       }
       if (e.key === "Backspace" && this._isAtStart() && this._isEmpty()) {
         e.preventDefault();

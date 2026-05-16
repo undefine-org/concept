@@ -1,0 +1,56 @@
+#+TITLE: Enter at end of block double-splits + focus does not transfer to new block
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-035-enter-at-end-of-block-double-splits-focu
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W2.7.6 Slice A (post BUG-032 fix) found: pressing Enter at end of a block does the right server thing (creates new sibling) but ALSO Lexical's native ~KEY_ENTER_COMMAND~ runs, splitting the SOURCE paragraph in place. Result: source block's editor now contains ~<p>beta</p><p><br></p>~ AND a new ora-block exists below. Plus focus doesn't transfer to the new block \u2014 activeElement stays in source.
+
+Two issues bundled:
+1. /Double split/: keydown handler's ~preventDefault~ runs in bubble phase, after Lexical's beforeinput-driven split has already committed. Need to either:
+   - Capture the key earlier (capture phase listener), OR
+   - Register ~KEY_ENTER_COMMAND~ with Lexical at COMMAND_PRIORITY_CRITICAL and conditionally return ~true~ (handled) when ~_isAtEnd()~.
+2. /Focus race/: server's ~push_event("focus_block_caret", ...)~ races the new block's BlockEditor hook mount. The new block may not yet have its hook attached when the event arrives. Options:
+   - Server delays push by one tick (no).
+   - Client queues unhandled focus_block_caret per block-id with a TTL; when a BlockEditor hook mounts, it consumes any pending focus for its id.
+   - LiveView's ~phx-mounted~ JS hook fires on mount; have new blocks check a global pending-focus map.
+
+* Scope
+- IN: register KEY_ENTER_COMMAND with editor at COMMAND_PRIORITY_CRITICAL in =assets/js/components/ora-block.js= (or wherever editor init lives). When ~_isAtEnd()~ returns true, dispatch `ora-block-enter-at-end` CustomEvent AND return `true` to halt Lexical's default.
+- IN: pending-focus queue in =assets/js/hooks/block_editor.js= \u2014 maintain a module-level Map of pending `focus_block_caret` payloads keyed by block-id; consume on mount.
+- IN: integration test in =assets/js/components/__tests__/ora-block-integration.test.js= asserting:
+  - Enter at end does NOT split the source editor (text content unchanged).
+  - `ora-block-enter-at-end` CustomEvent fires.
+  - When a new BlockEditor mounts with a pending focus, caret transfers.
+- OUT: rewriting the entire keydown flow.
+
+* TDD evidence required (3 separate Phase A snippets)
+
+* Implementation
+
+** TODO KEY_ENTER_COMMAND at CRITICAL priority
+:PROPERTIES:
+:CUSTOM_ID: BUG-035-enter-at-end-of-block-double-splits-focu::enter-command
+:END:
+
+** TODO Pending-focus queue
+:PROPERTIES:
+:CUSTOM_ID: BUG-035-enter-at-end-of-block-double-splits-focu::focus-queue
+:END:
+
+** TODO Integration tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-035-enter-at-end-of-block-double-splits-focu::tests
+:DEPENDS: BUG-035-enter-at-end-of-block-double-splits-focu::enter-command, BUG-035-enter-at-end-of-block-double-splits-focu::focus-queue
+:END:
+
+* Acceptance
+- Slice A behavior 5 passes: source intact after Enter, new block created, focus inside new block.
+- One commit: `fix(editor): KEY_ENTER_COMMAND priority + pending-focus queue (BUG-035)`.

@@ -334,4 +334,52 @@ describe("ora-block arrow-up integration", () => {
     // ── Assert ───────────────────────────────────────────────────────
     expect(enterFired).not.toHaveBeenCalled();
   });
+
+  it("Enter at end does NOT split source editor + fires ora-block-enter-at-end exactly once", async () => {
+    // ── Arrange ──────────────────────────────────────────────────────
+    const el = createBlock("split-test", "beta");
+    document.body.append(el);
+    await el.updateComplete;
+
+    if (!el._editor) {
+      const root = el.querySelector("[data-editor]");
+      if (root) {
+        el._editor = createBlockEditor(root, true);
+        const state = parseInitial(el._editor, el.getAttribute("initial-content"));
+        if (state) el._editor.setEditorState(state);
+      }
+    }
+
+    expect(el._editor).toBeTruthy();
+
+    // Place caret at end of "beta" (offset 4).
+    el._editor.update(() => {
+      const textNode = $getRoot().getFirstChild().getFirstChild();
+      const selection = $createRangeSelection();
+      selection.anchor.set(textNode.getKey(), textNode.getTextContentSize(), "text");
+      selection.focus.set(textNode.getKey(), textNode.getTextContentSize(), "text");
+      $setSelection(selection);
+    });
+    await flush();
+
+    const enterFired = vi.fn();
+    el.addEventListener("ora-block-enter-at-end", enterFired);
+
+    // ── Act ──────────────────────────────────────────────────────────
+    const editorRoot = el.querySelector("[data-editor]");
+    editorRoot.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+    await flush();
+
+    // ── Assert ───────────────────────────────────────────────────────
+    expect(enterFired).toHaveBeenCalledOnce();
+
+    // Editor text content must remain exactly "beta" — Lexical must NOT
+    // have appended a new empty paragraph.
+    const textAfter = el._editor.getEditorState().read(() => {
+      return $getRoot().getTextContent();
+    });
+    expect(textAfter).toBe("beta");
+  });
 });
