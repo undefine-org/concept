@@ -1,5 +1,5 @@
 #+TITLE: Slash menu never mounted; typing slash does nothing
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-017-slash-menu-never-mounted-typing-slash-do
@@ -121,3 +121,5 @@ The Lit element's existing API exposes ~items~ attribute (JSON) for dynamic bloc
 
 - Typing "/" in any block opens the menu; selecting an item creates a block of that type below the source and focuses it.
 - Tests green.
+
+NOTE [2026-05-16]: Commit 25f4b65. 20 ExUnit + 22 vitest green. BlockTypes.resolve/1 added. insert_paragraph_below kept as alias for backward compat.

@@ -114,7 +114,32 @@ These are inviolable for every implementer, every reviewer, and the main session
 - W4 and W5 /merged into a single parallel batch/ (BUG-025 quick_task + BUG-027 quick_task + FEAT-050 task) — all disjoint files.
 - Final reviewer covers cleanup sweep + 20-step E2E in one pass.
 
-Net: 5 work waves + 4 review waves (was 6+5).
+Net: 5 work waves + 4 review waves + a browser-verification wave after every reviewer (=W*.6=).
+
+** TDD evidence contract (every implementer task)
+Each implementer subagent must include a *red→green* paragraph in its final report:
+- /Phase A/: write the failing tests, run them, paste the failing output snippet (the exact assertion mismatch).
+- /Phase B/: implement, re-run, paste the passing output snippet.
+Single commit is allowed; the *report* must show both phases. Reviewer waves verify the report contains both phases; missing evidence → ~gate_failed~ on the item.
+
+** Browser verification wave (W*.6)
+After every code-level reviewer wave (W*.5) and before the next implementer wave, a ~task~ subagent (has full tool access incl. ~puppeteer~) drives the dev server through every user-visible behavior shipped in the preceding wave. Reviewer agents (read-only) cannot drive a browser; this is why W*.6 uses ~task~. Dispatch runs *in parallel* with W*.5 to compress the critical path. Next wave only dispatches when BOTH W*.5 (code) and W*.6 (browser) are green.
+
+** Specialist reviewer pattern (W*.5)
+Each W*.5 dispatch is a /parallel batch of focused ~reviewer~ agents/, not one monolith. Each specialist owns a thin slice and reports independently. The batch closes when all specialists return; findings aggregate.
+
+| Specialist | Owns |
+|---|---|
+| /Contract reviewer/ | =SERVER_CONTRACT.md= ↔ hook dispatches ↔ server ~handle_event~ alignment. Orphan-event + orphan-hook scans. CustomEvent producer/consumer pairing. |
+| /Test depth reviewer/ | Every claimed test scenario maps to a real assertion. No skipped / pending tests. TDD red→green evidence present in implementer reports. Test files committed alongside impl. |
+| /Convention reviewer/ | AGENTS.md adherence: Phoenix 1.8 layout contract, HEEx syntax, Ash ~actor + tenant~ pattern, ~current_scope~ threading, LiveView stream idioms, hero-icon usage, ~<.input>~ component, no inline scripts. |
+| /Scope-drift reviewer/ | Each commit's diff stays within the item's declared ~filesDeps~. No accidental Arcana touches. No drive-by edits. Commit attribution accurate (file delta matches the message). |
+| /Build & test runner/ | ~mix compile --warnings-as-errors~ + ~mix test~ + ~cd assets && npx vitest run~ + ~mix precommit~. No new warnings. Test count matches claims. |
+| /Architecture reviewer/ | Implementation matches the architecture sketch in PLAN body. No surprising new modules. No future-Arcana coupling. |
+
+Dispatch shape: =proxy_task { agent: "reviewer", tasks: […6 specialist tasks…] }=. Each task has a focused ~assignment~. Aggregated outcome → ~proceed~ / ~fix…~.
+
+Browser wave (W*.6) stays a single ~task~ agent (only one needs puppeteer access; doesn't parallelise well across one user journey).
 
 ** Agent routing per wave
 - W1: 2 ~task~ (BUG-014, BUG-015) + 1 ~quick_task~ (BUG-024). One dispatch each batch.

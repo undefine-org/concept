@@ -1,5 +1,5 @@
 #+TITLE: BlockList SortableJS hook unattached; drag-reorder dead
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-018-blocklist-sortablejs-hook-unattached-dra
@@ -127,3 +127,5 @@ The handle's ~data-block-id~ is correctly emitted from =block_render.ex=. Drop i
 - Dragging a block handle reorders the list and persists.
 - Refreshing the page shows the new order.
 - Tests green.
+
+NOTE [2026-05-16]: Commit fad859d. 16 ExUnit + 7 vitest green. Pages.reorder_block/3 + Block.update action already in place — no domain changes needed.

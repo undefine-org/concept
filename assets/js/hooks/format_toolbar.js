@@ -26,7 +26,10 @@ export const FormatToolbar = {
     this._onToggleFormat = this._handleToggleFormat.bind(this);
     this._onRequestLink = this._handleRequestLink.bind(this);
     this._onApplyLink = this._handleApplyLink.bind(this);
-    this._onCancelLink = this._handleCancelLink.bind(this);
+
+    // cancel-link is not dispatched by any component;
+    // <ora-link-editor> handles Escape internally.
+    // Listener removed in BUG-028.
 
     // Locate child elements
     this._toolbar = this.host.querySelector("ora-format-toolbar");
@@ -39,7 +42,7 @@ export const FormatToolbar = {
     this.host.addEventListener("toggle-format", this._onToggleFormat);
     this.host.addEventListener("request-link", this._onRequestLink);
     this.host.addEventListener("apply-link", this._onApplyLink);
-    this.host.addEventListener("cancel-link", this._onCancelLink);
+    // cancel-link addEventListener removed in BUG-028
 
     // Initial check
     this._handleSelectionChange();
@@ -201,21 +204,16 @@ export const FormatToolbar = {
     }
   },
 
-  /**
-   * Hide the link editor overlay without applying.
-   */
-  _handleCancelLink() {
-    if (this._linkEditor) {
-      this._linkEditor.removeAttribute("visible");
-    }
-  },
+  // _handleCancelLink removed in BUG-028 — <ora-link-editor> handles
+  // Escape internally via its visible reactive prop; no external listener
+  // is needed.
 
   destroyed() {
     document.removeEventListener("selectionchange", this._onSelectionChange);
     this.host.removeEventListener("toggle-format", this._onToggleFormat);
     this.host.removeEventListener("request-link", this._onRequestLink);
     this.host.removeEventListener("apply-link", this._onApplyLink);
-    this.host.removeEventListener("cancel-link", this._onCancelLink);
+    // cancel-link cleanup removed in BUG-028
     this._activeEditor = null;
   },
 };

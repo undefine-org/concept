@@ -5,11 +5,14 @@
  * opens the <ora-slash-menu> with filter, and dispatches
  * `insert_block_below` on selection.
  */
+import { $getRoot, $createTextNode } from "lexical";
+
 export const SlashMenu = {
   mounted() {
     this.host = this.el;
     this._open = false;
     this._triggerRange = null;
+    this._triggerPreLength = 0;
     this._activeBlockId = null;
     this._activeEditor = null;
 
@@ -91,6 +94,14 @@ export const SlashMenu = {
     this._activeBlockId = oraBlock.getAttribute("block-id");
     if (!this._activeEditor) return;
 
+    // Capture the editor text length before "/" was inserted.
+    // At this point the editor already contains "/" (input event fires after insertion),
+    // so we subtract 1 to get the pre-slash length.
+    this._triggerPreLength =
+      this._activeEditor
+        .getEditorState()
+        .read(() => $getRoot().getTextContent().length) - 1;
+
     // Show and position the slash menu
     this._open = true;
     const menu = this.host.querySelector("ora-slash-menu");
@@ -165,7 +176,16 @@ export const SlashMenu = {
 
   /**
    * Handle item selection from the slash menu.
-   * Deletes the trigger "/" from the editor, then pushes insert_block_below.
+   * Deletes the trigger "/" + filter chars from the editor via simpler
+   * root-manipulation approach (rather than Lexical's selection-range API).
+   *
+   * Why the simpler approach:
+   * The Lexical selection API ($getSelection().removeText()) requires
+   * reconstructing a multi-character DOM-to-Lexical range mapping, which
+   * is fragile across Lexical versions. The root-manipulation path is
+   * deterministic: we know the pre-slash text length, so we clear the
+   * editor and re-insert only the pre-slash portion.
+   *
    * @param {CustomEvent} event  detail: {type: string}
    */
   _handleSelectItem(event) {
@@ -175,23 +195,16 @@ export const SlashMenu = {
     const type = event.detail?.type;
     if (!type) return;
 
-    // Restore trigger range and delete "/" from Lexical editor
-    if (this._triggerRange && this._activeEditor) {
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(this._triggerRange);
-
-      // Use Lexical to remove the selected text ("/")
-      editor.update(() => {
-        // Lexical's $getSelection is available inside editor.update()
-        // We need to import it dynamically since it's not in our scope
-        // eslint-disable-next-line no-undef
-        const lexSel = typeof $getSelection === "function" && $getSelection();
-        if (lexSel && typeof lexSel.removeText === "function") {
-          lexSel.removeText();
-        }
-      });
-    }
+    // Delete the trigger "/" + filter chars from Lexical editor
+    editor.update(() => {
+      const root = $getRoot();
+      const text = root.getTextContent();
+      const startIdx = this._triggerPreLength;
+      // Keep only pre-slash content; discard "/" + any filter chars
+      // that were typed while the menu was open
+      root.clear();
+      root.append($createTextNode(text.slice(0, startIdx)));
+    });
 
     // Push insert event to server
     this.pushEvent("insert_block_below", {

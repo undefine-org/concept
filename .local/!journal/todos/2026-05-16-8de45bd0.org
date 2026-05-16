@@ -10,16 +10,32 @@
 :STATUS: gate_failed
 :END:
 
-** ITEM FormatToolbar hook + Lexical wrappers + render host
+* PLAN-005 W1+W2 browser verification (puppeteer)
+
+** DOING Browser verification of all W1+W2 user-visible behaviors
 :PROPERTIES:
 :TASK_ID: task-2
-:STATUS: pending
-:DEPENDS: task-1
+:STATUS: in_progress
 :END:
 
-** ITEM SlashMenu hook + insert_block_below with type + render host
+* PLAN-005 W2 follow-up (BUG-028)
+
+** DOING Delete slash trigger from Lexical + remove dead cancel-link listener
 :PROPERTIES:
 :TASK_ID: task-3
-:STATUS: pending
-:DEPENDS: task-2
+:STATUS: in_progress
+:END:
+
+* PLAN-005 W2.5 supplemental specialists (parallel)
+
+** DONE SERVER_CONTRACT.md ↔ hook ↔ server handler alignment + orphan event/hook scans
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: completed
+:END:
+
+** DOING Test coverage maps to claimed scenarios; no skipped/pending; TDD evidence retro-check
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: in_progress
 :END:

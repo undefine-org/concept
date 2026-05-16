@@ -1,0 +1,30 @@
+#+TITLE: Session 14e3d92dd933d2eb Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Verify — Run all tests + compile
+
+** DOING Run full vitest suite + mix compile
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: in_progress
+:GATE_CMD: cd assets && npx vitest run && cd .. && mix compile --warnings-as-errors
+:END:
+
+Commands:
+1. cd assets && npx vitest run → must be green
+2. mix compile --warnings-as-errors → clean
+If either fails, fix and re-run.
+
+Vitest: 34/34 green. mix compile fails on pre-existing profiles.ex error (unrelated to JS changes, present on clean git state).
+
+* Commit and report
+
+** DOING Commit and submit result with evidence
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: in_progress
+:END:
+
+git add -A && git commit -m "fix(editor): delete slash trigger from Lexical + drop dead cancel-link listener (BUG-028)"
+Collect: commit SHA, list of changed files, Phase A fail output, Phase B pass output

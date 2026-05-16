@@ -1,5 +1,5 @@
 #+TITLE: Format toolbar dispatches orphan events; link editor unreachable
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-016-format-toolbar-dispatches-orphan-events
@@ -141,3 +141,5 @@ export function setLink(editor, url) {
 - Clicking link opens overlay; entering URL + Enter wraps selection in a link.
 - After save+reload, formatting persists.
 - All tests green.
+
+NOTE [2026-05-16]: Commit 2ce65b9. 18 ExUnit + 8 vitest green. FormatToolbar hook routes toggle-format/request-link/apply-link/cancel-link → Lexical commands. SSR bold→<strong> verified.

@@ -183,16 +183,8 @@ describe("FormatToolbar hook", () => {
     document.body.removeChild(block);
   });
 
-  // ── Test 4: cancel-link hides the link editor ───────────────────
-
-  it("cancel-link hides link editor", () => {
-    env.linkEditor.setAttribute("visible", "");
-    expect(env.linkEditor.hasAttribute("visible")).toBe(true);
-
-    env.host.dispatchEvent(new CustomEvent("cancel-link"));
-
-    expect(env.linkEditor.hasAttribute("visible")).toBe(false);
-  });
+  // cancel-link test removed in BUG-028 — <ora-link-editor> handles
+  // Escape internally; no external listener is needed.
 
   // ── Test 5: collapsed / empty selection hides toolbar ───────────
 
@@ -243,9 +235,6 @@ describe("FormatToolbar hook", () => {
       "apply-link",
       expect.any(Function),
     );
-    expect(hostSpyRemove).toHaveBeenCalledWith(
-      "cancel-link",
-      expect.any(Function),
-    );
+    // cancel-link removed in BUG-028 — no longer registered
   });
 });

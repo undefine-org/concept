@@ -4,6 +4,32 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SlashMenu } from "../slash_menu.js";
 
+// Track Lexical root state across tests for the module-level mock
+const mockRootState = { text: "" };
+
+vi.mock("lexical", () => {
+  const mockRoot = {
+    getTextContent: () => mockRootState.text,
+    clear: () => {
+      mockRootState.text = "";
+    },
+    append: vi.fn((node) => {
+      mockRootState.text = node.__text ?? node.getTextContent?.() ?? "";
+    }),
+    select: vi.fn(),
+    selectStart: vi.fn(),
+    getLastDescendant: vi.fn(),
+  };
+  return {
+    $getRoot: vi.fn(() => mockRoot),
+    $createTextNode: vi.fn((text) => ({
+      getTextContent: () => text,
+      __text: text,
+    })),
+    $getSelection: vi.fn(() => null),
+  };
+});
+
 // ── helpers ────────────────────────────────────────────────────────────
 
 /**
@@ -15,7 +41,12 @@ function createOraBlock(id) {
   const el = document.createElement("ora-block");
   el.setAttribute("block-id", id);
   el._editor = {
-    update: vi.fn((cb) => cb()),
+    getEditorState: () => ({
+      read: vi.fn((cb) => cb()),
+    }),
+    update: vi.fn((cb) => {
+      cb();
+    }),
     focus: vi.fn(),
   };
   return el;
@@ -216,7 +247,55 @@ describe("SlashMenu hook", () => {
     document.body.removeChild(block);
   });
 
-  // ── Test 7: destroyed cleans up listeners ─────────────────────────
+  // ── Test 7: removes leading slash from source block on item select ────
+
+  it("removes leading slash from source block on item select", () => {
+    const block = createOraBlock("b1");
+    document.body.appendChild(block);
+
+    // Seed the mock root with editor text matching "foo" + "/" + filter chars "h1"
+    mockRootState.text = "foo/h1";
+
+    // Set up hook state directly — simulate that trigger detection has run
+    // and the user has typed "h1" as filter after the "/"
+    const range = document.createRange();
+    range.selectNodeContents(block);
+    range.collapse(false);
+    env.ctx._triggerRange = range.cloneRange();
+    env.ctx._activeEditor = block._editor;
+    env.ctx._activeBlockId = "b1";
+    env.ctx._triggerPreLength = 3; // length of "foo" (pre-slash text)
+    env.ctx._open = true;
+    env.menu.setAttribute("visible", "");
+
+    expect(env.menu.hasAttribute("visible")).toBe(true);
+    expect(env.pushEvent).not.toHaveBeenCalled();
+
+    // Dispatch item selection
+    env.host.dispatchEvent(
+      new CustomEvent("select-item", {
+        detail: { type: "heading_1" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+
+    // After select-item, the production code should have:
+    // 1. Called editor.update() with a callback that reads root text
+    // 2. Cleared root and appended only pre-slash text ("foo")
+    // Verify via the mock root's current state
+    expect(mockRootState.text).toBe("foo");
+
+    // Also verify pushEvent was called
+    expect(env.pushEvent).toHaveBeenCalledWith("insert_block_below", {
+      block_id: "b1",
+      type: "heading_1",
+    });
+
+    document.body.removeChild(block);
+  });
+
+  // ── Test 8: destroyed cleans up listeners ─────────────────────────
 
   it("destroyed removes event listeners and hides menu", () => {
     const block = createOraBlock("b1");

@@ -1,0 +1,104 @@
+#+TITLE: Slash menu leaves stray slash + dead cancel-link listener
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-028-slash-menu-leaves-stray-slash-dead-cance
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+W2.5 specialist reviewer flagged (P1, conf 0.95): =assets/js/hooks/slash_menu.js= ~_handleSelectItem~ never actually removes the leading "/" from the Lexical editor before inserting the new block. Root causes:
+1. ~$getSelection~ is not imported into the module; the runtime guard ~typeof $getSelection === "function"~ is always false; the Lexical-side deletion branch is never reached.
+2. The saved ~_triggerRange~ is a /collapsed/ DOM range cloned right after the "/" was typed \u2014 ~range.cloneRange()~ of a selection whose ~startOffset~ already moved past the "/". Even if step 1 were fixed, ~removeText()~ on the resulting collapsed Lexical selection would be a no-op.
+
+Result: after the user picks a menu item, the new block appears below but the source block still contains the stray "/" (plus any filter chars typed). Violates the BUG-017 contract bullet: "restore trigger range \u2192 Lexical ~editor.update(() => $getSelection().removeText())~ to drop the slash + filter chars".
+
+W2.5 also flagged (P2): =assets/js/hooks/format_toolbar.js= listens for a ~cancel-link~ CustomEvent that no component dispatches. Dead listener. Bundle the fix here since both touch slash/format flow.
+
+* Intention & Purpose
+
+After picking a slash-menu item, the source block's content reflects /only/ what the user typed before "/" \u2014 the slash and filter chars are deleted from Lexical. Vitest asserts deletion explicitly so this regression is caught.
+
+Format-toolbar's ~cancel-link~ listener is either removed (current cleanest path) or paired with a real dispatcher in =<ora-link-editor>= (if we want explicit cancel behavior).
+
+* Context & Narrative
+
+Lexical 0.17 selection API needs to be /used inside =editor.update(() => \u2026)= callback/, where ~$getSelection()~ is callable as a module helper from ~lexical~. The current code tries to read DOM selection then map it; for our case the simpler path is: instead of replaying the DOM range, store the /pre-slash content length/ at trigger time, then on select do ~editor.update(() => {root.getLastDescendant().select(preLen, preLen + slashChars)})~ then ~$getSelection().removeText()~.
+
+For ~cancel-link~: =<ora-link-editor>= has its own ~visible~ reactive prop; Escape inside the editor sets ~this.visible = false~ via internal Lit binding. We do NOT need an external cancel handler. Remove the listener.
+
+* Scope
+
+- IN: import ~$getSelection~ from ~lexical~ in =slash_menu.js=.
+- IN: re-architect the trigger-deletion: capture pre-slash text length on trigger; on select, position Lexical selection across the slash+filter range then ~removeText()~.
+- IN: extend vitest =slash_menu.test.js= with an explicit assertion: after select, the editor's text content has the slash+filter chars removed.
+- IN: remove the dead ~cancel-link~ listener in =format_toolbar.js= (and its cleanup in ~destroyed()~).
+- IN: extend vitest =format_toolbar.test.js= to remove the now-obsolete cancel-link assertion (or replace with a comment).
+- OUT: implementing a real Cancel button in =<ora-link-editor>= (separate UX decision).
+
+* Existing Patterns
+
+- =assets/js/lexical/commands.js= ~moveCaretToStart/End~ \u2014 same pattern: ~editor.update(() => \u2026)~ with =$getRoot()= helpers.
+- =assets/js/hooks/format_toolbar.js= ~toggleFormat~ wrapping via ~editor.dispatchCommand~ \u2014 hook routes events to commands.
+
+* Tests
+
+** Vitest (new assertions in existing files)
+
+1. /slash_menu.test.js/ \u2014 add scenario: mount block, type "/" + "h1" + Enter on heading_1 item \u2192 assert (a) block.getContent() text equals what was there pre-slash, (b) pushEvent called with insert_block_below + type heading_1.
+2. /format_toolbar.test.js/ \u2014 drop the cancel-link assertion; replace with a comment noting the listener was removed in BUG-028.
+
+* Implementation
+
+** TODO Re-architect slash-menu trigger deletion
+:PROPERTIES:
+:CUSTOM_ID: BUG-028-slash-menu-leaves-stray-slash-dead-cance::trigger-delete
+:END:
+
+- File: =assets/js/hooks/slash_menu.js=.
+- Import ~{ $getSelection, $getRoot } from "lexical"~ at top.
+- In the trigger detection branch, before opening the menu: capture ~_triggerPreLength~ = the editor's text content length BEFORE the "/" was inserted. Implementation: read ~editor.getEditorState().read(() => $getRoot().getTextContent().length)~ then subtract 1 (the "/" itself).
+- In ~_handleSelectItem~, replace the failing DOM-range path with:
+  #+begin_src js
+  editor.update(() => {
+    const root = $getRoot();
+    const text = root.getTextContent();
+    const startIdx = this._triggerPreLength;
+    const endIdx = text.length;
+    // select range [startIdx, endIdx], then removeText
+    // Use TextNode walk or $getRoot().selectStart() then advance via offset.
+    const selection = $getSelection();
+    if (selection !== null) {
+      // implement range selection across the slash+filter chars
+      // using selection.applyDOMRange or manual TextNode keying
+      selection.removeText();
+    }
+  });
+  pushEvent("insert_block_below", {block_id, type});
+  #+end_src
+- If clean Lexical-range selection turns out non-trivial, fall back to the simpler approach: re-set editor content via ~root.clear()~ + ~root.append(new TextNode(text.slice(0, startIdx)))~. Document the choice in a code comment.
+
+** TODO Remove dead cancel-link listener
+:PROPERTIES:
+:CUSTOM_ID: BUG-028-slash-menu-leaves-stray-slash-dead-cance::cancel-link
+:END:
+
+- File: =assets/js/hooks/format_toolbar.js= \u2014 delete the ~cancel-link~ ~addEventListener~ and its cleanup in ~destroyed()~. Replace with a comment: ~// cancel handled internally by <ora-link-editor> via Escape; no external listener required~.
+
+** TODO Vitest assertions
+:PROPERTIES:
+:CUSTOM_ID: BUG-028-slash-menu-leaves-stray-slash-dead-cance::tests
+:DEPENDS: BUG-028-slash-menu-leaves-stray-slash-dead-cance::trigger-delete, BUG-028-slash-menu-leaves-stray-slash-dead-cance::cancel-link
+:END:
+
+- Files: =assets/js/hooks/__tests__/slash_menu.test.js= + =assets/js/hooks/__tests__/format_toolbar.test.js=.
+
+* Acceptance
+
+- Vitest suites green: slash_menu (+1 deletion-assert scenario), format_toolbar (cancel-link assertion removed).
+- After a slash-menu select, source block content reflects only pre-slash text.
+- One commit: ~fix(editor): delete slash trigger from Lexical + drop dead cancel-link listener (BUG-028)~.

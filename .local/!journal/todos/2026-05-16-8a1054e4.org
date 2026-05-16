@@ -1,0 +1,37 @@
+#+TITLE: Session 14e3d3396533d2e3 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Server-side changes
+
+** DOING Add BlockTypes.resolve/1
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: in_progress
+:GATE_CMD: mix compile
+:GATE_LLM: resolve_safe exists, returns expected tuple
+:END:
+
+File: lib/concept/pages/block_types.ex
+Add resolve/1 fn (string→atom with validation) using lookup_safe/1: {:ok, type_atom} | {:error, :unknown_type}
+
+mix compile blocked by pre-existing FUP-014 compilation error in profiles.ex (parallel task). Verified syntactically via elixir -e. resolve/1 correct.
+
+* Tests
+
+** DONE Extend page_editor_test.exs with insert_block_below tests
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: completed
+:END:
+
+File: test/concept_web/live/page_editor_test.exs
+2 tests: insert_block_below with type creates typed block; backward-compat insert_paragraph_below creates paragraph
+
+** DONE Run full test suite and commit
+:PROPERTIES:
+:TASK_ID: task-7
+:STATUS: completed
+:END:
+
+Run mix test + vitest, then git commit
