@@ -90,7 +90,7 @@
   .ora-cover-swatch-default { background: #fff; position: relative; }
   .ora-cover-swatch-default::after { content: '✕'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #aaa; font-size: 14px; }
 
-  [data-locked-by] { border-left: 2px solid var(--lock-color, var(--color-notion-blue)); padding-left: 8px; }
+  .ora-block-row[data-locked-by]::before { content: ""; position: absolute; left: -8px; top: 0; bottom: 0; width: 3px; background: var(--lock-color, var(--color-notion-blue)); border-radius: 2px; }
 
     .block-highlight {
       background-color: rgb(254 240 138 / 0.4);

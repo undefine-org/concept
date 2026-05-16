@@ -40,6 +40,7 @@ defmodule ConceptWeb.PageEditorLive do
       |> assign(:blocks, blocks)
       |> assign(:held_locks, %{})
       |> assign(:presence_users, [])
+      |> assign(:locked_blocks, %{})
 
     {:ok, socket}
   end
@@ -51,7 +52,7 @@ defmodule ConceptWeb.PageEditorLive do
       <div id="page-editor-content" class="space-y-1 relative" phx-hook="AskSelection">
         <ul :if={@blocks != []} id={"block-list-#{@page_id}"} phx-hook="BlockList" class="space-y-1">
           <li :for={b <- @blocks} data-block-id={b.id}>
-            <ConceptWeb.BlockRender.block block={b} />
+            <ConceptWeb.BlockRender.block block={b} locked_by={@locked_blocks[b.id]} />
           </li>
         </ul>
         <div :if={@blocks == []} class="py-8 text-center">
@@ -142,6 +143,12 @@ defmodule ConceptWeb.PageEditorLive do
 
     case lock_result do
       {:ok, _} ->
+        topic = "workspace:#{ws_id}:page:#{page_id}:presence"
+
+        ConceptWeb.Presence.update(self(), topic, user.id, fn meta ->
+          Map.put(meta, :locked_block_id, id)
+        end)
+
         {:noreply,
          socket
          |> assign(:held_locks, Map.put(socket.assigns.held_locks, id, true))
@@ -155,6 +162,15 @@ defmodule ConceptWeb.PageEditorLive do
   @impl true
   def handle_event("blur_block", %{"block_id" => id}, socket) do
     socket = release_if_held(socket, id)
+    user = socket.assigns.current_user
+    ws_id = socket.assigns.workspace.id
+    page_id = socket.assigns.page_id
+    topic = "workspace:#{ws_id}:page:#{page_id}:presence"
+
+    ConceptWeb.Presence.update(self(), topic, user.id, fn meta ->
+      Map.delete(meta, :locked_block_id)
+    end)
+
     {:noreply, socket}
   end
 
@@ -490,7 +506,25 @@ defmodule ConceptWeb.PageEditorLive do
       end)
       |> Enum.uniq_by(& &1.id)
 
-    {:noreply, assign(socket, :presence_users, users)}
+    self_id = socket.assigns.current_user.id
+
+    locked_blocks =
+      presence_list
+      |> Enum.reject(fn {user_id, _} -> user_id == self_id end)
+      |> Enum.flat_map(fn {user_id, %{metas: metas}} ->
+        metas
+        |> Enum.filter(&Map.get(&1, :locked_block_id))
+        |> Enum.map(fn meta ->
+          {meta.locked_block_id,
+           %{user_id: user_id, color: ConceptWeb.Colors.for_user_id(user_id)}}
+        end)
+      end)
+      |> Map.new()
+
+    {:noreply,
+     socket
+     |> assign(:presence_users, users)
+     |> assign(:locked_blocks, locked_blocks)}
   end
 
   @impl true

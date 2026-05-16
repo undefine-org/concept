@@ -10,6 +10,7 @@ defmodule ConceptWeb.BlockRender do
   )
 
   attr :block, :map, required: true
+  attr :locked_by, :map, default: nil
 
   def block(assigns) do
     assigns = assign(assigns, :type, to_string(assigns.block.type))
@@ -17,7 +18,12 @@ defmodule ConceptWeb.BlockRender do
     if assigns.type in @text_types do
       ~H"""
       <div id={"block-" <> @block.id} class="block-anchor scroll-mt-20">
-        <div class="ora-block-row group" data-block-id={@block.id}>
+        <div
+          class="ora-block-row group"
+          data-block-id={@block.id}
+          data-locked-by={@locked_by && @locked_by.user_id}
+          style={@locked_by && "--lock-color: #{@locked_by.color}"}
+        >
           <ora-block-handle class="ora-block-handle group-hover:opacity-100" block-id={@block.id} />
           <ora-block
             phx-hook="BlockEditor"
