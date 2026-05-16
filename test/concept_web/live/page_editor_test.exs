@@ -448,6 +448,59 @@ defmodule ConceptWeb.PageEditorTest do
     assert html =~ "bold text here"
   end
 
+  test "link text in block content renders as <a href=\"…\">", %{
+    conn: conn,
+    ws: ws,
+    page: page,
+    user: user
+  } do
+    link_lexical = %{
+      "root" => %{
+        "type" => "root",
+        "children" => [
+          %{
+            "type" => "paragraph",
+            "children" => [
+              %{
+                "type" => "link",
+                "url" => "https://example.com",
+                "direction" => "ltr",
+                "format" => "",
+                "indent" => 0,
+                "version" => 1,
+                "children" => [
+                  %{
+                    "type" => "text",
+                    "text" => "click me",
+                    "format" => 0,
+                    "detail" => 0,
+                    "mode" => "normal",
+                    "style" => "",
+                    "version" => 1
+                  }
+                ]
+              }
+            ],
+            "direction" => "ltr",
+            "format" => "",
+            "indent" => 0,
+            "version" => 1
+          }
+        ],
+        "direction" => "ltr",
+        "format" => "",
+        "indent" => 0,
+        "version" => 1
+      }
+    }
+
+    _ = {conn, ws, page, user}
+    html = Concept.Lexical.to_html(link_lexical)
+    assert html =~ ~s|<a href="https://example.com"|
+    assert html =~ "click me"
+    assert html =~ "</a>"
+  end
+
   # ── BUG-017 ──────────────────────────────────────────────────────────
 
   test "insert_block_below with type creates typed block", %{
