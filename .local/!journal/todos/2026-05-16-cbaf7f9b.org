@@ -4,31 +4,10 @@
 
 * Template & tests
 
-** DONE Create format_toolbar.test.js
-:PROPERTIES:
-:TASK_ID: task-5
-:STATUS: completed
-:END:
-
-File: assets/js/hooks/__tests__/format_toolbar.test.js
-New vitest test file with jsdom env
-Test 1: Mount with active ora-block + selected text, dispatch toggle-format with detail {format: 'bold'}, assert spy on editor.dispatchCommand called with (FORMAT_TEXT_COMMAND, 'bold')
-Test 2: Dispatch request-link, assert link-editor host gains 'visible' attr
-Test 3: Dispatch apply-link with {url: 'https://x'}, assert dispatchCommand(TOGGLE_LINK_COMMAND, 'https://x')
-
-** DONE Add bold rendering test to page_editor_test.exs
-:PROPERTIES:
-:TASK_ID: task-6
-:STATUS: completed
-:END:
-
-File: test/concept_web/live/page_editor_test.exs
-Add test: save block content with bold text (Lexical JSON format:1), reload via Pages.get_block, assert HTML contains <strong>
-
-** DOING Run mix compile + scoped tests
+** DONE Run mix compile + scoped tests
 :PROPERTIES:
 :TASK_ID: task-7
-:STATUS: in_progress
+:STATUS: completed
 :END:
 
 mix compile clean; cd assets && npx vitest run hooks/__tests__/format_toolbar.test.js; mix test test/concept_web/live/page_editor_test.exs; git add; git commit
