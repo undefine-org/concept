@@ -1,0 +1,92 @@
+#+TITLE: Session 14e3db72d073d2f5 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Phase A — Write tests first (red)
+
+** DONE contract-fix: drop select-item, write real-select test
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:END:
+
+File: assets/js/hooks/slash_menu.js + test
+1. Remove addEventListener('select-item',…) & cleanup
+2. In test: replace CustomEvent('select-item',…) → CustomEvent('select',…)
+3. Add NEW test that fires real 'select' event (proves regression guard)
+4. Update destroyed spy to not expect 'select-item'
+
+** DONE keyboard-test: ArrowDown×2+Enter → heading_2
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:END:
+
+assets/js/hooks/__tests__/slash_menu.test.js
+New it: open menu, dispatch 2×ArrowDown + Enter on window
+→ assert pushEvent called with insert_block_below + heading_2 type
+
+** DONE filter-tests: narrow/backspace/backspace-past
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
+:END:
+
+assets/js/hooks/__tests__/slash_menu.test.js
+3 new it blocks:
+1. filter narrows: type 'h'→filter='h', type '1'→filter='h1'
+2. backspace narrows: from 'h1', Backspace→filter='h'
+3. backspace-past closes: from '', Backspace→menu closed
+
+** ITEM commands-test: toggleFormat + setLink on real editor
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: pending
+:END:
+
+NEW assets/js/lexical/__tests__/commands.test.js
+- toggleFormat on selected text → bold bit=1
+- setLink creates LinkNode with __url, setLink(null) removes it
+
+** DONE reorder-invariant: add position assertion
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:END:
+
+test/concept_web/live/page_editor_test.exs
+In middle-reorder test, add: assert b1.position < new_b3.position < b2.position
+
+* Phase B — Implement (green) + gates
+
+** DOING Implement contract-fix
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: in_progress
+:END:
+
+Remove select-item listener + cleanup. Run test suite.
+
+** ITEM Add backspace-close to hook _handleKeyDown
+:PROPERTIES:
+:TASK_ID: task-7
+:STATUS: pending
+:END:
+
+If Backspace and filter empty → close menu
+
+** ITEM Run full gate: vitest + scoped mix test
+:PROPERTIES:
+:TASK_ID: task-8
+:STATUS: pending
+:END:
+
+cd assets && npx vitest run; mix test test/concept_web/live/page_editor_test.exs
+
+** ITEM Commit + report
+:PROPERTIES:
+:TASK_ID: task-9
+:STATUS: pending
+:END:
+
+git add -A && git commit -m 'test(editor): close W2.5 specialist findings (BUG-029)'

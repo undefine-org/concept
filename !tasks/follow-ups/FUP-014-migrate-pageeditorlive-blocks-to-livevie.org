@@ -1,0 +1,40 @@
+#+TITLE: Migrate PageEditorLive @blocks to LiveView streams
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: FUP-014-migrate-pageeditorlive-blocks-to-livevie
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W2.5 convention reviewer (P3) noted: =lib/concept_web/live/page_editor_live.ex= renders =@blocks= as a flat assign. Every handler (~reorder_block~, ~insert_block_below~, ~save_content~, ~focus_block~, ~delete_block_merge~) re-assigns the whole list. AGENTS.md mandates LiveView streams for collection rendering to avoid memory ballooning on long pages.
+
+* Intention
+
+Migrate to ~stream(:blocks, blocks)~ + ~phx-update="stream"~ on the =<ul>= + ~stream_insert~ / ~stream_delete~ in handlers. Preserve current behavior; just change the data-flow.
+
+* Scope
+
+- IN: =lib/concept_web/live/page_editor_live.ex= render + every handler.
+- IN: existing tests must keep passing after the switch (assertions on ~has_element?~ / ~render(view)~ remain valid).
+- OUT: per-block update granularity beyond what current handlers need.
+
+* Notes
+
+Pre-W2 pattern; not introduced by PLAN-005 work. P3 risk \u2014 manifests only on very long pages. Address opportunistically; not blocking any other plan.
+
+* Implementation sketch
+
+- Replace =@blocks= reads in mount with ~stream(socket, :blocks, blocks)~.
+- Replace each ~assign(:blocks, \u2026)~ in handlers with ~stream_insert(:blocks, block, at: \u2026)~ / ~stream_delete(:blocks, block)~ / ~stream(:blocks, fresh_list, reset: true)~ depending on op.
+- Update render's =<ul>= to ~id="block-list-#{@page_id}" phx-update="stream"~; =<li>= iter becomes ~<li :for={{id, b} <- @streams.blocks} id={id}>~.
+
+* Acceptance
+
+- ~mix test test/concept_web/live/page_editor_test.exs~ green.
+- ~cd assets && npx vitest run~ green.
+- Memory profile flat across 500-block pages (smoke test optional).

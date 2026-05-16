@@ -30,7 +30,6 @@ export const SlashMenu = {
 
     // Listen for events from the <ora-slash-menu> Lit component
     this.host.addEventListener("select", this._onSelectItem);
-    this.host.addEventListener("select-item", this._onSelectItem);
     this.host.addEventListener("close", this._onClose);
   },
 
@@ -150,6 +149,13 @@ export const SlashMenu = {
       if (this._open) {
         this._close();
       }
+    } else if (event.key === "Backspace") {
+      // Backspace on empty filter closes the menu
+      const menu = this.host.querySelector("ora-slash-menu");
+      if (menu && (menu._filter === "" || menu._filter == null)) {
+        event.preventDefault();
+        this._close();
+      }
     }
   },
 
@@ -236,7 +242,6 @@ export const SlashMenu = {
     document.removeEventListener("keydown", this._onKeyDown);
     document.removeEventListener("click", this._onClickOutside);
     this.host.removeEventListener("select", this._onSelectItem);
-    this.host.removeEventListener("select-item", this._onSelectItem);
     this.host.removeEventListener("close", this._onClose);
     this._close();
   },

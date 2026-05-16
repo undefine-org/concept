@@ -1,0 +1,204 @@
+#+TITLE: Session 14e3d6e773b3d2e7 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Setup
+
+** BLOCKED ~~Register test user & sign in~~
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Navigate to /register, create test@example.com, sign in. Screenshot sign-in gate.
+
+Server cannot serve /register or /sign-in - LiveView crashes due to Spark 2.7 incompatibility and incomplete resource registration.
+
+** BLOCKED ~~Create workspace & open page editor~~
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Create workspace, navigate to a page, verify the block editor loads. Screenshot.
+
+Blocked - requires authenticated session
+
+* W1 — BUG-014 caret handoff
+
+** BLOCKED ~~Step 2-3: ArrowDown moves caret between blocks~~
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Create 2 paragraph blocks, click alpha, ArrowDown → activeElement is beta block
+
+Blocked - requires authenticated session
+
+** BLOCKED ~~Step 4: ArrowUp moves caret up~~
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+ArrowUp from beta → caret in alpha
+
+Blocked
+
+** BLOCKED ~~Step 5: Enter creates new block~~
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Caret end of alpha, Enter → new block below, activeElement is in it
+
+Blocked
+
+* W1 — BUG-015 current_scope
+
+** BLOCKED ~~Step 6: Header shows user + workspace~~
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Inspect header for user email/avatar and workspace name
+
+Blocked
+
+** BLOCKED ~~Step 7: /w index renders without crash~~
+:PROPERTIES:
+:TASK_ID: task-7
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Navigate to /w, verify header renders
+
+Blocked
+
+* W2 — BUG-018 drag-reorder
+
+** BLOCKED ~~Step 8: Drag reorder + persistence~~
+:PROPERTIES:
+:TASK_ID: task-8
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Create 3 blocks A,B,C. Drag handle of A to C position. Reload, verify order
+
+Blocked
+
+* W2 — BUG-016 format toolbar
+
+** BLOCKED ~~Step 9-10: Select text shows format toolbar~~
+:PROPERTIES:
+:TASK_ID: task-9
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Type 'hello world', select 'world', verify ora-format-toolbar is visible
+
+Blocked
+
+** BLOCKED ~~Step 11-12: Bold button applies formatting~~
+:PROPERTIES:
+:TASK_ID: task-10
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Click bold button, verify font-weight:bold + Lexical node format bit
+
+Blocked
+
+** BLOCKED ~~Step 13: Bold persists after reload~~
+:PROPERTIES:
+:TASK_ID: task-11
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Blur block, reload, assert <strong>world</strong> in DOM
+
+Blocked
+
+* W2 — BUG-016 link editor
+
+** BLOCKED ~~Step 14-15: Link button + URL input~~
+:PROPERTIES:
+:TASK_ID: task-12
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Select 'hello', click Link, type URL, assert <a> in DOM
+
+Blocked
+
+** BLOCKED ~~Step 16: Link persists after reload~~
+:PROPERTIES:
+:TASK_ID: task-13
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Reload and assert <a href> persists
+
+Blocked
+
+* W2 — BUG-017 slash menu
+
+** BLOCKED ~~Step 17: Slash menu appears on /~~
+:PROPERTIES:
+:TASK_ID: task-14
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Focus block, type /, assert ora-slash-menu visible
+
+Blocked
+
+** BLOCKED ~~Step 18: Filter narrows options~~
+:PROPERTIES:
+:TASK_ID: task-15
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Type 'h1', assert items narrow to Heading 1
+
+Blocked
+
+** BLOCKED ~~Step 19: Enter creates heading block~~
+:PROPERTIES:
+:TASK_ID: task-16
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Press Enter, assert heading_1 block appears, caret inside, / not in source
+
+Blocked
+
+** BLOCKED ~~Step 20: Escape cancels menu~~
+:PROPERTIES:
+:TASK_ID: task-17
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015-follow-up-w12-puppeteer-verification-blo
+:END:
+
+Type /, press Esc, assert menu closed, / remains
+
+Blocked

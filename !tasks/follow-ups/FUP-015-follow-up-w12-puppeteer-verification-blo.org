@@ -1,0 +1,14 @@
+#+TITLE: Follow-up: W12 Puppeteer verification (blocked by 3 Spark 2.7 blockers)
+#+STATE: ITEM
+#+SESSION_ID: 14e3d6e773b3d2e7
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc/12-W12Puppeteer.jsonl]]
+#+CUSTOM_ID: FUP-015-follow-up-w12-puppeteer-verification-blo
+
+Deferred W12 puppeteer verification task. All 20 steps blocked by:
+
+1. Spark.Dsl section macro `profiles/1` not available at module level (profiles.ex)
+2. Untracked ingestion_job.ex crashes AshStateMachine.AddState transformer
+3. knowledge_reindex.ex references enqueue_ingest!/3 not in committed knowledge.ex
+
+Fix these blockers, then retry the full verification sequence:
+https://github.com/othro/concept/issues

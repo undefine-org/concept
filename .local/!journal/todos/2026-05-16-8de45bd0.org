@@ -12,30 +12,16 @@
 
 * PLAN-005 W1+W2 browser verification (puppeteer)
 
-** DOING Browser verification of all W1+W2 user-visible behaviors
+** DONE Browser verification of all W1+W2 user-visible behaviors
 :PROPERTIES:
 :TASK_ID: task-2
-:STATUS: in_progress
-:END:
-
-* PLAN-005 W2 follow-up (BUG-028)
-
-** DOING Delete slash trigger from Lexical + remove dead cancel-link listener
-:PROPERTIES:
-:TASK_ID: task-3
-:STATUS: in_progress
-:END:
-
-* PLAN-005 W2.5 supplemental specialists (parallel)
-
-** DONE SERVER_CONTRACT.md ↔ hook ↔ server handler alignment + orphan event/hook scans
-:PROPERTIES:
-:TASK_ID: task-4
 :STATUS: completed
 :END:
 
-** DOING Test coverage maps to claimed scenarios; no skipped/pending; TDD evidence retro-check
+* PLAN-005 W2 cleanup (BUG-029)
+
+** DOING Close 5 W2.5 specialist findings: select listener + 3 missing tests + reorder invariant + commands.test.js
 :PROPERTIES:
-:TASK_ID: task-5
+:TASK_ID: task-3
 :STATUS: in_progress
 :END:

@@ -1,0 +1,92 @@
+#+TITLE: W2.5 specialist cleanup: dead select-item listener + missing tests + assertion tightening
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-029-w2-5-specialist-cleanup-dead-select-item
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W2.5 specialist reviewer swarm (parallel contract / test-depth / convention / scope-drift agents, 2026-05-16) surfaced five findings the monolithic reviewer missed. This consolidated cleanup item closes all of them in a single commit.
+
+* Findings rolled in
+
+1. /Contract reviewer, P2/ \u2014 =assets/js/hooks/slash_menu.js:29-30= registers a listener for the ~select-item~ CustomEvent. =assets/js/components/ora-slash-menu.js:165-170= only dispatches ~select~ (and ~close~). The companion vitest fires the phantom ~select-item~ event, masking the real production contract. Net: a regression where ora-slash-menu stops dispatching ~select~ would not fail the test.
+2. /Test-depth reviewer, P2/ \u2014 BUG-017 org item required a vitest scenario "Arrow Down then Enter \u2192 select-item event with selected item type". The implementation only covers click-equivalent. Keyboard nav is the primary slash-menu UX and is currently uncovered.
+3. /Test-depth reviewer, P2/ \u2014 BUG-017 org item required "Subsequent character filters items; backspace narrows; backspace past '/' closes". Vitest has only Escape + click-select scenarios. Three menu-state transitions untested.
+4. /Test-depth reviewer, P3/ \u2014 BUG-018 middle-reorder test asserts ~ids == [b1.id, b3.id, b2.id]~ but the org-stated invariant is "position is strictly between left and right". Transitive proof relying on Pages.list_for_page sort path; a position miscalculation that happened to round-trip the same order would not be caught.
+5. /Test-depth reviewer, P3/ \u2014 BUG-016 org item specified direct unit tests of ~toggleFormat(editor, "bold")~ and ~setLink(editor, url)~ asserting post-conditions on Lexical state (format bitmask set; LinkNode created/reversed). Implementation only has hook-level dispatchCommand spies. Spy-on-callee weaker than asserting resulting editor state.
+
+* Scope
+
+** IN
+- Drop the ~select-item~ listener registration in =slash_menu.js= (lines 29-30 area) and rewrite the matching vitest scenario to dispatch ~select~ (the real CustomEvent).
+- Add vitest scenario: keyboard nav \u2014 ArrowDown twice + Enter \u2192 hook receives ~select~ with the 2nd item's type; correct ~insert_block_below~ pushEvent.
+- Add vitest scenarios: filter narrowing (type "h", then "1"); backspace narrows back; backspace past trigger "/" closes the menu and clears state.
+- Tighten BUG-018 middle-reorder ExUnit assertion: read positions of the three blocks post-reorder; assert ~b1.position < new_b3.position < b2.position~ (strict inequalities).
+- New =assets/js/lexical/__tests__/commands.test.js= with direct ~toggleFormat~ + ~setLink~ post-condition assertions on a real Lexical editor instance.
+
+** OUT
+- LiveView streams migration of PageEditorLive (filed as separate FUP \u2014 pre-W2 pattern, P3 risk).
+- ora-block-handle ~add-below~ / ~open-menu~ orphan-dispatched events (pre-W2 also; if a future block-menu feature needs them, wire then).
+- =SERVER_CONTRACT.md= drift on lock_granted/lock_denied/set_locked_by/apply_remote (BUG-021 in W3 will revisit lock contract anyway).
+- =phx-hook="PageHeader"= orphan (already filed as BUG-027 / addressed in W4 by removing the orphan ~phx_hook: "PageEditor"~ option \u2014 verify alignment in W4).
+
+* TDD evidence required
+
+Each new test must follow red\u2192green. Implementer must paste failing snippet (Phase A) for each new scenario, then passing snippet (Phase B) after fix.
+
+* Implementation
+
+** TODO Drop select-item, switch test to select
+:PROPERTIES:
+:CUSTOM_ID: BUG-029-w2-5-specialist-cleanup-dead-select-item::contract-fix
+:END:
+
+- File: =assets/js/hooks/slash_menu.js= \u2014 remove the ~addEventListener("select-item", \u2026)~ registration and its cleanup. Keep ~select~.
+- File: =assets/js/hooks/__tests__/slash_menu.test.js= \u2014 wherever the test dispatches ~new CustomEvent("select-item", \u2026)~ change to ~"select"~. Verify the existing assertions still hold.
+
+** TODO Keyboard nav test
+:PROPERTIES:
+:CUSTOM_ID: BUG-029-w2-5-specialist-cleanup-dead-select-item::keyboard-test
+:END:
+
+- File: =assets/js/hooks/__tests__/slash_menu.test.js= \u2014 new ~it("dispatches insert_block_below for keyboard-selected item", \u2026)~. Mount block, trigger menu open, simulate two ~keydown~ "ArrowDown" events on the menu host, then "Enter". Assert ~pushEvent~ called with the 3rd FALLBACK_ITEM's type. (FALLBACK_ITEMS[2] is heading_2 \u2014 confirm via reading ora-slash-menu source.)
+
+** TODO Filter / backspace narrowing tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-029-w2-5-specialist-cleanup-dead-select-item::filter-tests
+:END:
+
+- File: same. Three new ~it~ blocks:
+  1. /filter narrows/ \u2014 open menu, type "h", assert ora-slash-menu's ~filter~ attribute equals "h"; type "1", filter "h1"; visible items reduce to {Heading 1}.
+  2. /backspace narrows back/ \u2014 starting from filter "h1", press Backspace, assert filter is "h" and item list widens.
+  3. /backspace past trigger closes/ \u2014 starting from filter "", press Backspace, assert menu closes (visible attr false) and internal state cleared.
+
+** TODO Reorder position invariant
+:PROPERTIES:
+:CUSTOM_ID: BUG-029-w2-5-specialist-cleanup-dead-select-item::reorder-invariant
+:END:
+
+- File: =test/concept_web/live/page_editor_test.exs= \u2014 the middle-reorder scenario. Read positions of three blocks post-reorder via ~Pages.list_for_page(\u2026)~. ~assert b1.position < new_b3.position and new_b3.position < b2.position~ alongside the existing id-order assertion (keep both).
+
+** TODO commands.test.js direct unit tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-029-w2-5-specialist-cleanup-dead-select-item::commands-test
+:END:
+
+- File: =assets/js/lexical/__tests__/commands.test.js= (new).
+- Instantiate a Lexical editor via ~createHeadlessEditor~ from ~@lexical/headless~ if available, else mount via DOM. Insert a paragraph with "abc" selected; call ~toggleFormat(editor, "bold")~; read editor state JSON; assert the text node has ~format & 1 = 1~.
+- For ~setLink~: same setup; call ~setLink(editor, "https://x")~; assert the selected text is now wrapped in a ~LinkNode~ with ~__url == "https://x"~; call ~setLink(editor, null)~; assert LinkNode unwrapped.
+
+* Acceptance
+
+- All 5 findings closed.
+- Vitest: at least 4 new scenarios in slash_menu.test.js + 2 in commands.test.js (new file). All green.
+- ExUnit: 1 strengthened reorder assertion.
+- Phase-A/Phase-B output in the implementer report.
+- One commit: ~test(editor): close W2.5 specialist findings (BUG-029)~.

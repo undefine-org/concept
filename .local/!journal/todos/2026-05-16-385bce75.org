@@ -177,28 +177,10 @@
 :STATUS: pending
 :END:
 
-* Wave 1 Knowledge Domain
+* Spark research
 
-** BLOCKED FEAT-034 Spark DSL Knowledge.Profiles
+** DONE Find canonical pattern for standalone Spark DSL with entities
 :PROPERTIES:
 :TASK_ID: task-1
-:STATUS: failed
-:END:
-
-** DONE FEAT-032 Knowledge.Citation Ash resource
-:PROPERTIES:
-:TASK_ID: task-2
 :STATUS: completed
-:END:
-
-** DOING FEAT-031 Knowledge.Link Ash resource + Arcana.Graph mirror
-:PROPERTIES:
-:TASK_ID: task-3
-:STATUS: in_progress
-:END:
-
-** ITEM FEAT-030 Knowledge.IngestionJob Ash resource with SM + AshOban + pub_sub
-:PROPERTIES:
-:TASK_ID: task-4
-:STATUS: pending
 :END:

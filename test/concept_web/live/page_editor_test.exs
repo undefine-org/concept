@@ -328,6 +328,13 @@ defmodule ConceptWeb.PageEditorTest do
 
     {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
     ids = Enum.map(blocks, & &1.id)
+
+    # Read positions and assert strict ordering (BUG-018 invariant)
+    rb1 = Enum.find(blocks, &(&1.id == b1.id))
+    rb3 = Enum.find(blocks, &(&1.id == b3.id))
+    rb2 = Enum.find(blocks, &(&1.id == b2.id))
+    assert rb1.position < rb3.position
+    assert rb3.position < rb2.position
     assert ids == [b1.id, b3.id, b2.id]
   end
 

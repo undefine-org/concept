@@ -3,9 +3,16 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SlashMenu } from "../slash_menu.js";
+import "../../components/ora-slash-menu.js";
 
 // Track Lexical root state across tests for the module-level mock
 const mockRootState = { text: "" };
+
+
+// jsdom doesn't implement scrollIntoView; polyfill for Lit component
+if (typeof Element.prototype.scrollIntoView !== 'function') {
+  Element.prototype.scrollIntoView = () => {};
+}
 
 vi.mock("lexical", () => {
   const mockRoot = {
@@ -94,7 +101,6 @@ function typeSlash(container, offset) {
     bubbles: true,
     cancelable: true,
   });
-  // Dispatch on the container so the event bubbles up through DOM ancestors
   return container.dispatchEvent(event);
 }
 
@@ -132,8 +138,6 @@ describe("SlashMenu hook", () => {
   it('detects "/" at text start and shows menu with position', () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-
-    // "/" is the only content — line start is valid
     const textNode = document.createTextNode("/");
     block.appendChild(textNode);
     typeSlash(textNode, 1);
@@ -148,8 +152,6 @@ describe("SlashMenu hook", () => {
   it('detects "/" after whitespace and shows menu', () => {
     const block = createOraBlock("b2");
     document.body.appendChild(block);
-
-    // "hello /" — "/" after space is a trigger
     const textNode = document.createTextNode("hello /");
     block.appendChild(textNode);
     typeSlash(textNode, 7);
@@ -164,8 +166,6 @@ describe("SlashMenu hook", () => {
   it('does NOT trigger for "/" mid-word', () => {
     const block = createOraBlock("b3");
     document.body.appendChild(block);
-
-    // "foo/bar" — "/" inside a word
     const textNode = document.createTextNode("foo/bar");
     block.appendChild(textNode);
     typeSlash(textNode, 4);
@@ -196,8 +196,6 @@ describe("SlashMenu hook", () => {
   it("dispatches pushEvent on item select", () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-
-    // Trigger menu
     const textNode = document.createTextNode("/");
     block.appendChild(textNode);
     typeSlash(textNode, 1);
@@ -205,9 +203,8 @@ describe("SlashMenu hook", () => {
     expect(env.menu.hasAttribute("visible")).toBe(true);
     expect(env.pushEvent).not.toHaveBeenCalled();
 
-    // Simulate item selection (the Lit component dispatches CustomEvent('select'))
     env.host.dispatchEvent(
-      new CustomEvent("select-item", {
+      new CustomEvent("select", {
         detail: { type: "heading_1" },
         bubbles: true,
         composed: true,
@@ -219,26 +216,144 @@ describe("SlashMenu hook", () => {
       block_id: "b1",
       type: "heading_1",
     });
-
-    // Menu should be closed after selection
     expect(env.menu.hasAttribute("visible")).toBe(false);
 
     document.body.removeChild(block);
   });
 
-  // ── Test 6: Escape closes without dispatching ─────────────────────
+  // ── Test 6: contract guard — real `select` event works ────────────────
 
-  it("Escape closes menu without pushEvent", () => {
+  it("dispatches pushEvent for real `select` CustomEvent", () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
+    const textNode = document.createTextNode("/");
+    block.appendChild(textNode);
+    typeSlash(textNode, 1);
 
+    expect(env.menu.hasAttribute("visible")).toBe(true);
+    expect(env.pushEvent).not.toHaveBeenCalled();
+
+    env.host.dispatchEvent(
+      new CustomEvent("select", {
+        detail: { type: "heading_2" },
+        bubbles: true,
+        composed: true,
+      })
+    );
+
+    expect(env.pushEvent).toHaveBeenCalledTimes(1);
+    expect(env.pushEvent).toHaveBeenCalledWith("insert_block_below", {
+      block_id: "b1",
+      type: "heading_2",
+    });
+    expect(env.menu.hasAttribute("visible")).toBe(false);
+
+    document.body.removeChild(block);
+  });
+
+  // ── Test 7: keyboard nav — ArrowDown×2 + Enter → heading_2 ───────────
+
+  it("dispatches insert_block_below for keyboard-selected item", () => {
+    const block = createOraBlock("b1");
+    document.body.appendChild(block);
+    const textNode = document.createTextNode("/");
+    block.appendChild(textNode);
+    typeSlash(textNode, 1);
+
+    expect(env.menu.hasAttribute("visible")).toBe(true);
+    expect(env.pushEvent).not.toHaveBeenCalled();
+
+    // Simulate keyboard nav via the Lit component's window keydown handler.
+    // After import of ora-slash-menu.js, the custom element is upgraded to
+    // OraSlashMenu and its window keydown listener is active.
+    // ArrowDown twice selects FALLBACK_ITEMS[2] = heading_2, then Enter dispatches select.
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    expect(env.pushEvent).toHaveBeenCalledTimes(1);
+    expect(env.pushEvent).toHaveBeenCalledWith("insert_block_below", {
+      block_id: "b1",
+      type: "heading_2",
+    });
+    expect(env.menu.hasAttribute("visible")).toBe(false);
+
+    document.body.removeChild(block);
+  });
+
+  // ── Test 8: filter narrows ───────────────────────────────────────────
+
+  it("filter narrows items as user types", () => {
+    const block = createOraBlock("b1");
+    document.body.appendChild(block);
     const textNode = document.createTextNode("/");
     block.appendChild(textNode);
     typeSlash(textNode, 1);
 
     expect(env.menu.hasAttribute("visible")).toBe(true);
 
-    // Press Escape
+    // The Lit component's _onInput sets _filter from the input event target value
+    env.menu._onInput({ target: { value: "h" } });
+    expect(env.menu._filter).toBe("h");
+
+    env.menu._onInput({ target: { value: "h1" } });
+    expect(env.menu._filter).toBe("h1");
+
+    document.body.removeChild(block);
+  });
+
+  // ── Test 9: backspace narrows back ────────────────────────────────────
+
+  it("backspace narrows filter back", () => {
+    const block = createOraBlock("b1");
+    document.body.appendChild(block);
+    const textNode = document.createTextNode("/");
+    block.appendChild(textNode);
+    typeSlash(textNode, 1);
+
+    expect(env.menu.hasAttribute("visible")).toBe(true);
+
+    env.menu._onInput({ target: { value: "h1" } });
+    expect(env.menu._filter).toBe("h1");
+
+    env.menu._onInput({ target: { value: "h" } });
+    expect(env.menu._filter).toBe("h");
+
+    document.body.removeChild(block);
+  });
+
+  // ── Test 10: backspace past trigger closes menu ───────────────────────
+
+  it("backspace past trigger closes menu", () => {
+    const block = createOraBlock("b1");
+    document.body.appendChild(block);
+    const textNode = document.createTextNode("/");
+    block.appendChild(textNode);
+    typeSlash(textNode, 1);
+
+    expect(env.menu.hasAttribute("visible")).toBe(true);
+    expect(env.ctx._open).toBe(true);
+
+    // Filter is empty, Backspace document keydown should close menu
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }));
+
+    expect(env.menu.hasAttribute("visible")).toBe(false);
+    expect(env.ctx._open).toBe(false);
+
+    document.body.removeChild(block);
+  });
+
+  // ── Test 11: Escape closes without dispatching ─────────────────────
+
+  it("Escape closes menu without pushEvent", () => {
+    const block = createOraBlock("b1");
+    document.body.appendChild(block);
+    const textNode = document.createTextNode("/");
+    block.appendChild(textNode);
+    typeSlash(textNode, 1);
+
+    expect(env.menu.hasAttribute("visible")).toBe(true);
+
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
 
     expect(env.menu.hasAttribute("visible")).toBe(false);
@@ -247,46 +362,34 @@ describe("SlashMenu hook", () => {
     document.body.removeChild(block);
   });
 
-  // ── Test 7: removes leading slash from source block on item select ────
+  // ── Test 12: removes leading slash from source block on item select ───
 
   it("removes leading slash from source block on item select", () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-
-    // Seed the mock root with editor text matching "foo" + "/" + filter chars "h1"
     mockRootState.text = "foo/h1";
 
-    // Set up hook state directly — simulate that trigger detection has run
-    // and the user has typed "h1" as filter after the "/"
     const range = document.createRange();
     range.selectNodeContents(block);
     range.collapse(false);
     env.ctx._triggerRange = range.cloneRange();
     env.ctx._activeEditor = block._editor;
     env.ctx._activeBlockId = "b1";
-    env.ctx._triggerPreLength = 3; // length of "foo" (pre-slash text)
+    env.ctx._triggerPreLength = 3;
     env.ctx._open = true;
     env.menu.setAttribute("visible", "");
 
     expect(env.menu.hasAttribute("visible")).toBe(true);
-    expect(env.pushEvent).not.toHaveBeenCalled();
 
-    // Dispatch item selection
     env.host.dispatchEvent(
-      new CustomEvent("select-item", {
+      new CustomEvent("select", {
         detail: { type: "heading_1" },
         bubbles: true,
         composed: true,
       }),
     );
 
-    // After select-item, the production code should have:
-    // 1. Called editor.update() with a callback that reads root text
-    // 2. Cleared root and appended only pre-slash text ("foo")
-    // Verify via the mock root's current state
     expect(mockRootState.text).toBe("foo");
-
-    // Also verify pushEvent was called
     expect(env.pushEvent).toHaveBeenCalledWith("insert_block_below", {
       block_id: "b1",
       type: "heading_1",
@@ -295,19 +398,17 @@ describe("SlashMenu hook", () => {
     document.body.removeChild(block);
   });
 
-  // ── Test 8: destroyed cleans up listeners ─────────────────────────
+  // ── Test 13: destroyed cleans up listeners ─────────────────────────
 
   it("destroyed removes event listeners and hides menu", () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-
     const textNode = document.createTextNode("/");
     block.appendChild(textNode);
     typeSlash(textNode, 1);
 
     expect(env.menu.hasAttribute("visible")).toBe(true);
 
-    // Spy removeEventListener
     const spy = vi.spyOn(document, "removeEventListener");
     const hostSpy = vi.spyOn(env.host, "removeEventListener");
 
@@ -317,7 +418,6 @@ describe("SlashMenu hook", () => {
     expect(spy).toHaveBeenCalledWith("keydown", expect.any(Function));
     expect(spy).toHaveBeenCalledWith("click", expect.any(Function));
     expect(hostSpy).toHaveBeenCalledWith("select", expect.any(Function));
-    expect(hostSpy).toHaveBeenCalledWith("select-item", expect.any(Function));
     expect(hostSpy).toHaveBeenCalledWith("close", expect.any(Function));
     expect(env.menu.hasAttribute("visible")).toBe(false);
 

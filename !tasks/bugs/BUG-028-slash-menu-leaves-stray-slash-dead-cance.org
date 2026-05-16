@@ -1,5 +1,5 @@
 #+TITLE: Slash menu leaves stray slash + dead cancel-link listener
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-028-slash-menu-leaves-stray-slash-dead-cance
@@ -102,3 +102,5 @@ For ~cancel-link~: =<ora-link-editor>= has its own ~visible~ reactive prop; Esca
 - Vitest suites green: slash_menu (+1 deletion-assert scenario), format_toolbar (cancel-link assertion removed).
 - After a slash-menu select, source block content reflects only pre-slash text.
 - One commit: ~fix(editor): delete slash trigger from Lexical + drop dead cancel-link listener (BUG-028)~.
+
+NOTE [2026-05-16]: Commit 235dd4e. TDD red→green evidence present: failing deletion test in Phase A, 34/34 vitest in Phase B. root.clear()+append fallback approach used (documented in code comment).

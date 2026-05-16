@@ -5,11 +5,17 @@ defmodule Concept.Knowledge do
   """
   use Ash.Domain, otp_app: :concept, extensions: [AshAdmin.Domain]
 
+  alias Concept.Knowledge.SystemActor
+
   admin do
     show? true
   end
 
   resources do
+    resource Concept.Knowledge.IngestionJob do
+      define :read_ingestion_jobs, action: :read
+    end
+
     # resource Concept.Knowledge.Citation do
     #   define :create_citation, action: :create
     #   define :citations_for_message, action: :for_message, args: [:message_id]
@@ -20,5 +26,17 @@ defmodule Concept.Knowledge do
       define :create_link, action: :create
       define :destroy_link, action: :destroy
     end
+  end
+
+  @doc """
+  Enqueue a page ingestion job.
+
+  Creates an IngestionJob row in :queued state. The AshOban trigger picks it up
+  on the next cron tick.
+  """
+  def enqueue_ingest!(workspace_id, page_id, op \\ :upsert) do
+    Concept.Knowledge.IngestionJob
+    |> Ash.Changeset.for_create(:enqueue, %{workspace_id: workspace_id, page_id: page_id, op: op})
+    |> Ash.create!(actor: %SystemActor{}, tenant: workspace_id)
   end
 end
