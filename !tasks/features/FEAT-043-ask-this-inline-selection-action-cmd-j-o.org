@@ -1,5 +1,5 @@
 #+TITLE: Ask-this inline selection action (Cmd-J on highlighted text)
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b087d426cfb5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
 #+CUSTOM_ID: FEAT-043-ask-this-inline-selection-action-cmd-j-o
@@ -38,3 +38,12 @@ Contextual ask: select text in any block → floating "Ask about this" button in
 
 * Acceptance
 - Highlight "OKR" → Ask → ChatPanel streams an answer grounded in OKR-mentioning blocks.
+
+NOTE [2026-05-16]: Implemented "Ask about this" feature:
+- Extended ora-format-toolbar.js with ✨ button
+- Created AskSelection hook to forward events to backend
+- Added PageEditorLive handler to broadcast palette_ask_with_seed
+- Added WorkspaceLive handler to open ChatPanel with seeded prompt
+- ChatPanel opens with scope=:subtree and scope_target_id set to page_id
+- All tests passing (3 JS tests + 3 Elixir tests)
+- Compiles without warnings

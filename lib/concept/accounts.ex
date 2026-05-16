@@ -13,6 +13,7 @@ defmodule Concept.Accounts do
     resource Concept.Accounts.User
     resource Concept.Accounts.Workspace
     resource Concept.Accounts.Membership
+    resource Concept.Accounts.ApiKey
   end
 
   @doc """

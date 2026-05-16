@@ -1,9 +1,15 @@
 defmodule Concept.Pages do
   @moduledoc "Page tree + Block content domain."
-  use Ash.Domain, otp_app: :concept, extensions: [AshAdmin.Domain]
+  use Ash.Domain, otp_app: :concept, extensions: [AshAdmin.Domain, AshAi]
 
   admin do
     show? true
+  end
+
+  tools do
+    tool :create_page, Concept.Pages.Page, :create_page do
+      description "Create a new page under the given parent (or top-level)."
+    end
   end
 
   resources do
@@ -26,6 +32,7 @@ defmodule Concept.Pages do
       define :create_block, args: [:page_id, :type, :workspace_id, {:optional, :parent_block_id}]
       define :update_content, args: [:content]
       define :update_props, args: [:props]
+      define :evaluate_ai, args: [:prompt, {:optional, :scope}, {:optional, :profile}]
       define :reorder_block, args: [:position], action: :reorder
       define :reparent_block, args: [:parent_block_id, :position], action: :reparent
       define :archive_block, action: :archive
@@ -34,5 +41,69 @@ defmodule Concept.Pages do
       define :refresh_lock
       define :list_for_page, args: [:page_id]
     end
+  end
+
+  @doc """
+  Computes staleness for an `:ai_answer` block.
+
+  Returns `%{stale?: boolean, drifted_count: integer, drifted_block_ids: [uuid]}`.
+
+  A block is stale if any cited block has `updated_at > Message.inserted_at`.
+  Defensive: returns `%{stale?: false, drifted_count: 0, drifted_block_ids: []}` if
+  the block has no message_id or if citations/blocks cannot be loaded.
+  """
+  def staleness_for_ai_block(block) do
+    message_id = get_in(block.content, ["message_id"])
+    workspace_id = block.workspace_id
+    system_actor = %{system?: true}
+
+    if is_nil(message_id) do
+      %{stale?: false, drifted_count: 0, drifted_block_ids: []}
+    else
+      with {:ok, message} <- load_message(message_id, system_actor),
+           {:ok, citations} <-
+             Concept.Knowledge.citations_for_message(message_id,
+               actor: system_actor,
+               tenant: workspace_id
+             ),
+           {:ok, blocks} <- load_cited_blocks(citations, system_actor, workspace_id) do
+        compute_staleness(blocks, message.inserted_at)
+      else
+        _ -> %{stale?: false, drifted_count: 0, drifted_block_ids: []}
+      end
+    end
+  end
+
+  defp load_message(message_id, actor) do
+    Concept.Knowledge.Chat.Message
+    |> Ash.get(message_id, actor: actor, authorize?: false)
+  end
+
+  defp load_cited_blocks(citations, actor, workspace_id) do
+    block_ids = Enum.map(citations, & &1.block_id)
+
+    if Enum.empty?(block_ids) do
+      {:ok, []}
+    else
+      import Ash.Query
+
+      Concept.Pages.Block
+      |> filter(id in ^block_ids)
+      |> Ash.read(actor: actor, tenant: workspace_id, authorize?: false)
+    end
+  end
+
+  defp compute_staleness(blocks, message_inserted_at) do
+    drifted =
+      blocks
+      |> Enum.filter(fn block ->
+        DateTime.compare(block.updated_at, message_inserted_at) == :gt
+      end)
+
+    %{
+      stale?: length(drifted) > 0,
+      drifted_count: length(drifted),
+      drifted_block_ids: Enum.map(drifted, & &1.id)
+    }
   end
 end

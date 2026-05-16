@@ -1,5 +1,5 @@
 #+TITLE: Live citation rail — ambient cross-block awareness while editing
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b087d426cfb5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
 #+CUSTOM_ID: FEAT-045-live-citation-rail-ambient-cross-block-a

@@ -92,20 +92,212 @@ defmodule ConceptWeb.BlockRender do
     do: raw("<div class=\"text-notion-text-light py-2\">Equation (KaTeX)</div>")
 
   defp static_block(%{type: :ai_answer} = block) do
+    state = ai_block_state(block)
+    message_id = get_in(block.content, ["message_id"]) || ""
+
+    {preview_html, staleness_attrs} =
+      if state == "answered" do
+        preview = render_ai_answer_preview(block)
+        staleness = Concept.Pages.staleness_for_ai_block(block)
+
+        attrs =
+          if staleness.stale? do
+            " data-stale=\"true\" data-drifted-count=\"#{staleness.drifted_count}\" data-drifted-block-ids=\"#{Jason.encode!(staleness.drifted_block_ids)}\""
+          else
+            " data-stale=\"false\""
+          end
+
+        {preview, attrs}
+      else
+        {"", ""}
+      end
+
+    safe_preview = Phoenix.HTML.html_escape(preview_html) |> Phoenix.HTML.safe_to_string()
+
     raw(
-      "<ora-ai-block id=\"ai-#{block.id}\" block-id=\"#{block.id}\" state=\"#{ai_state(block.content)}\"></ora-ai-block>"
+      "<ora-ai-block id=\"ai-#{block.id}\" block-id=\"#{block.id}\" message-id=\"#{message_id}\" state=\"#{state}\" preview-html=\"#{safe_preview}\"#{staleness_attrs}></ora-ai-block>"
     )
   end
 
   defp static_block(_block), do: raw("")
 
-  defp ai_state(content) when is_map(content) do
-    if Map.get(content, "message_id") do
-      "answered"
-    else
-      "empty"
+  defp ai_block_state(block) do
+    message_id = get_in(block.content, ["message_id"])
+
+    cond do
+      is_nil(message_id) ->
+        "empty"
+
+      true ->
+        # Try to load message to check completion status
+        case load_message(message_id, block.workspace_id) do
+          {:ok, %{complete: true}} -> "answered"
+          {:ok, %{complete: false}} -> "streaming"
+          {:error, _} -> "failed"
+        end
     end
   end
 
-  defp ai_state(_), do: "empty"
+  defp load_message(message_id, _workspace_id) do
+    system_actor = %{system?: true}
+
+    Concept.Knowledge.Chat.Message
+    |> Ash.get(message_id, actor: system_actor, authorize?: false)
+    |> case do
+      {:ok, message} -> {:ok, message}
+      error -> error
+    end
+  end
+
+  defp render_ai_answer_preview(block) do
+    message_id = get_in(block.content, ["message_id"])
+    workspace_id = block.workspace_id
+    system_actor = %{system?: true}
+
+    with {:ok, message} <- load_message(message_id, workspace_id),
+         {:ok, citations} <-
+           Concept.Knowledge.citations_for_message(message_id,
+             actor: system_actor,
+             tenant: workspace_id
+           ) do
+      # Render answer text
+      {:safe, escaped_text} = Phoenix.HTML.html_escape(message.text)
+
+      answer_html =
+        "<div class=\"ai-answer-text mb-4\"><pre class=\"whitespace-pre-wrap text-sm\">#{IO.iodata_to_binary(escaped_text)}</pre></div>"
+
+      # Render citations if any
+      citations_html =
+        if length(citations) > 0 do
+          citation_cards =
+            citations
+            |> Enum.map(fn citation ->
+              # This is a simplified rendering; in production you'd use the full component
+              {:safe, escaped_snippet} = Phoenix.HTML.html_escape(citation.snippet || "Source")
+
+              "<div class=\"citation-card p-2 border rounded text-xs mb-1\">#{IO.iodata_to_binary(escaped_snippet)}</div>"
+            end)
+            |> Enum.join("")
+
+          "<div class=\"ai-citations mt-3\"><div class=\"text-xs font-medium text-gray-600 mb-2\">Sources:</div>#{citation_cards}</div>"
+        else
+          ""
+        end
+
+      # Render why_this_answer disclosure
+      why_html = render_why_this_answer_html(message)
+
+      answer_html <> citations_html <> why_html
+    else
+      _ -> ""
+    end
+  end
+
+  defp render_why_this_answer_html(message) do
+    # Manually construct HTML for why_this_answer disclosure
+    has_rewritten = message.rewritten_prompt != nil
+    has_search = message.search_trace && length(message.search_trace) > 0
+    has_kept = has_search && Enum.any?(message.search_trace, & &1["kept?"])
+    has_grounding = message.grounding_score != nil
+
+    prompt_section = """
+    <section class="ora-why-section-prompt">
+      <h4 class="font-semibold text-zinc-900 dark:text-zinc-100">Prompt</h4>
+      #{if has_rewritten do
+      {:safe, escaped_original} = Phoenix.HTML.html_escape(message.text)
+      {:safe, escaped_rewritten} = Phoenix.HTML.html_escape(message.rewritten_prompt)
+      """
+      <div class="mt-1">
+        <p class="text-xs text-zinc-500">Original:</p>
+        <p class="text-sm">#{IO.iodata_to_binary(escaped_original)}</p>
+        <p class="text-xs text-zinc-500 mt-2">Rewritten:</p>
+        <p class="text-sm">#{IO.iodata_to_binary(escaped_rewritten)}</p>
+      </div>
+      """
+    else
+      {:safe, escaped_text} = Phoenix.HTML.html_escape(message.text)
+      "<p class=\"text-sm mt-1\">#{IO.iodata_to_binary(escaped_text)}</p>"
+    end}
+    </section>
+    """
+
+    search_section =
+      if has_search do
+        chunk_count = length(message.search_trace)
+
+        chunk_items =
+          message.search_trace
+          |> Enum.map(fn chunk ->
+            score = Float.round(chunk["score"] || 0.0, 3)
+
+            kept =
+              if chunk["kept?"], do: "<span class=\"ml-2 text-green-600\">✓ kept</span>", else: ""
+
+            snippet =
+              if chunk["snippet"] do
+                {:safe, esc} = Phoenix.HTML.html_escape(chunk["snippet"])
+
+                "<p class=\"text-zinc-600 dark:text-zinc-400 mt-0.5 truncate\">#{IO.iodata_to_binary(esc)}</p>"
+              else
+                ""
+              end
+
+            """
+            <li class="text-xs">
+              <span class="font-mono text-zinc-700 dark:text-zinc-300">score: #{score}</span>
+              #{kept}
+              #{snippet}
+            </li>
+            """
+          end)
+          |> Enum.join("")
+
+        """
+        <section class="ora-why-section-retrieval">
+          <h4 class="font-semibold text-zinc-900 dark:text-zinc-100">Retrieval</h4>
+          <p class="text-xs text-zinc-500 mt-1">#{chunk_count} chunks retrieved</p>
+          <ul class="mt-2 space-y-1">#{chunk_items}</ul>
+        </section>
+        """
+      else
+        ""
+      end
+
+    rerank_section =
+      if has_kept do
+        kept_count = Enum.count(message.search_trace, & &1["kept?"])
+
+        """
+        <section class="ora-why-section-reranking">
+          <h4 class="font-semibold text-zinc-900 dark:text-zinc-100">Reranking</h4>
+          <p class="text-xs text-zinc-500 mt-1">#{kept_count} chunks kept for generation</p>
+        </section>
+        """
+      else
+        ""
+      end
+
+    generation_section = """
+    <section class="ora-why-section-generation">
+      <h4 class="font-semibold text-zinc-900 dark:text-zinc-100">Generation</h4>
+      <dl class="mt-1 space-y-1 text-xs">
+        #{if message.latency_ms, do: "<div><dt class=\"inline font-medium\">Latency:</dt><dd class=\"inline ml-1\">#{message.latency_ms}ms</dd></div>", else: ""}
+        #{if message.prompt_tokens || message.completion_tokens, do: "<div><dt class=\"inline font-medium\">Tokens:</dt><dd class=\"inline ml-1\">#{message.prompt_tokens || 0} prompt, #{message.completion_tokens || 0} completion</dd></div>", else: ""}
+        #{if has_grounding, do: "<div><dt class=\"inline font-medium\">Grounding score:</dt><dd class=\"inline ml-1\">#{Float.round(message.grounding_score, 3)}</dd></div>", else: ""}
+      </dl>
+    </section>
+    """
+
+    """
+    <details class="ora-why-this-answer mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+      <summary class="cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-200 font-medium">Why this answer?</summary>
+      <div class="mt-2 space-y-4 pl-4 border-l-2 border-zinc-200 dark:border-zinc-700">
+        #{prompt_section}
+        #{search_section}
+        #{rerank_section}
+        #{generation_section}
+      </div>
+    </details>
+    """
+  end
 end

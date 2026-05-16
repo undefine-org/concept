@@ -137,6 +137,72 @@ export class OraFormatToolbar extends LitElement {
     );
   }
 
+  _askSelection() {
+    const sel = document.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const range = sel.getRangeAt(0);
+    const text = range.toString();
+    if (!text) return;
+
+    // Find closest ora-block
+    const startBlock = closestBlock(range.startContainer);
+    const blockId = startBlock?.id || undefined;
+
+    // Find page_id from URL or data attribute
+    const pageId = this._getPageId();
+
+    this.dispatchEvent(
+      new CustomEvent("ora-ask-selection", {
+        detail: { text, blockId, pageId },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  _getPageId() {
+    // Try to get from URL pattern /w/<slug>/p/<page_id>
+    const match = window.location.pathname.match(/\/p\/([^/]+)/);
+    if (match) return match[1];
+
+    // Fallback: look for data attribute on page editor root
+    const editorRoot = document.getElementById("page-editor-root");
+    return editorRoot?.dataset?.pageId || undefined;
+  }
+  _askSelection() {
+    const sel = document.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const range = sel.getRangeAt(0);
+    const text = range.toString();
+    if (!text) return;
+
+    // Find closest ora-block
+    const startBlock = closestBlock(range.startContainer);
+    const blockId = startBlock?.id || undefined;
+
+    // Find page_id from URL or data attribute
+    const pageId = this._getPageId();
+
+    this.dispatchEvent(
+      new CustomEvent("ora-ask-selection", {
+        detail: { text, blockId, pageId },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  _getPageId() {
+    // Try to get from URL pattern /w/<slug>/p/<page_id>
+    const match = window.location.pathname.match(/\/p\/([^/]+)/);
+    if (match) return match[1];
+
+    // Fallback: look for data attribute on page editor root
+    const editorRoot = document.getElementById("page-editor-root");
+    return editorRoot?.dataset?.pageId || undefined;
+  }
   render() {
     const formats = [
       { key: "bold", label: "B" },
@@ -152,6 +218,7 @@ export class OraFormatToolbar extends LitElement {
         `
       )}
       <button @click=${this._requestLink}>🔗</button>
+      <button @click=${this._askSelection} title="Ask about this">✨</button>
     `;
   }
 }

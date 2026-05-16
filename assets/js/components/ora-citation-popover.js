@@ -9,6 +9,7 @@ import { unsafeHTML } from "lit/directives/unsafe-html.js";
  * that the parent LiveView can handle to fetch block preview HTML.
  * 
  * @fires citation-preview-request - Dispatched after hover debounce, parent should reply with preview HTML
+ * @fires ora-link-this - Dispatched when Link button is clicked
  * @attr {boolean} open - Controls popover visibility
  * @attr {string} preview-html - HTML content to display in popover
  * @attr {string} data-block-id - Block ID for preview request
@@ -65,7 +66,19 @@ export class OraCitationPopover extends LitElement {
         ${this.open && this.previewHtml
           ? html`
               <div class="ora-citation-popover-content">
-                ${unsafeHTML(this.previewHtml)}
+                <div class="ora-citation-popover-preview">
+                  ${unsafeHTML(this.previewHtml)}
+                </div>
+                <div class="ora-citation-popover-actions">
+                  <button
+                    type="button"
+                    @click=${this._onLinkClick}
+                    class="ora-citation-link-btn"
+                    title="Link this block"
+                  >
+                    🔗 Link
+                  </button>
+                </div>
               </div>
             `
           : null}
@@ -103,6 +116,24 @@ export class OraCitationPopover extends LitElement {
       })
     );
   }
+
+  _onLinkClick = (e) => {
+    e.stopPropagation();
+    const targetBlockId = this.getAttribute("data-block-id");
+    if (!targetBlockId) return;
+
+    this.dispatchEvent(
+      new CustomEvent("ora-link-this", {
+        detail: { targetBlockId },
+        bubbles: true,
+        composed: true,
+      })
+    );
+
+    // Close popover after dispatching
+    this.open = false;
+    this.previewHtml = "";
+  };
 
   _addClickOutsideListener() {
     // Small delay to avoid immediate closure from the same click

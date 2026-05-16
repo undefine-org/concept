@@ -48,7 +48,7 @@ defmodule ConceptWeb.PageEditorLive do
   def render(assigns) do
     ~H"""
     <div id="page-editor-root" phx-hook=".PageScroll">
-      <div class="space-y-1 relative">
+      <div id="page-editor-content" class="space-y-1 relative" phx-hook="AskSelection">
         <ul :if={@blocks != []} id={"block-list-#{@page_id}"} phx-hook="BlockList" class="space-y-1">
           <li :for={b <- @blocks} data-block-id={b.id}>
             <ConceptWeb.BlockRender.block block={b} />
@@ -108,11 +108,21 @@ defmodule ConceptWeb.PageEditorLive do
   end
 
   @impl true
-  def handle_event("focus_block", %{"block_id" => id}, socket) do
+  def handle_event("focus_block", %{"block_id" => id} = params, socket) do
     user = socket.assigns.current_user
     ws_id = socket.assigns.workspace.id
+    page_id = socket.assigns.page_id
 
     block = Enum.find(socket.assigns.blocks, &(&1.id == id))
+
+    # Broadcast focus event for live citation rail
+    if text = Map.get(params, "text") do
+      Phoenix.PubSub.broadcast(
+        Concept.PubSub,
+        "workspace:#{ws_id}:focus_block",
+        {:focus_block, id, text, page_id}
+      )
+    end
 
     self_held? =
       Map.get(socket.assigns.held_locks, id) ||
@@ -366,6 +376,23 @@ defmodule ConceptWeb.PageEditorLive do
               socket
           end
       end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event(
+        "ask_selection",
+        %{"text" => text, "block_id" => _block_id, "page_id" => page_id},
+        socket
+      ) do
+    ws_id = socket.assigns.workspace.id
+
+    Phoenix.PubSub.broadcast(
+      Concept.PubSub,
+      "palette:#{ws_id}",
+      {:palette_ask_with_seed, text, page_id}
+    )
 
     {:noreply, socket}
   end

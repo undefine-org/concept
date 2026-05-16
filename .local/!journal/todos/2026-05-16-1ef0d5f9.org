@@ -14,28 +14,28 @@ Read assets/js/lexical/__tests__/commands.test.js, assets/js/lexical/registry.js
 
 Phase A FAIL confirmed: setLink via production registry fails because nodes lacks LinkNode and no TOGGLE_LINK_COMMAND handler is registered.
 
-** DOING Fix registry.js and package.json
+** DONE Fix registry.js and package.json
 :PROPERTIES:
 :TASK_ID: fix-registry
-:STATUS: in_progress
+:STATUS: completed
 :DEPENDS: phase-a
 :END:
 
 Add @lexical/link dep if missing. Import LinkNode, $toggleLink, TOGGLE_LINK_COMMAND. Add to nodes array. Register TOGGLE_LINK_COMMAND handler in register().
 
-** ITEM Fix server-side to_html for links
+** DONE Fix server-side to_html for links
 :PROPERTIES:
 :TASK_ID: fix-server
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: phase-a
 :END:
 
 Add %{type: "link", url: u, children: c} -> <a href={u}> case in Concept.Lexical.to_html/1.
 
-** ITEM Run tests and commit
+** DONE Run tests and commit
 :PROPERTIES:
 :TASK_ID: verify-commit
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: fix-registry fix-server
 :END:
 

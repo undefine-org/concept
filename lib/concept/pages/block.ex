@@ -130,6 +130,22 @@ defmodule Concept.Pages.Block do
       change set_attribute(:lock_expires_at, nil)
     end
 
+    update :evaluate_ai do
+      argument :prompt, :string, allow_nil?: false
+
+      argument :scope, :atom,
+        constraints: [one_of: [:workspace, :page, :subtree]],
+        default: :workspace
+
+      argument :profile, :atom,
+        constraints: [one_of: [:fast, :default, :thorough, :outline, :contradict, :intent]],
+        default: :default
+
+      accept []
+      require_atomic? false
+      change Concept.Pages.Block.Changes.EvaluateAi
+    end
+
     read :list_for_page do
       argument :page_id, :uuid, allow_nil?: false
       filter expr(page_id == ^arg(:page_id) and is_nil(archived_at))

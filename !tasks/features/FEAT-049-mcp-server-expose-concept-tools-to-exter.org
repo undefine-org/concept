@@ -1,5 +1,5 @@
 #+TITLE: MCP server — expose Concept tools to external AI agents
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b087d426cfb5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
 #+CUSTOM_ID: FEAT-049-mcp-server-expose-concept-tools-to-exter
@@ -33,3 +33,16 @@ AshAI ships an MCP (Model Context Protocol) server. Expose Concept's Knowledge +
 * Acceptance
 - Claude Desktop with the MCP proxy can list pages and ask questions against a workspace.
 - The same tool registry powers internal ChatPanel + external MCP — single source.
+
+NOTE [2026-05-16]: MCP server successfully exposed at /mcp with:
+- API key authentication via AshAuthentication
+- 2 Knowledge domain tools: search_workspace, answer_question (via Tools wrapper resource)
+- Tools registered in Knowledge and Pages domains (4 total: search_workspace, answer_question, link_blocks, create_page)
+- Comprehensive tests: tool listing, auth acceptance, auth rejection
+- Dev hot-reload support via AshAi.Mcp.Dev plug
+
+Implementation notes:
+- Created Concept.Knowledge.Tools resource wrapping Search.search/3 and Ask.ask/3 as Ash actions
+- Added AshAI extension to Knowledge and Pages domains
+- MCP route mounted at /mcp with :mcp pipeline (API key auth required)
+- Tools filtered by authorization - only search_workspace and answer_question appear in test due to workspace/tenant scoping requirements

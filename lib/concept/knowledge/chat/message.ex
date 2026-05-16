@@ -205,6 +205,37 @@ defmodule Concept.Knowledge.Chat.Message do
       public? true
       allow_nil? false
     end
+
+    attribute :rewritten_prompt, :string do
+      public? false
+      allow_nil? true
+    end
+
+    attribute :search_trace, {:array, :map} do
+      public? false
+      allow_nil? false
+      default []
+    end
+
+    attribute :prompt_tokens, :integer do
+      public? false
+      allow_nil? true
+    end
+
+    attribute :completion_tokens, :integer do
+      public? false
+      allow_nil? true
+    end
+
+    attribute :latency_ms, :integer do
+      public? false
+      allow_nil? true
+    end
+
+    attribute :grounding_score, :float do
+      public? false
+      allow_nil? true
+    end
   end
 
   relationships do

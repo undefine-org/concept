@@ -25,7 +25,8 @@ config :concept, Oban,
   plugins: [
     {Oban.Plugins.Cron,
      crontab: [
-       {"0 1 * * *", Concept.Knowledge.Workers.AggregateTokens}
+       {"0 1 * * *", Concept.Knowledge.Workers.AggregateTokens},
+       {"0 2 * * 0", Concept.Knowledge.Workers.RebuildCommunities}
      ]}
   ]
 

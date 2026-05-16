@@ -1,0 +1,33 @@
+#+TITLE: Session 14e3fe9c5966d016 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Write component tests
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: completed
+:END:
+
+File: test/concept_web/components/live_citation_rail_test.exs
+
+Tests (4):
+1. test "rail defaults to off" - check @live_rail_show = false in initial assigns
+2. test "focus_block triggers debounced search" - send focus event, advance time 1.5s, assert search called
+3. test "results exclude current page" - mock search results with current+other pages, assert only other shown
+4. test "rapid focus cancels pending" - send focus twice quickly, advance 1.5s, assert only one search
+
+Use Concept.DataCase, inline user/workspace creation pattern from citation_test.exs
+
+Acceptance: mix test path/to/test.exs green
+
+** DONE Mark org item DONE
+:PROPERTIES:
+:TASK_ID: task-7
+:STATUS: completed
+:END:
+
+Run: org update --id FEAT-045-live-citation-rail-ambient-cross-block-a --state DONE
+
+Acceptance: org get shows DONE state

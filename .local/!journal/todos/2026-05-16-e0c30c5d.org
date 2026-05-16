@@ -1,0 +1,23 @@
+#+TITLE: Session 14e3fe0045b3d325 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Add 4 missing integration scenarios
+:PROPERTIES:
+:TASK_ID: add-tests
+:STATUS: completed
+:END:
+
+Add tests for: ArrowUp mid-block (no fire), ArrowDown end (fires), Enter end (fires insert), Enter mid (no fire). Use existing harness pattern.
+
+* Verification
+
+** DONE Run vitest and commit
+:PROPERTIES:
+:TASK_ID: verify-commit
+:STATUS: completed
+:END:
+
+cd assets && npx vitest run components/__tests__/ora-block-integration.test.js must pass 5+ tests. Then git commit.

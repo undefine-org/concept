@@ -91,13 +91,16 @@ defmodule ConceptWeb.CommandPaletteLive do
                 </div>
 
                 <%!-- Title results bucket --%>
-                <%= if match?(%{ok?: true, result: results} when results != [], @title_results) do %>
+                <%= if match?(%{ok?: true, result: %{title_results: results}} when results != [], @title_results) do %>
                   <div class="px-4 pt-3 pb-1 text-xs font-medium text-notion-text-light uppercase tracking-wide">
                     Pages
                   </div>
                   <div>
                     <.page_item
-                      :for={{page, idx} <- Enum.with_index(@title_results.result |> Enum.take(4))}
+                      :for={
+                        {page, idx} <-
+                          Enum.with_index(@title_results.result.title_results |> Enum.take(4))
+                      }
                       index={length(@actions) + idx}
                       selected_index={@selected_index}
                       icon_emoji={page.icon_emoji}
@@ -111,13 +114,13 @@ defmodule ConceptWeb.CommandPaletteLive do
                 <% end %>
 
                 <%!-- Semantic results bucket --%>
-                <%= if match?(%{ok?: true, result: results} when results != [], @semantic_results) do %>
+                <%= if match?(%{ok?: true, result: %{semantic_results: results}} when results != [], @semantic_results) do %>
                   <% title_page_ids =
-                    if match?(%{ok?: true, result: _pages}, @title_results),
-                      do: Enum.map(@title_results.result, & &1.id),
+                    if match?(%{ok?: true, result: %{title_results: _pages}}, @title_results),
+                      do: Enum.map(@title_results.result.title_results, & &1.id),
                       else: [] %>
                   <% semantic_hits =
-                    @semantic_results.result
+                    @semantic_results.result.semantic_results
                     |> Enum.uniq_by(& &1.page_id)
                     |> Enum.reject(&(&1.page_id in title_page_ids))
                     |> Enum.take(6) %>
@@ -316,12 +319,12 @@ defmodule ConceptWeb.CommandPaletteLive do
     {:noreply, socket}
   end
 
-  defp title_count(%{ok?: true, result: pages}), do: min(length(pages), 4)
+  defp title_count(%{ok?: true, result: %{title_results: pages}}), do: min(length(pages), 4)
   defp title_count(_), do: 0
 
   defp semantic_count(assigns) do
-    with %{ok?: true, result: hits} <- assigns.semantic_results,
-         %{ok?: true, result: pages} <- assigns.title_results do
+    with %{ok?: true, result: %{semantic_results: hits}} <- assigns.semantic_results,
+         %{ok?: true, result: %{title_results: pages}} <- assigns.title_results do
       title_page_ids = Enum.map(pages, & &1.id)
 
       hits

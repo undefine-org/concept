@@ -6,6 +6,15 @@ defmodule ConceptWeb.Router do
   import ArcanaWeb.Router
   import AshAuthentication.Plug.Helpers
 
+  pipeline :mcp do
+    plug AshAuthentication.Strategy.ApiKey.Plug,
+      resource: Concept.Accounts.User,
+      # Use `required?: false` to allow unauthenticated
+      # users to connect, for example if some tools
+      # are publicly accessible.
+      required?: true
+  end
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -20,6 +29,11 @@ defmodule ConceptWeb.Router do
     plug :accepts, ["json"]
     plug :load_from_bearer
     plug :set_actor, :user
+
+    plug AshAuthentication.Strategy.ApiKey.Plug,
+      resource: Concept.Accounts.User,
+      # if you want to require an api key to be supplied, set `required?` to true
+      required?: false
   end
 
   pipeline :require_owner do
@@ -39,6 +53,7 @@ defmodule ConceptWeb.Router do
       live "/w", WorkspaceLive, :index
       live "/w/:workspace_slug", WorkspaceLive, :workspace
       live "/w/:workspace_slug/p/:page_id", WorkspaceLive, :page
+      live "/w/:workspace_slug/graph", WorkspaceGraphLive
     end
   end
 
@@ -99,6 +114,15 @@ defmodule ConceptWeb.Router do
   end
 
   import AshAdmin.Router
+
+  scope "/mcp" do
+    pipe_through :mcp
+
+    forward "/", AshAi.Mcp.Router,
+      tools: [:search_workspace, :answer_question, :link_blocks, :create_page],
+      protocol_version_statement: "2024-11-05",
+      otp_app: :concept
+  end
 
   scope "/admin" do
     pipe_through [:browser, :require_owner]

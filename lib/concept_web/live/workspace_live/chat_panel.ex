@@ -23,6 +23,7 @@ defmodule ConceptWeb.WorkspaceLive.ChatPanel do
       |> assign_new(:message_scope, fn -> :workspace end)
       |> assign_new(:message_profile, fn -> :default end)
       |> assign_new(:initial_prompt, fn -> nil end)
+      |> assign_new(:scope_target_id, fn -> nil end)
 
     {:ok, socket}
   end
@@ -116,6 +117,7 @@ defmodule ConceptWeb.WorkspaceLive.ChatPanel do
             message_scope={@message_scope}
             message_profile={@message_profile}
             initial_prompt={@initial_prompt}
+            scope_target_id={@scope_target_id}
           />
         </div>
       </div>

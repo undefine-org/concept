@@ -1,0 +1,71 @@
+#+TITLE: Session 14e3f476bf73d316 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Phase A: Write failing tests
+
+** DONE Add filter defect test
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:END:
+
+In assets/js/hooks/__tests__/slash_menu.test.js: add test that sets _filter='h1' on OraSlashMenu and asserts Heading 1 is in _filteredItems. Run, capture FAIL snippet.
+
+FAIL snippet: AssertionError: expected [] to include 'Heading 1'
+
+** DONE Add deletion integration test
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:END:
+
+In slash_menu.test.js: mount real ora-block + Lexical editor with 'foo', focus block, type '/' via editor.update(()=>$getSelection().insertText('/')), dispatch select event with heading_1, await flush, assert text === 'foo'. Run, capture FAIL.
+
+FAIL snippet: expected 'foo/h1' to be 'foo' + Lexical error: does not support appending TextNode to root
+
+** DONE Add detection integration test
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
+:END:
+
+In slash_menu.test.js: mount real ora-block + editor, type '/' via editor.update insertText, assert menu visible or _open true. Run, capture FAIL.
+
+FAIL snippet: expected false to be true (menu.visible)
+
+* Phase B: Implement fixes
+
+** DOING Fix filter in ora-slash-menu.js
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: in_progress
+:END:
+
+Update _filteredItems getter in assets/js/components/ora-slash-menu.js to use case-insensitive label, normalized type (remove _/-), and label key (remove spaces).
+
+** ITEM Rework hook to Lexical pipeline
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: pending
+:END:
+
+In assets/js/hooks/slash_menu.js: remove document input listener, add ora-block-focus/ora-block-blur listeners, subscribe/unsubscribe registerTextContentListener on focused editor, detect '/' at trigger position. Keep _activeEditor for _handleSelectItem.
+
+** ITEM Fix trigger deletion with verified flush
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: pending
+:END:
+
+In _handleSelectItem: use editor.update with onUpdate callback or await rAF, then re-read text to verify deletion. Use $getSelection-based removal or root reconstruction inside update.
+
+* Phase B: Verify and commit
+
+** ITEM Run tests and commit
+:PROPERTIES:
+:TASK_ID: task-7
+:STATUS: pending
+:END:
+
+Run vitest for hooks and components. All green. One commit referencing BUG-033.

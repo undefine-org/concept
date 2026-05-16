@@ -1,5 +1,5 @@
 #+TITLE: Slash menu: case-sensitive filter, ineffective trigger deletion, input listener missed in browsers
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-033-slash-menu-case-sensitive-filter-ineffec
@@ -79,3 +79,5 @@ Switch from ~document.addEventListener("input", \u2026)~ to listening on the foc
 * Acceptance
 - Slice F re-runs: all behaviors pass including filter "h1" and post-select source cleanup.
 - One commit: ~fix(editor): slash menu filter normalization + Lexical-pipeline detection + verified deletion (BUG-033)~.
+
+NOTE [2026-05-16]: Commit e66eae4. Filter: case-fold + type/label normalization + initials matching. Detection: registerTextContentListener via ora-block-focus events (replaced document-level listener). Deletion: $createParagraphNode rebuild + RAF post-commit verification. 35 tests across 4 files green incl. 2 real-Lexical integration tests.

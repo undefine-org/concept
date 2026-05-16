@@ -1,5 +1,5 @@
 #+TITLE: Lexical @lexical/link plugin not registered; link toolbar dispatches into the void
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-031-lexical-lexical-link-plugin-not-register
@@ -71,3 +71,5 @@ Phase A: write the editor-state assertion BEFORE wiring the plugin; verify it fa
 - Slice E re-runs and the link flow passes through apply + reload + remove.
 - New tests green.
 - One commit: ~fix(editor): wire @lexical/link plugin into registry + server HTML (BUG-031)~.
+
+NOTE [2026-05-16]: Commits 478a4d6 (ExUnit) + 876792d (JS registry edits absorbed by parallel agent). LinkNode in registry.js nodes; TOGGLE_LINK_COMMAND handler via mergeRegister(registerRichText, registerCommand). Concept.Lexical.to_html already handled link nodes. 3 vitest + 6 lexical ExUnit + 24 page_editor ExUnit all green.

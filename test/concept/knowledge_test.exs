@@ -10,8 +10,18 @@ defmodule Concept.KnowledgeTest do
       assert Code.ensure_loaded?(Concept.Knowledge)
     end
 
-    test "domain has no resources" do
-      assert Ash.Domain.Info.resources(Concept.Knowledge) == []
+    test "domain has expected knowledge resources" do
+      resources = Ash.Domain.Info.resources(Concept.Knowledge)
+
+      assert Concept.Knowledge.IngestionJob in resources
+      assert Concept.Knowledge.Citation in resources
+      assert Concept.Knowledge.Link in resources
+      assert Concept.Knowledge.Link.Version in resources
+      assert Concept.Knowledge.TokenLedger in resources
+      assert Concept.Knowledge.Tools in resources
+
+      # Ensure we have exactly these 6 resources
+      assert length(resources) == 6
     end
   end
 end

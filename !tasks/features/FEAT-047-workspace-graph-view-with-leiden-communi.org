@@ -1,5 +1,5 @@
 #+TITLE: Workspace graph view with Leiden communities
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b087d426cfb5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
 #+CUSTOM_ID: FEAT-047-workspace-graph-view-with-leiden-communi

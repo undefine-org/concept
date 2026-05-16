@@ -1,0 +1,32 @@
+#+TITLE: BUG-032 integration tests missing 4 of 5 scenarios from org spec
+#+STATE: DONE
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-034-bug-032-integration-tests-missing-4-of-5
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W2.7.5 test-depth specialist (P2): BUG-032 org spec listed 5 integration scenarios in =assets/js/components/__tests__/ora-block-integration.test.js=. Commit 2136bf8 only shipped 1 (positive ArrowUp@0). Missing:
+
+1. /ArrowUp mid-block/ does NOT fire ~ora-block-arrow-up~.
+2. /ArrowDown at end/ fires ~ora-block-arrow-down~.
+3. /Enter at end/ fires ~insert_block_below~.
+4. /Enter mid-block/ does NOT fire (Lexical's native newline runs).
+
+Negative-path coverage absent. Without it, a regression where `_isAtStart`/`_isAtEnd` returns ~true~ mid-block would not be caught.
+
+* Scope
+- IN: extend =assets/js/components/__tests__/ora-block-integration.test.js= with the 4 missing scenarios.
+- IN: keep TDD discipline \u2014 Phase A failing snippet (e.g. for the negative ArrowUp mid-block case, what would fail with the current code?).
+- OUT: any changes to =ora-block.js= (only test coverage).
+
+* Acceptance
+- All 5 scenarios present; integration suite green.
+- One commit: ~test(editor): add negative + ArrowDown + Enter scenarios to ora-block integration (BUG-034)~.
+
+NOTE [2026-05-16]: Commit b9ad15c. 4 scenarios added: ArrowUp@mid negative, ArrowDown@end positive, Enter@end positive (verified event name ora-block-enter-at-end), Enter@mid negative. 6 vitest tests in file green. TDD evidence: inverted positive assertions to confirm meaningfulness; negatives proved via Phase B PASS.

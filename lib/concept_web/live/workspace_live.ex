@@ -5,9 +5,13 @@ defmodule ConceptWeb.WorkspaceLive do
   import ConceptWeb.Components.Sidebar
   import ConceptWeb.Components.PresenceBar
   import ConceptWeb.Components.IndexingPill
+  import ConceptWeb.Components.LinkThisModal
+  import ConceptWeb.Components.LiveCitationRail
 
   alias Concept.Accounts
   alias Concept.Pages
+
+  require Ash.Query
 
   @impl true
   def mount(_params, _session, socket) do
@@ -59,7 +63,11 @@ defmodule ConceptWeb.WorkspaceLive do
            indexing_state: %{count: 0, last_succeeded_at: nil, failed?: false},
            show_indexing_details: false,
            chat_open?: false,
-           chat_initial_prompt: nil
+           chat_initial_prompt: nil,
+           link_modal_state: nil,
+           live_rail_results: [],
+           live_rail_show: false,
+           live_rail_debounce_ref: nil
          )}
 
       {:error, _} ->
@@ -79,6 +87,7 @@ defmodule ConceptWeb.WorkspaceLive do
         Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:ingest")
         Phoenix.PubSub.subscribe(Concept.PubSub, "palette:#{ws.id}")
         Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:page:#{page_id}:presence")
+        Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:focus_block")
         {:ok, pages} = Pages.list_tree(actor: user, tenant: ws.id)
 
         case Pages.get_page(page_id, actor: user, tenant: ws.id) do
@@ -94,7 +103,11 @@ defmodule ConceptWeb.WorkspaceLive do
                indexing_state: %{count: 0, last_succeeded_at: nil, failed?: false},
                show_indexing_details: false,
                chat_open?: false,
-               chat_initial_prompt: nil
+               chat_initial_prompt: nil,
+               link_modal_state: nil,
+               live_rail_results: [],
+               live_rail_show: false,
+               live_rail_debounce_ref: nil
              )}
 
           _ ->
@@ -152,6 +165,20 @@ defmodule ConceptWeb.WorkspaceLive do
 
   def handle_info({:palette_ask, query}, socket) do
     {:noreply, assign(socket, chat_open?: true, chat_initial_prompt: query)}
+  end
+
+  def handle_info({:palette_ask_with_seed, text, page_id}, socket) do
+    prompt = "Tell me more about this excerpt:\n\n" <> text
+
+    socket = assign(socket, chat_open?: true, chat_initial_prompt: prompt)
+
+    send_update(ConceptWeb.WorkspaceLive.ChatPanel,
+      id: "chat-panel",
+      message_scope: :subtree,
+      scope_target_id: page_id
+    )
+
+    {:noreply, socket}
   end
 
   def handle_info(:close_chat_panel, socket) do
@@ -261,6 +288,36 @@ defmodule ConceptWeb.WorkspaceLive do
   end
 
   @impl true
+  def handle_info({:focus_block, _block_id, text, page_id}, socket) do
+    # Cancel previous debounce if exists
+    if socket.assigns.live_rail_debounce_ref do
+      Process.cancel_timer(socket.assigns.live_rail_debounce_ref)
+    end
+
+    # Schedule new search after 1.5s
+    ref = Process.send_after(self(), {:execute_rail_search, text, page_id}, 1500)
+    {:noreply, assign(socket, live_rail_debounce_ref: ref)}
+  end
+
+  def handle_info({:execute_rail_search, text, page_id}, socket) do
+    ws_id = socket.assigns.workspace.id
+
+    case Concept.Knowledge.Search.search(text, ws_id, limit: 3, mode: :hybrid) do
+      {:ok, results} ->
+        # Filter out results from current page
+        filtered =
+          results
+          |> Enum.filter(fn hit -> hit.page_id != page_id end)
+          |> Enum.take(3)
+
+        {:noreply, assign(socket, live_rail_results: filtered, live_rail_debounce_ref: nil)}
+
+      {:error, _} ->
+        {:noreply, assign(socket, live_rail_debounce_ref: nil)}
+    end
+  end
+
+  @impl true
   def handle_event("new_page", _, socket) do
     {:noreply, do_new_page(socket, nil)}
   end
@@ -364,6 +421,126 @@ defmodule ConceptWeb.WorkspaceLive do
     close_palette(socket)
   end
 
+  @impl true
+  def handle_event("ora_link_this", %{"targetBlockId" => target_block_id}, socket) do
+    # Determine source block from current page's focused block or first block
+    # For now, we'll require the event to include source_block_id or use current page's first block
+    source_block_id = determine_source_block(socket)
+
+    {:noreply,
+     assign(socket, :link_modal_state, %{
+       target_block_id: target_block_id,
+       source_block_id: source_block_id,
+       error: nil
+     })}
+  end
+
+  def handle_event("close_link_modal", _params, socket) do
+    {:noreply, assign(socket, :link_modal_state, nil)}
+  end
+
+  def handle_event("toggle_live_rail", _params, socket) do
+    new_state = !socket.assigns.live_rail_show
+
+    socket =
+      socket
+      |> assign(live_rail_show: new_state)
+      |> push_event("rail_toggled", %{show: new_state})
+
+    {:noreply, socket}
+  end
+
+  def handle_event("set_live_rail_show", %{"show" => show}, socket) do
+    {:noreply, assign(socket, live_rail_show: show)}
+  end
+
+  def handle_event("submit_link", params, socket) do
+    %{
+      "kind" => kind,
+      "source_block_id" => source_block_id,
+      "target_block_id" => target_block_id
+    } = params
+
+    note = Map.get(params, "note", "")
+
+    ws = socket.assigns.workspace
+    user = socket.assigns.current_user
+
+    # Validate self-link at backend too
+    if source_block_id == target_block_id do
+      {:noreply,
+       assign(socket, :link_modal_state, %{
+         target_block_id: target_block_id,
+         source_block_id: source_block_id,
+         error: "Cannot link a block to itself"
+       })}
+    else
+      link_attrs = %{
+        source_block_id: source_block_id,
+        target_block_id: target_block_id,
+        kind: String.to_existing_atom(kind),
+        note: if(note == "", do: nil, else: note),
+        workspace_id: ws.id
+      }
+
+      case Concept.Knowledge.Link
+           |> Ash.Changeset.for_create(:create, link_attrs, actor: user, tenant: ws.id)
+           |> Ash.create() do
+        {:ok, _link} ->
+          {:noreply,
+           socket
+           |> assign(:link_modal_state, nil)
+           |> put_flash(:info, "✓ Linked")}
+
+        {:error, %Ash.Error.Invalid{errors: errors}} ->
+          error_msg =
+            errors
+            |> Enum.map(fn
+              %{message: msg} -> msg
+              _ -> "Failed to create link"
+            end)
+            |> Enum.join(", ")
+
+          {:noreply,
+           assign(socket, :link_modal_state, %{
+             target_block_id: target_block_id,
+             source_block_id: source_block_id,
+             error: error_msg
+           })}
+
+        {:error, _} ->
+          {:noreply,
+           assign(socket, :link_modal_state, %{
+             target_block_id: target_block_id,
+             source_block_id: source_block_id,
+             error: "Failed to create link"
+           })}
+      end
+    end
+  end
+
+  defp determine_source_block(socket) do
+    # For now, return the current page's first block if available
+    # Future: track focused block in assigns
+    case socket.assigns[:current_page] do
+      %{id: page_id} ->
+        ws = socket.assigns.workspace
+        user = socket.assigns.current_user
+
+        case Concept.Pages.Block
+             |> Ash.Query.filter(page_id: page_id)
+             |> Ash.Query.sort(:position)
+             |> Ash.Query.limit(1)
+             |> Ash.read(actor: user, tenant: ws.id) do
+          {:ok, [block | _]} -> block.id
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
   defp do_new_page(socket, parent_id) do
     ws = socket.assigns.workspace
     user = socket.assigns.current_user
@@ -406,7 +583,7 @@ defmodule ConceptWeb.WorkspaceLive do
       <div
         id="workspace-root"
         class="flex h-screen"
-        phx-hook="GlobalKeys"
+        phx-hook="GlobalKeys LiveCitationRail"
         phx-window-keydown="global_key"
       >
         <.sidebar
@@ -414,6 +591,7 @@ defmodule ConceptWeb.WorkspaceLive do
           pages={@pages}
           current_page={@current_page}
           current_user={@current_user}
+          live_rail_show={@live_rail_show}
         />
 
         <main class="flex-1 overflow-y-auto bg-notion-bg">
@@ -449,6 +627,13 @@ defmodule ConceptWeb.WorkspaceLive do
             </div>
           <% end %>
         </main>
+
+        <.live_citation_rail
+          :if={@live_rail_show && @current_page}
+          citations={@live_rail_results}
+          workspace_slug={@workspace.slug}
+          current_page_id={@current_page && @current_page.id}
+        />
       </div>
 
       <div class="fixed bottom-4 right-4 z-30">
@@ -483,6 +668,14 @@ defmodule ConceptWeb.WorkspaceLive do
         workspace={@workspace}
         current_user={@current_user}
         show_palette={@show_palette}
+      />
+
+      <.link_this_modal
+        :if={@link_modal_state}
+        show={@link_modal_state != nil}
+        source_block_id={@link_modal_state && @link_modal_state.source_block_id}
+        target_block_id={@link_modal_state && @link_modal_state.target_block_id}
+        error={@link_modal_state && @link_modal_state.error}
       />
     </Layouts.app>
     """

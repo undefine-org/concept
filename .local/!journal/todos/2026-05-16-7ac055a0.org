@@ -1,0 +1,20 @@
+#+TITLE: Session 14e3fb938ca6d00e Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Write link_this_modal tests
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: completed
+:END:
+
+File: test/concept_web/components/link_this_modal_test.exs
+4 tests:
+1. Modal renders 4 kind options
+2. Submit creates Link + closes modal
+3. Duplicate identity → inline error
+4. Self-link rejected (frontend validation shows error)
+Use Concept.DataCase pattern from citation_card_test.exs
+Acceptance: mix test green

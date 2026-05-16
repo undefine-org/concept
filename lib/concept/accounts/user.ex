@@ -45,6 +45,11 @@ defmodule Concept.Accounts.User do
       end
 
       remember_me :remember_me
+
+      api_key :api_key do
+        api_key_relationship :valid_api_keys
+        api_key_hash_attribute :api_key_hash
+      end
     end
   end
 
@@ -225,6 +230,11 @@ defmodule Concept.Accounts.User do
       # Generates an authentication token for the user
       change AshAuthentication.GenerateTokenChange
     end
+
+    read :sign_in_with_api_key do
+      argument :api_key, :string, allow_nil?: false
+      prepare AshAuthentication.Strategy.ApiKey.SignInPreparation
+    end
   end
 
   policies do
@@ -247,6 +257,12 @@ defmodule Concept.Accounts.User do
     end
 
     attribute :confirmed_at, :utc_datetime_usec
+  end
+
+  relationships do
+    has_many :valid_api_keys, Concept.Accounts.ApiKey do
+      filter expr(valid)
+    end
   end
 
   identities do

@@ -171,9 +171,9 @@ PerformIngest covers immediate need; full Reactor steps refactor deferred to pos
 :STATUS: failed
 :END:
 
-* Wave 2 regression fix
+* Wave 4.5 final fixes
 
-** ITEM Fix 8 test regressions across Link/Knowledge/Palette
+** ITEM Fix 9 remaining test failures across staleness/tokens/ai-block/palette
 :PROPERTIES:
 :TASK_ID: task-5
 :STATUS: pending

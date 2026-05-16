@@ -32,6 +32,16 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
       profile = Concept.Knowledge.Profiles.get!(profile_name)
       model = profile.answer[:model] || "google:gemini-2.5-flash"
 
+      # Track start time for latency
+      start_time = System.monotonic_time(:millisecond)
+
+      # Capture metadata during streaming
+      metadata = %{
+        prompt_tokens: nil,
+        completion_tokens: nil,
+        grounding_score: nil
+      }
+
       final_state =
         prompt_messages
         |> AshAi.ToolLoop.stream(
@@ -42,43 +52,51 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
           tenant: context.tenant,
           context: Map.new(Ash.Context.to_opts(context))
         )
-        |> Enum.reduce(%{text: "", tool_calls: [], tool_results: [], stream_error: nil}, fn
-          {:content, content}, acc ->
-            if content not in [nil, ""] do
-              Concept.Knowledge.Chat.Message
-              |> Ash.Changeset.for_create(
-                :upsert_response,
-                %{
-                  id: new_message_id,
-                  response_to_id: message.id,
-                  conversation_id: message.conversation_id,
-                  text: content
-                },
-                actor: %AshAi{}
-              )
-              |> Ash.create!()
-            end
+        |> Enum.reduce(
+          %{text: "", tool_calls: [], tool_results: [], stream_error: nil, metadata: metadata},
+          fn
+            {:content, content}, acc ->
+              if content not in [nil, ""] do
+                Concept.Knowledge.Chat.Message
+                |> Ash.Changeset.for_create(
+                  :upsert_response,
+                  %{
+                    id: new_message_id,
+                    response_to_id: message.id,
+                    conversation_id: message.conversation_id,
+                    text: content
+                  },
+                  actor: %AshAi{}
+                )
+                |> Ash.create!()
+              end
 
-            %{acc | text: acc.text <> (content || "")}
+              %{acc | text: acc.text <> (content || "")}
 
-          {:tool_call, tool_call}, acc ->
-            %{acc | tool_calls: append_event(acc.tool_calls, tool_call)}
+            {:tool_call, tool_call}, acc ->
+              %{acc | tool_calls: append_event(acc.tool_calls, tool_call)}
 
-          {:tool_result, %{id: id, result: result}}, acc ->
-            %{
+            {:tool_result, %{id: id, result: result}}, acc ->
+              %{
+                acc
+                | tool_results: append_event(acc.tool_results, normalize_tool_result(id, result))
+              }
+
+            {:error, reason}, acc ->
+              %{acc | stream_error: reason}
+
+            {:done, done_metadata}, acc ->
+              # Capture token usage and grounding if available
+              usage_metadata = extract_usage_metadata(done_metadata)
+              %{acc | metadata: Map.merge(acc.metadata, usage_metadata)}
+
+            _, acc ->
               acc
-              | tool_results: append_event(acc.tool_results, normalize_tool_result(id, result))
-            }
+          end
+        )
 
-          {:error, reason}, acc ->
-            %{acc | stream_error: reason}
-
-          {:done, _}, acc ->
-            acc
-
-          _, acc ->
-            acc
-        end)
+      # Calculate latency
+      latency_ms = System.monotonic_time(:millisecond) - start_time
 
       stream_error_text = stream_error_text(final_state.stream_error)
 
@@ -105,15 +123,18 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
         Concept.Knowledge.Chat.Message
         |> Ash.Changeset.for_create(
           :upsert_response,
-          %{
-            id: new_message_id,
-            response_to_id: message.id,
-            conversation_id: message.conversation_id,
-            complete: true,
-            tool_calls: final_state.tool_calls,
-            tool_results: final_state.tool_results,
-            text: final_text
-          },
+          Map.merge(
+            %{
+              id: new_message_id,
+              response_to_id: message.id,
+              conversation_id: message.conversation_id,
+              complete: true,
+              tool_calls: final_state.tool_calls,
+              tool_results: final_state.tool_results,
+              text: final_text
+            },
+            build_audit_attrs(final_state.metadata, latency_ms)
+          ),
           actor: %AshAi{}
         )
         |> Ash.create!()
@@ -162,5 +183,30 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
 
   defp stream_error_text(_reason) do
     "I hit an error while generating this response. Please try again."
+  end
+
+  defp extract_usage_metadata(metadata) when is_map(metadata) do
+    %{
+      prompt_tokens: get_in(metadata, [:usage, :prompt_tokens]),
+      completion_tokens: get_in(metadata, [:usage, :completion_tokens]),
+      grounding_score: get_in(metadata, [:grounding_metadata, :grounding_score])
+    }
+  end
+
+  defp extract_usage_metadata(_), do: %{}
+
+  defp build_audit_attrs(metadata, latency_ms) do
+    %{
+      prompt_tokens: metadata.prompt_tokens,
+      completion_tokens: metadata.completion_tokens,
+      latency_ms: latency_ms,
+      grounding_score: metadata.grounding_score,
+      # For now, search_trace is empty (TODO: integrate with retrieval)
+      search_trace: [],
+      # rewritten_prompt: captured during retrieval phase (not yet implemented)
+      rewritten_prompt: nil
+    }
+    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+    |> Map.new()
   end
 end

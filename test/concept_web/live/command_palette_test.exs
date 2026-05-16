@@ -141,9 +141,9 @@ defmodule ConceptWeb.CommandPaletteTest do
       |> element("#command-palette input[type='text']")
       |> render_keyup(%{key: "", value: "oad"})
 
-    # Should show title matches
+    # Should show title matches in the palette results
     assert html =~ page.title
-    assert html =~ "hero-document-text"
+    assert html =~ "Pages"
     # Should not show semantic section (no blocks ingested)
     refute html =~ "Semantic matches"
   end

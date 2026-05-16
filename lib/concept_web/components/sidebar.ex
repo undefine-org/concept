@@ -6,6 +6,7 @@ defmodule ConceptWeb.Components.Sidebar do
   attr :pages, :list, default: []
   attr :current_page, :map, default: nil
   attr :current_user, :map, required: true
+  attr :live_rail_show, :boolean, default: false
 
   def sidebar(assigns) do
     ~H"""
@@ -44,6 +45,15 @@ defmodule ConceptWeb.Components.Sidebar do
       </div>
 
       <div class="mt-auto border-t border-notion-divider pt-2 px-2 pb-2">
+        <button
+          type="button"
+          phx-click="toggle_live_rail"
+          class="ora-sidebar-row text-xs text-notion-text-light mb-2"
+        >
+          <.icon name="hero-link-micro" class="size-4" />
+          <span>Related blocks</span>
+          <span class="ml-auto">{if @live_rail_show, do: "✓", else: ""}</span>
+        </button>
         <div class="ora-sidebar-row text-xs text-notion-text-light">
           <span class="truncate">{@current_user.email}</span>
           <.link href={~p"/sign-out"} method="delete" class="ml-auto hover:text-notion-text">

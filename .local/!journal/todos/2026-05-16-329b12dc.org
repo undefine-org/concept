@@ -1,0 +1,22 @@
+#+TITLE: Session 14e3f9b817e6cffe Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Verification
+
+** DONE Run tests and mark FEAT-047 DONE
+:PROPERTIES:
+:TASK_ID: task-11
+:STATUS: completed
+:END:
+
+RUN: mix test test/concept_web/live/workspace_graph_test.exs
+Expect: all green
+
+RUN: mix precommit (if exists, else mix test + mix format --check-formatted)
+Expect: all green
+
+Org: Mark FEAT-047-workspace-graph-view-with-leiden-communi DONE
+Command: org update --id FEAT-047-workspace-graph-view-with-leiden-communi --state DONE
+
+Acceptance: Tests pass, FEAT-047 marked DONE

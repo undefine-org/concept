@@ -1,5 +1,5 @@
 #+TITLE: Why-this-answer disclosure panel
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b087d426cfb5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
 #+CUSTOM_ID: FEAT-044-why-this-answer-disclosure-panel
@@ -36,3 +36,12 @@ Make RAG audit-able to users. Every answered Query exposes a "Why this answer?" 
 
 * Acceptance
 - Open a finalized chat answer → expand "Why this answer?" → see the retrieval ladder, the kept chunks, and timing.
+
+NOTE [2026-05-16]: Completed why_this_answer disclosure component implementation:
+- Added 6 audit fields to Message resource (rewritten_prompt, search_trace, prompt_tokens, completion_tokens, latency_ms, grounding_score)
+- Updated Respond change to capture token usage, latency, and metadata
+- Created WhyThisAnswer component with 4 conditional sections
+- Embedded component in ChatPanel for agent messages
+- Embedded component in AI block preview rendering
+- All 5 tests passing
+- Migration applied successfully

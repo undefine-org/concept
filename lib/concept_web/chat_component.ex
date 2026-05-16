@@ -1,5 +1,6 @@
 defmodule ConceptWeb.ChatComponent do
   use ConceptWeb, :live_component
+  import ConceptWeb.Components.WhyThisAnswer
   @chat_ui_tools AshAi.ChatUI.Tools
 
   @impl true
@@ -193,6 +194,9 @@ defmodule ConceptWeb.ChatComponent do
                 </div>
                 <div :if={String.trim(message.text || "") != ""} class="chat-bubble">
                   {to_markdown(message.text || "")}
+                </div>
+                <div :if={message.source == :agent} class="mt-2">
+                  <.why_this_answer message={message} />
                 </div>
               </div>
             <% end %>

@@ -1,0 +1,22 @@
+#+TITLE: Session 14e3f64cc266cff8 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Mark FEAT-043 as DONE
+:PROPERTIES:
+:TASK_ID: task-12
+:STATUS: completed
+:END:
+
+Command: mix phx.server, then manual smoke test:
+1. Create a page with text
+2. Select text in a block
+3. Click ✨ button in toolbar
+4. Verify ChatPanel opens with 'Tell me more about this excerpt: <text>'
+5. Verify scope is set to 'subtree'
+
+Then mark org item FEAT-043-ask-this-inline-selection-action-cmd-j-o as DONE using org tool.
+
+Acceptance: Org item state is TODO->DONE
