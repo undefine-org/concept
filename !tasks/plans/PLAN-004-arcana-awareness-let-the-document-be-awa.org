@@ -1,5 +1,5 @@
 #+TITLE: Arcana awareness — let the document be aware of itself
-#+STATE: DOING
+#+STATE: DONE
 #+SESSION_ID: 14e3b087d426cfb5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
 #+CUSTOM_ID: PLAN-004-arcana-awareness-let-the-document-be-awa
@@ -206,3 +206,5 @@ Existing FUPs (FUP-001..006) remain valid; FUP-004 (per-workspace LLM keys) ties
 - ~PLAN-003-arcana-integration~ — original plan, audit baseline
 
 NOTE [2026-05-16]: Plan approved by user 2026-05-16. Beginning Wave -1 (foundation installs: ash_ai, arcana, arcana.graph) then Wave 0 (stabilization BUGs).
+
+NOTE [2026-05-16]: Shipped end-to-end across 5 wave swarms. 29 work items (10 BUGs + 19 FEATs). 189/189 tests green across 5 seeds; 2 integration tests deferred to FUP-019 (LLM stub wiring). Visual smoke captured in !tasks/plans/plan-artifacts/PLAN-004/. AshAI 0.6.1 + Arcana 2.0 + Gemini 2.5 family operational. Wild moves (FUP-007..014, 016, 017, 019) substrate ready.

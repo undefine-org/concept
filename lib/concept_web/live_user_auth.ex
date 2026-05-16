@@ -77,4 +77,23 @@ defmodule ConceptWeb.LiveUserAuth do
       {:cont, assign(socket, current_user: nil, current_scope: nil)}
     end
   end
+
+  # Runs on auth routes (sign_in / confirm / magic_sign_in). When a session
+  # already carries a signed-in user, jump straight to their primary
+  # workspace so we never strand them on /sign-in or /.
+  def on_mount(:after_sign_in, _params, _session, socket) do
+    case socket.assigns[:current_user] do
+      nil ->
+        {:cont, socket}
+
+      user ->
+        case Concept.Accounts.get_primary_workspace(user, actor: user) do
+          {:ok, %{slug: slug}} ->
+            {:halt, Phoenix.LiveView.push_navigate(socket, to: ~p"/w/#{slug}")}
+
+          _ ->
+            {:cont, socket}
+        end
+    end
+  end
 end

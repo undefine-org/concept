@@ -6,7 +6,19 @@ defmodule ConceptWeb.HomeLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, socket}
+    case socket.assigns[:current_user] do
+      nil ->
+        {:ok, socket}
+
+      user ->
+        case Concept.Accounts.get_primary_workspace(user, actor: user) do
+          {:ok, %{slug: slug}} ->
+            {:ok, Phoenix.LiveView.push_navigate(socket, to: ~p"/w/#{slug}")}
+
+          _ ->
+            {:ok, socket}
+        end
+    end
   end
 
   @impl true

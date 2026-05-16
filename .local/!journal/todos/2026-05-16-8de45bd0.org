@@ -12,10 +12,10 @@
 
 * PLAN-005 Wave 3 implementer batch
 
-** DOING AuthOverrides + .ora-auth-* CSS layer + smoke tests
+** DONE AuthOverrides + .ora-auth-* CSS layer + smoke tests
 :PROPERTIES:
 :TASK_ID: task-5
-:STATUS: in_progress
+:STATUS: completed
 :END:
 
 ** DOING Workspace primary? attr + AfterSignIn on_mount redirect + HomeLive signed-in redirect
@@ -24,10 +24,10 @@
 :STATUS: in_progress
 :END:
 
-** ITEM Block lock indicators via presence metadata + data-locked-by
+** DOING Block lock indicators via presence metadata + data-locked-by
 :PROPERTIES:
 :TASK_ID: task-7
-:STATUS: pending
+:STATUS: in_progress
 :DEPENDS: task-5
 :END:
 
@@ -37,8 +37,8 @@
 :STATUS: in_progress
 :END:
 
-** DOING Trim title server-side + client-side; empty placeholder works on whitespace input
+** DONE Trim title server-side + client-side; empty placeholder works on whitespace input
 :PROPERTIES:
 :TASK_ID: task-9
-:STATUS: in_progress
+:STATUS: completed
 :END:

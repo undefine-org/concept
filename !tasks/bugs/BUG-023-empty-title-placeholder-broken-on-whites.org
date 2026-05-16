@@ -1,5 +1,5 @@
 #+TITLE: Empty title placeholder broken on whitespace input
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-023-empty-title-placeholder-broken-on-whites
@@ -95,3 +95,5 @@ end
 - Saving whitespace-only title produces ~""~ and placeholder shows.
 - Saving padded title strips padding on persist.
 - Tests green.
+
+NOTE [2026-05-16]: Commit e23f100. JS-side trim was the real fix (server already trims via Ash.Type.String default). 2 ExUnit + 2 vitest green.

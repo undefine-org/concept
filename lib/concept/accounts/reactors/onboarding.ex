@@ -39,7 +39,8 @@ defmodule Concept.Accounts.Reactors.Onboarding do
       name: result(:user_name),
       slug: result(:slug),
       icon_emoji: value("🏠"),
-      owner_id: input(:user, [:id])
+      owner_id: input(:user, [:id]),
+      primary?: value(true)
     }
 
     actor result(:system_actor)

@@ -1,5 +1,5 @@
 #+TITLE: AuthOverrides module is empty; sign-in renders raw DaisyUI
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-019-authoverrides-module-is-empty-sign-in-re
@@ -96,3 +96,5 @@ Tailwind classes already exist in =assets/css/app.css= for ~.ora-btn-primary~ su
 - /sign-in, /register, /reset render with =.ora-auth-root= wrapper visible in HTML.
 - Visual screenshot review by reviewer wave shows parity with workspace shell.
 - Tests green.
+
+NOTE [2026-05-16]: Implementation absorbed in d751da8 (parallel wave-4.5). Verified: .ora-auth-* CSS classes present, AuthOverrides populated, 3 smoke tests green. No new commit.

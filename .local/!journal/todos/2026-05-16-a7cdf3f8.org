@@ -4,72 +4,58 @@
 
 * Phase A: red
 
-** DOING Write Elixir page title test
-:PROPERTIES:
-:TASK_ID: task-1
-:STATUS: in_progress
-:END:
-
-Create test/concept/pages/page_title_test.exs; setup user+workspace+page; assert rename_page with title "  " returns page.title == "" and "  hello world  " returns "hello world".
-
-** ITEM Write JS content_editable hook test
-:PROPERTIES:
-:TASK_ID: task-2
-:STATUS: pending
-:END:
-
-Create assets/js/hooks/__tests__/content_editable.test.js; jsdom env; mount hook; set el.innerText = "   "; trigger blur; assert pushEventTo called with %{value: ""}.
-
-** ITEM Run both, capture FAIL
+** DONE Run both, capture FAIL
 :PROPERTIES:
 :TASK_ID: task-3
-:STATUS: pending
+:STATUS: completed
 :END:
 
 Run mix test test/concept/pages/page_title_test.exs and cd assets && npx vitest run hooks/__tests__/content_editable.test.js; record FAIL snippet.
 
+JS test FAIL captured as Phase A evidence. Elixir test passes because Ash.Type.String trims by default (trim?: true), but assignment still requires adding TrimTitle change defensively.
+
 * Phase B: green
 
-** ITEM Add TrimTitle change module
+** DONE Add TrimTitle change module
 :PROPERTIES:
 :TASK_ID: task-4
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: task-3
 :END:
 
 Create lib/concept/pages/changes/trim_title.ex per spec.
 
-** ITEM Wire TrimTitle into page.ex
+** DONE Wire TrimTitle into page.ex
 :PROPERTIES:
 :TASK_ID: task-5
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: task-4
 :END:
 
 Add `change Concept.Pages.Changes.TrimTitle` to :create_page and :rename actions in lib/concept/pages/page.ex.
 
-** ITEM Trim innerText in hook
+** DONE Trim innerText in hook
 :PROPERTIES:
 :TASK_ID: task-6
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: task-3
 :END:
 
 Edit assets/js/hooks/content_editable.js: `this.el.innerText.trim()` in payload.
 
-** ITEM Re-run both, capture PASS
+** DONE Re-run both, capture PASS
 :PROPERTIES:
 :TASK_ID: task-7
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: task-5 task-6
 :END:
 
 Run mix test test/concept/pages/page_title_test.exs and cd assets && npx vitest run hooks/__tests__/content_editable.test.js; record PASS snippet.
 
-** ITEM Commit BUG-023 fix
+** DONE Commit BUG-023 fix
 :PROPERTIES:
 :TASK_ID: task-8
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: task-7
 :END:
 

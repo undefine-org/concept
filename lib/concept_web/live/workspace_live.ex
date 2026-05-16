@@ -203,6 +203,12 @@ defmodule ConceptWeb.WorkspaceLive do
     socket =
       case {event, notification, socket.assigns[:current_page]} do
         {"page_updated", %{data: %{id: id} = page}, %{id: id}} ->
+          send_update(ConceptWeb.Components.PageHeader,
+            id: "page-header-#{page.id}",
+            page: page,
+            current_user: socket.assigns.current_user
+          )
+
           socket
           |> assign(:current_page, page)
           |> assign(:page_title, page.title)

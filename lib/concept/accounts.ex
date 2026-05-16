@@ -30,4 +30,32 @@ defmodule Concept.Accounts do
     |> Ash.Query.filter(user_id: user_id, workspace_id: workspace_id)
     |> Ash.read_one(actor: actor, authorize?: true, load: :workspace)
   end
+
+  @doc """
+  Returns the authenticated user's primary workspace.
+
+  Falls back to the oldest membership workspace when no primary is set.
+  """
+  def get_primary_workspace(user, opts \\ []) do
+    actor = opts[:actor] || user
+
+    primary_query =
+      Concept.Accounts.Workspace
+      |> Ash.Query.filter(memberships.user_id == ^user.id and primary? == true)
+
+    case Ash.read_one(primary_query, actor: actor, authorize?: true) do
+      {:ok, %{} = ws} ->
+        {:ok, ws}
+
+      {:ok, nil} ->
+        Concept.Accounts.Workspace
+        |> Ash.Query.filter(memberships.user_id == ^user.id)
+        |> Ash.Query.sort(inserted_at: :asc)
+        |> Ash.Query.limit(1)
+        |> Ash.read_one(actor: actor, authorize?: true)
+
+      {:error, _} = err ->
+        err
+    end
+  end
 end

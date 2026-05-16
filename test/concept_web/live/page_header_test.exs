@@ -89,4 +89,41 @@ defmodule ConceptWeb.PageHeaderTest do
     {:ok, updated} = Pages.get_page(page.id, actor: user, tenant: ws.id)
     assert updated.title == ""
   end
+
+  test "remote save_title updates other LV's page header", %{conn: conn, ws: ws, page: page} do
+    {:ok, view1, _html1} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+    {:ok, view2, _html2} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    header1 = element(view1, "#page-header-#{page.id}")
+    render_hook(header1, "save_title", %{"value" => "Renamed"})
+
+    Process.sleep(100)
+    html2 = render(view2)
+    assert html2 =~ "Renamed"
+    assert has_element?(view2, "h1#page-title-#{page.id}", "Renamed")
+  end
+
+  test "remote set_emoji updates other LV's page header", %{conn: conn, ws: ws, page: page} do
+    {:ok, view1, _html1} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+    {:ok, view2, _html2} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    header1 = element(view1, "#page-header-#{page.id}")
+    render_hook(header1, "set_emoji", %{"emoji" => "🚀"})
+
+    Process.sleep(100)
+    html2 = render(view2)
+    assert html2 =~ "🚀"
+  end
+
+  test "remote set_cover_color updates other LV's page header", %{conn: conn, ws: ws, page: page} do
+    {:ok, view1, _html1} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+    {:ok, view2, _html2} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    header1 = element(view1, "#page-header-#{page.id}")
+    render_hook(header1, "set_cover_color", %{"color" => "blue"})
+
+    Process.sleep(100)
+    html2 = render(view2)
+    assert html2 =~ "ora-cover-blue"
+  end
 end

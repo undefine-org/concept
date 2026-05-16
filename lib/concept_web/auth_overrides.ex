@@ -101,6 +101,7 @@ defmodule ConceptWeb.AuthOverrides do
     set :slot_class, "ora-auth-slot"
     set :button_text, "Request reset password link"
     set :disable_button_text, "Requesting …"
+
     set :reset_flash_text,
         "If this user exists in our system, you will be contacted with password reset instructions shortly."
   end

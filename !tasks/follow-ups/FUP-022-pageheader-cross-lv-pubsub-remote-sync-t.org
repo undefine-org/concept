@@ -1,0 +1,31 @@
+#+TITLE: PageHeader cross-LV PubSub remote sync tests
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FUP-022-pageheader-cross-lv-pubsub-remote-sync-t
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+3 ConceptWeb.PageHeaderTest scenarios (remote save_title, set_emoji, set_cover_color) fail because Ash.Notifier.PubSub doesn't appear to fire for the :rename/:set_icon/:set_cover_color actions despite explicit publish declarations. WorkspaceLive subscribes correctly, handle_info shape is correct, but the broadcast never arrives at the other LV in test env.
+
+* Hypotheses
+1. Test env config disables Ash notifiers (check config/test.exs).
+2. Sandboxed Repo + multi-LV pattern doesn't propagate notifiers across test processes.
+3. ~publish~ vs ~publish_all~ semantics: explicit per-action publish may not co-exist with publish_all properly.
+4. Notifiers need ~publish~ + tenant context that the action is missing.
+
+* Approach
+- Compare PageEditorLive's PubSub usage (which works) vs PageHeader's setup.
+- Verify with manual ~Phoenix.PubSub.broadcast/3~ call as a workaround to see if subscription is the issue (would prove notifier path failure).
+- Read AshPubSub notifier source for tenant + topic resolution in test env.
+- Possibly: add ~broadcast?: true~ to actions or use ~previous_values?: true~ on the publish declaration.
+
+* Files
+- ~lib/concept/pages/page.ex~ (publish block + actions)
+- ~lib/concept_web/live/page_header_live.ex~ (event handlers)
+- ~test/concept_web/live/page_header_test.exs~ (3 failing tests)
+- config/test.exs (verify notifier config)

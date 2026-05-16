@@ -26,7 +26,7 @@ defmodule Concept.Accounts.Workspace do
     defaults [:read, :destroy]
 
     create :create_personal do
-      accept [:name, :slug, :icon_emoji, :owner_id]
+      accept [:name, :slug, :icon_emoji, :owner_id, :primary?]
     end
 
     update :rename do
@@ -73,6 +73,7 @@ defmodule Concept.Accounts.Workspace do
     attribute :slug, :string, allow_nil?: false, public?: true
     attribute :icon_emoji, :string, default: "🏠", public?: true
     attribute :owner_id, :uuid, allow_nil?: false, public?: true
+    attribute :primary?, :boolean, default: false, allow_nil?: false, public?: true
     create_timestamp :inserted_at
     update_timestamp :updated_at
   end

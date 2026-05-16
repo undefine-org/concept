@@ -1,0 +1,49 @@
+#+TITLE: Session 14e40d6cff33d337 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Phase A (red)
+
+** DONE Add multi-LV propagation tests
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:END:
+
+Extend test/concept_web/live/page_header_test.exs with three tests: remote save_title, remote set_emoji, remote set_cover_color. Each opens two LV connections, fires event on LV1, asserts LV2 sees the update.
+
+** DONE Run tests to capture FAIL
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:END:
+
+mix test test/concept_web/live/page_header_test.exs — expect three new tests to FAIL.
+
+* Phase B (green)
+
+** DOING Add send_update for PageHeader in workspace_live.ex
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: in_progress
+:END:
+
+In handle_info for page_updated broadcast, after assigning @current_page, send_update to ConceptWeb.Components.PageHeader with the new page.
+
+** ITEM Run tests to capture PASS
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: pending
+:END:
+
+mix test test/concept_web/live/page_header_test.exs — all green.
+
+* Wrap-up
+
+** ITEM Commit with BUG-022 reference
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: pending
+:END:
+
+git add -A && git commit -m 'fix(workspace): send_update PageHeader on page_updated broadcast (BUG-022)'
