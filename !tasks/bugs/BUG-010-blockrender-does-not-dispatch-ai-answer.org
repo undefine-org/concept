@@ -1,5 +1,5 @@
 #+TITLE: BlockRender does not dispatch :ai_answer (block invisible)
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b087d426cfb5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
 #+CUSTOM_ID: BUG-010-blockrender-does-not-dispatch-ai-answer
@@ -21,3 +21,5 @@ Do a critical review of Arcana's integration into Concept and how you'd make the
 
 * Acceptance
 - Inserting an :ai_answer block renders the ~ora-ai-block~ custom element with the right ~block-id~ attribute.
+
+NOTE [2026-05-16]: BugBlockRender quick_task: :ai_answer dispatch clause + ai_state/1 helper; renders <ora-ai-block> placeholder host.

@@ -35,8 +35,7 @@ defmodule Concept.Knowledge.Search do
       repo: Concept.Repo,
       collections: [collection_name],
       mode: mode,
-      limit: limit,
-      include_metadata: true
+      limit: limit
     ]
 
     case Arcana.search(query, search_opts) do

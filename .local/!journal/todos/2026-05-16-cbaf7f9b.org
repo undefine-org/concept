@@ -1,0 +1,86 @@
+#+TITLE: Session 14e3d0f27df3d2e1 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* JS hooks & commands
+
+** DONE Add setLink to commands.js
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:END:
+
+File: assets/js/lexical/commands.js
+Add TOGGLE_LINK_COMMAND to @lexical/link import.
+Add export function setLink(editor, url) { editor.dispatchCommand(TOGGLE_LINK_COMMAND, url || null); }
+Acceptance: export exists
+
+** DONE Create format_toolbar.js hook
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:GATE_ARTIFACT: assets/js/hooks/format_toolbar.js
+:END:
+
+File: assets/js/hooks/format_toolbar.js
+- import toggleFormat, setLink from lexical/commands
+- import applyLink from lexical/commands
+Feature: resolves active editor from document.activeElement -> ora-block._editor
+Subscribes to selectionchange filtered to selections inside ora-block
+Tracks caret position via getBoundingClientRect()
+Lets toggle-format and request-link events
+
+** DONE Register FormatToolbar in hooks/index.js
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
+:END:
+
+File: assets/js/hooks/index.js
+Add: import FormatToolbar from "./format_toolbar.js"
+Add FormatToolbar to Hooks export object
+
+* Template & tests
+
+** DONE Update page_editor_live.ex render
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: completed
+:END:
+
+File: lib/concept_web/live/page_editor_live.ex
+Replace the bare <ora-format-toolbar> with the host div template:
+<div id="format-toolbar-host" phx-hook="FormatToolbar" phx-update="ignore" class="ora-format-host">
+  <ora-format-toolbar />
+  <ora-link-editor />
+</div>
+Also add the slot component for link-editor in the existing format toolbar test expectations
+
+** DOING Create format_toolbar.test.js
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: in_progress
+:END:
+
+File: assets/js/hooks/__tests__/format_toolbar.test.js
+New vitest test file with jsdom env
+Test 1: Mount with active ora-block + selected text, dispatch toggle-format with detail {format: 'bold'}, assert spy on editor.dispatchCommand called with (FORMAT_TEXT_COMMAND, 'bold')
+Test 2: Dispatch request-link, assert link-editor host gains 'visible' attr
+Test 3: Dispatch apply-link with {url: 'https://x'}, assert dispatchCommand(TOGGLE_LINK_COMMAND, 'https://x')
+
+** ITEM Add bold rendering test to page_editor_test.exs
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: pending
+:END:
+
+File: test/concept_web/live/page_editor_test.exs
+Add test: save block content with bold text (Lexical JSON format:1), reload via Pages.get_block, assert HTML contains <strong>
+
+** ITEM Run mix compile + scoped tests
+:PROPERTIES:
+:TASK_ID: task-7
+:STATUS: pending
+:END:
+
+mix compile clean; cd assets && npx vitest run hooks/__tests__/format_toolbar.test.js; mix test test/concept_web/live/page_editor_test.exs; git add; git commit

@@ -1,5 +1,5 @@
 #+TITLE: OraBlock missing focusStart/focusEnd; arrow nav silently fails
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-014-orablock-missing-focusstart-focusend-arr
@@ -139,3 +139,5 @@ focusEnd()   { moveCaretToEnd(this._editor);   this._editor.focus(); }
 - After Enter at end of a block, caret is at offset 0 of the new sibling; typed text appears in the new block.
 - Vitest + ExUnit suites green.
 - ~mix precommit~ green.
+
+NOTE [2026-05-16]: Commit 548c57e. Vitest 12/12 + ExUnit 11/11 green. Side-effect: block_keyboard.js deletion absorbed here (scope drift but the correct outcome; BUG-024 follow-up cleaned the SERVER_CONTRACT.md docs).

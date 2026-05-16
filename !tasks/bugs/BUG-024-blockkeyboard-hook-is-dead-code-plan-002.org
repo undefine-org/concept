@@ -1,5 +1,5 @@
 #+TITLE: BlockKeyboard hook is dead code; PLAN-002 cleanup incomplete
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-024-blockkeyboard-hook-is-dead-code-plan-002
@@ -48,3 +48,5 @@ Delete =block_keyboard.js= and confirm no references remain anywhere in the repo
 - File gone.
 - No residual reference.
 - ~mix precommit~ + vitest green.
+
+NOTE [2026-05-16]: File deletion absorbed into BUG-014 commit 548c57e (scope drift). SERVER_CONTRACT.md docs consolidated in 17f4e14. `rg BlockKeyboard` returns only the historical mention documenting its removal.

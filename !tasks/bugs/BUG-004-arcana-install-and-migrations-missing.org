@@ -1,5 +1,5 @@
 #+TITLE: Arcana install and migrations missing
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b087d426cfb5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
 #+CUSTOM_ID: BUG-004-arcana-install-and-migrations-missing
@@ -27,3 +27,5 @@ Do a critical review of Arcana's integration into Concept and how you'd make the
 - ~mix ecto.reset~ creates all Arcana tables.
 - ~mix test~ runs with Mox embedder (no Gemini calls in unit tests).
 - ~Arcana.Collection.get_or_create("workspace:abc", Concept.Repo, "test")~ succeeds in IEx.
+
+NOTE [2026-05-16]: Completed during Wave -1 foundation: mix arcana.install + mix arcana.graph.install + mix ash_ai.gen.chat ran; migrations relocated from priv/concept_repo to priv/repo (installer mis-detected repo name); MockEmbedder + Gemini-2.5-flash config wired.

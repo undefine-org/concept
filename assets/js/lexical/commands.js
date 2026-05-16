@@ -1,5 +1,5 @@
 import { FORMAT_TEXT_COMMAND, $getRoot } from "lexical";
-import { $toggleLink } from "@lexical/link";
+import { $toggleLink, TOGGLE_LINK_COMMAND } from "@lexical/link";
 
 /**
  * Toggle a text format on the current selection.
@@ -21,6 +21,16 @@ export function applyLink(editor, url) {
   editor.update(() => {
     $toggleLink(url || null);
   });
+}
+
+/**
+ * Apply or remove a link via the TOGGLE_LINK_COMMAND.
+ *
+ * @param {import("lexical").LexicalEditor} editor
+ * @param {string} url – empty string removes the link
+ */
+export function setLink(editor, url) {
+  editor.dispatchCommand(TOGGLE_LINK_COMMAND, url || null);
 }
 
 /**

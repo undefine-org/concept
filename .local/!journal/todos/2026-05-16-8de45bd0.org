@@ -2,16 +2,24 @@
 #+DATE: 2026-05-16
 #+TODO: ITEM DOING BLOCKED | DONE
 
-* PLAN-005 Wave 1 (task)
+* PLAN-005 Wave 2 (editor wiring)
 
-** DONE OraBlock focusStart/focusEnd + lexical caret helpers
+** BLOCKED Attach BlockList SortableJS hook + reorder_block handler
 :PROPERTIES:
 :TASK_ID: task-1
-:STATUS: completed
+:STATUS: gate_failed
 :END:
 
-** DOING Concept.Accounts.Scope + current_scope assign + Layouts.app threading
+** ITEM FormatToolbar hook + Lexical wrappers + render host
 :PROPERTIES:
 :TASK_ID: task-2
-:STATUS: in_progress
+:STATUS: pending
+:DEPENDS: task-1
+:END:
+
+** ITEM SlashMenu hook + insert_block_below with type + render host
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: pending
+:DEPENDS: task-2
 :END:

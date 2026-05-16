@@ -1,0 +1,67 @@
+#+TITLE: Session 14e3cf3ca0f3d2df Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Render + Hook
+
+** DONE Attach BlockList hook to <ul> in PageEditorLive
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:GATE_COMMIT: true
+:GATE_ARTIFACT: lib/concept_web/live/page_editor_live.ex
+:END:
+
+Add id=block-list-{@page_id} and phx-hook=BlockList to <ul>; add data-block-id to <li>
+
+* Server handler
+
+** DONE Add update_block_position to Pages domain and Block resource
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:GATE_ARTIFACT: lib/concept/pages.ex
+:END:
+
+lib/concept/pages.ex + lib/concept/pages/block.ex
+
+Already exists: define :reorder_block in pages.ex + :reorder action in block.ex accepting [:position]. No change needed.
+
+** DONE Add handle_event reorder_block to PageEditorLive
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
+:GATE_ARTIFACT: lib/concept_web/live/page_editor_live.ex
+:END:
+
+lib/concept_web/live/page_editor_live.ex
+
+* Tests
+
+** DONE Add vitest for block_list hook
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: completed
+:GATE_ARTIFACT: assets/js/hooks/__tests__/block_list.test.js
+:END:
+
+assets/js/hooks/__tests__/block_list.test.js
+
+** DONE Add ExUnit for reorder_block
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:GATE_ARTIFACT: test/concept_web/live/page_editor_test.exs
+:END:
+
+test/concept_web/live/page_editor_test.exs
+
+* Verify
+
+** DONE Run mix compile + scoped tests
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: completed
+:END:
+
+mix compile, mix test test/concept_web/live/page_editor_test.exs, cd assets && npx vitest run hooks/__tests__/block_list.test.js

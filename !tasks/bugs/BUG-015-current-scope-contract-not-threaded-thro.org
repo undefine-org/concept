@@ -1,5 +1,5 @@
 #+TITLE: current_scope contract not threaded through Layouts.app
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-015-current-scope-contract-not-threaded-thro
@@ -114,3 +114,5 @@ end
 - =<Layouts.app>= rendered with ~current_scope={@current_scope}~ in HomeLive and WorkspaceLive.
 - Tests green; ~mix precommit~ green.
 - No regression: existing ~@current_user~ reads continue working for this PR (alias-only).
+
+NOTE [2026-05-16]: Commit 631d708. 19 tests green (8 new + 11 existing web tests). Edge cases verified incl. CiString email, nil-safe scope, bad slug, missing membership, nil user.

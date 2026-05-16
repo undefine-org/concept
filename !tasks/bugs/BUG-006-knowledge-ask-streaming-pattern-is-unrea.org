@@ -1,5 +1,5 @@
 #+TITLE: Knowledge.Ask streaming pattern is unreachable
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b087d426cfb5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
 #+CUSTOM_ID: BUG-006-knowledge-ask-streaming-pattern-is-unrea
@@ -23,3 +23,5 @@ Do a critical review of Arcana's integration into Concept and how you'd make the
 * Acceptance
 - Compiles without warnings.
 - IEx: ~Concept.Knowledge.Ask.ask("hi", ws_id)~ → returns ~{:ok, %{answer_id, topic}}~, eventually broadcasts a single ~:knowledge_done~ with the full answer.
+
+NOTE [2026-05-16]: BugAsk quick_task: deprecated-tagged, stripped dead Stream.map/Enum.join branch, single :knowledge_done broadcast.

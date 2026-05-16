@@ -382,3 +382,69 @@ defmodule ConceptWeb.PageEditorTest do
     assert length(blocks) == 1
   end
 end
+
+  # ── BUG-016 ──────────────────────────────────────────────────────────
+
+  test "link editor host renders alongside format toolbar", %{
+    conn: conn,
+    ws: ws,
+    page: page,
+    user: user
+  } do
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+    html = render(view)
+
+    assert has_element?(view, "#format-toolbar-host")
+    assert has_element?(view, "ora-format-toolbar")
+    assert has_element?(view, "ora-link-editor")
+  end
+
+  test "bold text in block content renders as <strong>", %{
+    conn: conn,
+    ws: ws,
+    page: page,
+    user: user
+  } do
+    bold_lexical = %{
+      "root" => %{
+        "type" => "root",
+        "children" => [
+          %{
+            "type" => "paragraph",
+            "children" => [
+              %{
+                "type" => "text",
+                "text" => "bold text here",
+                "format" => 1,
+                "detail" => 0,
+                "mode" => "normal",
+                "style" => "",
+                "version" => 1
+              }
+            ],
+            "direction" => "ltr",
+            "format" => "",
+            "indent" => 0,
+            "version" => 1
+          }
+        ],
+        "direction" => "ltr",
+        "format" => "",
+        "indent" => 0,
+        "version" => 1
+      }
+    }
+
+    {:ok, block} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, _updated} = Pages.update_content(block, bold_lexical, actor: user, tenant: ws.id)
+
+    {:ok, fetched} = Pages.get_block(block.id, actor: user, tenant: ws.id)
+    html = Concept.Lexical.to_html(fetched.content)
+
+    assert html =~ "<strong>"
+    assert html =~ "bold text here"
+  end
+end
+

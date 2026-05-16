@@ -231,14 +231,8 @@
 
 * Wave 0 BUGs
 
-** DOING BUG-005+013: Knowledge.Search + Community fix + resilience
+** DONE BUG-005+013: Knowledge.Search + Community fix + resilience
 :PROPERTIES:
 :TASK_ID: task-1
-:STATUS: in_progress
-:END:
-
-** DONE BUG-007+011: KnowledgeReindex notifier + subscribe Page+Block
-:PROPERTIES:
-:TASK_ID: task-2
 :STATUS: completed
 :END:

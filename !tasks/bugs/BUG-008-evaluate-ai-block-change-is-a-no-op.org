@@ -1,5 +1,5 @@
 #+TITLE: evaluate_ai_block change is a no-op
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b087d426cfb5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
 #+CUSTOM_ID: BUG-008-evaluate-ai-block-change-is-a-no-op
@@ -22,3 +22,5 @@ Do a critical review of Arcana's integration into Concept and how you'd make the
 
 * Acceptance
 - File deleted, no stale references, compile clean.
+
+NOTE [2026-05-16]: BugDeadChange quick_task: deleted lib/concept/pages/block/changes/evaluate_ai_block.ex; TODO(FEAT-041) added to AiAnswer block type.

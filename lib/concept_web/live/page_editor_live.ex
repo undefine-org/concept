@@ -61,7 +61,10 @@ defmodule ConceptWeb.PageEditorLive do
           + Click to add your first block
         </button>
       </div>
-      <ora-format-toolbar id="page-format-toolbar" />
+      <div id="format-toolbar-host" phx-hook="FormatToolbar" phx-update="ignore" class="ora-format-host">
+        <ora-format-toolbar />
+        <ora-link-editor />
+      </div>
     </div>
     """
   end

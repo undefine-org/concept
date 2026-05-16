@@ -4,14 +4,8 @@
 
 * Implementation
 
-** DONE Write scope_assign_test.exs
-:PROPERTIES:
-:TASK_ID: task-8
-:STATUS: completed
-:END:
-
-** DOING Run tests + format + commit
+** DONE Run tests + format + commit
 :PROPERTIES:
 :TASK_ID: task-9
-:STATUS: in_progress
+:STATUS: completed
 :END:
