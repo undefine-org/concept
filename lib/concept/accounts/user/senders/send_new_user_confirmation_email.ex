@@ -17,7 +17,7 @@ defmodule Concept.Accounts.User.Senders.SendNewUserConfirmationEmail do
     IO.puts("""
     Click this link to confirm your email:
 
-    #{url(~p"/confirm_new_user?/#{token}")}
+    #{url(~p"/auth/user/confirm_new_user?confirm=#{token}")}
     """)
   end
 end
