@@ -48,8 +48,8 @@ defmodule ConceptWeb.PageEditorLive do
   def render(assigns) do
     ~H"""
     <div class="space-y-1 relative">
-      <ul :if={@blocks != []} class="space-y-1">
-        <li :for={b <- @blocks}>
+      <ul :if={@blocks != []} id={"block-list-#{@page_id}"} phx-hook="BlockList" class="space-y-1">
+        <li :for={b <- @blocks} data-block-id={b.id}>
           <ConceptWeb.BlockRender.block block={b} />
         </li>
       </ul>
@@ -201,6 +201,54 @@ defmodule ConceptWeb.PageEditorLive do
       end
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("reorder_block", %{"block_id" => block_id, "prev_id" => prev_id, "next_id" => next_id}, socket) do
+    user = socket.assigns.current_user
+    ws_id = socket.assigns.workspace.id
+    blocks = socket.assigns.blocks
+
+    block = Enum.find(blocks, &(&1.id == block_id))
+
+    if is_nil(block) do
+      {:noreply, socket}
+    else
+      prev_block = prev_id && Enum.find(blocks, &(&1.id == prev_id))
+      next_block = next_id && Enum.find(blocks, &(&1.id == next_id))
+
+      new_position =
+        cond do
+          prev_block && next_block ->
+            Concept.Pages.FractionalIndex.between(prev_block.position, next_block.position)
+
+          prev_block && is_nil(next_block) ->
+            Concept.Pages.FractionalIndex.after_(prev_block.position)
+
+          is_nil(prev_block) && next_block ->
+            Concept.Pages.FractionalIndex.before_(next_block.position)
+
+          true ->
+            Concept.Pages.FractionalIndex.initial()
+        end
+
+      if new_position == block.position do
+        {:noreply, socket}
+      else
+        case Pages.reorder_block(block, new_position, actor: user, tenant: ws_id) do
+          {:ok, updated_block} ->
+            blocks =
+              blocks
+              |> Enum.map(fn b -> if b.id == block_id, do: updated_block, else: b end)
+              |> Enum.sort_by(& &1.position)
+
+            {:noreply, assign(socket, :blocks, blocks)}
+
+          {:error, _} ->
+            {:noreply, socket}
+        end
+      end
+    end
   end
 
   @impl true

@@ -235,4 +235,150 @@ defmodule ConceptWeb.PageEditorTest do
     block_els = LazyHTML.query(doc, "ora-block")
     assert Enum.count(block_els) == 1
   end
+
+  # ── BUG-018 ──────────────────────────────────────────────────────────
+
+  test "reorder_block moves block to first position", %{
+    conn: conn,
+    ws: ws,
+    page: page,
+    user: user
+  } do
+    {:ok, b1} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, b2} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, b3} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    editor_view = find_live_child(view, "page-editor-#{page.id}")
+
+    # Move b3 to first position: prev_id = nil, next_id = b1.id
+    render_hook(editor_view, "reorder_block", %{
+      "block_id" => b3.id,
+      "prev_id" => nil,
+      "next_id" => b1.id
+    })
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    ids = Enum.map(blocks, & &1.id)
+    assert ids == [b3.id, b1.id, b2.id]
+  end
+
+  test "reorder_block moves block to last position", %{
+    conn: conn,
+    ws: ws,
+    page: page,
+    user: user
+  } do
+    {:ok, b1} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, b2} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, b3} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    editor_view = find_live_child(view, "page-editor-#{page.id}")
+
+    # Move b1 to last position: prev_id = b3.id, next_id = nil
+    render_hook(editor_view, "reorder_block", %{
+      "block_id" => b1.id,
+      "prev_id" => b3.id,
+      "next_id" => nil
+    })
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    ids = Enum.map(blocks, & &1.id)
+    assert ids == [b2.id, b3.id, b1.id]
+  end
+
+  test "reorder_block moves block to middle position", %{
+    conn: conn,
+    ws: ws,
+    page: page,
+    user: user
+  } do
+    {:ok, b1} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, b2} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, b3} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    editor_view = find_live_child(view, "page-editor-#{page.id}")
+
+    # Move b3 between b1 and b2: prev_id = b1.id, next_id = b2.id
+    render_hook(editor_view, "reorder_block", %{
+      "block_id" => b3.id,
+      "prev_id" => b1.id,
+      "next_id" => b2.id
+    })
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    ids = Enum.map(blocks, & &1.id)
+    assert ids == [b1.id, b3.id, b2.id]
+  end
+
+  test "reorder_block is no-op when dropped at same position", %{
+    conn: conn,
+    ws: ws,
+    page: page,
+    user: user
+  } do
+    {:ok, b1} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, b2} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    editor_view = find_live_child(view, "page-editor-#{page.id}")
+
+    # Move b2 to where it already is: prev_id = b1.id, next_id = nil
+    render_hook(editor_view, "reorder_block", %{
+      "block_id" => b2.id,
+      "prev_id" => b1.id,
+      "next_id" => nil
+    })
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    ids = Enum.map(blocks, & &1.id)
+    assert ids == [b1.id, b2.id]
+  end
+
+  test "reorder_block with unknown block_id is safe no-op", %{
+    conn: conn,
+    ws: ws,
+    page: page,
+    user: user
+  } do
+    {:ok, b1} =
+      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    editor_view = find_live_child(view, "page-editor-#{page.id}")
+
+    render_hook(editor_view, "reorder_block", %{
+      "block_id" => "nonexistent",
+      "prev_id" => nil,
+      "next_id" => nil
+    })
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    assert length(blocks) == 1
+  end
 end
