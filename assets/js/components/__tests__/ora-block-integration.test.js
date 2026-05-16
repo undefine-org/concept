@@ -178,4 +178,160 @@ describe("ora-block arrow-up integration", () => {
     // ── Assert ───────────────────────────────────────────────────────
     expect(arrowUpFired).toHaveBeenCalledOnce();
   });
+
+  it("does NOT fire ora-block-arrow-up when ArrowUp pressed at mid-block offset 3", async () => {
+    // ── Arrange ──────────────────────────────────────────────────────
+    const el = createBlock("delta", "hello");
+    document.body.append(el);
+    await el.updateComplete;
+
+    if (!el._editor) {
+      const root = el.querySelector("[data-editor]");
+      if (root) {
+        el._editor = createBlockEditor(root, true);
+        const state = parseInitial(el._editor, el.getAttribute("initial-content"));
+        if (state) el._editor.setEditorState(state);
+      }
+    }
+
+    expect(el._editor).toBeTruthy();
+
+    el._editor.update(() => {
+      const textNode = $getRoot().getFirstChild().getFirstChild();
+      const selection = $createRangeSelection();
+      selection.anchor.set(textNode.getKey(), 3, "text");
+      selection.focus.set(textNode.getKey(), 3, "text");
+      $setSelection(selection);
+    });
+    await flush();
+
+    const arrowUpFired = vi.fn();
+    el.addEventListener("ora-block-arrow-up", arrowUpFired);
+
+    // ── Act ──────────────────────────────────────────────────────────
+    const editorRoot = el.querySelector("[data-editor]");
+    editorRoot.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }),
+    );
+
+    // ── Assert ───────────────────────────────────────────────────────
+    expect(arrowUpFired).not.toHaveBeenCalled();
+  });
+
+  it("fires ora-block-arrow-down when ArrowDown pressed at end of text", async () => {
+    // ── Arrange ──────────────────────────────────────────────────────
+    const el = createBlock("epsilon", "hello");
+    document.body.append(el);
+    await el.updateComplete;
+
+    if (!el._editor) {
+      const root = el.querySelector("[data-editor]");
+      if (root) {
+        el._editor = createBlockEditor(root, true);
+        const state = parseInitial(el._editor, el.getAttribute("initial-content"));
+        if (state) el._editor.setEditorState(state);
+      }
+    }
+
+    expect(el._editor).toBeTruthy();
+
+    el._editor.update(() => {
+      const textNode = $getRoot().getFirstChild().getFirstChild();
+      const selection = $createRangeSelection();
+      selection.anchor.set(textNode.getKey(), 5, "text");
+      selection.focus.set(textNode.getKey(), 5, "text");
+      $setSelection(selection);
+    });
+    await flush();
+
+    const arrowDownFired = vi.fn();
+    el.addEventListener("ora-block-arrow-down", arrowDownFired);
+
+    // ── Act ──────────────────────────────────────────────────────────
+    const editorRoot = el.querySelector("[data-editor]");
+    editorRoot.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+    );
+
+    // ── Assert ───────────────────────────────────────────────────────
+    expect(arrowDownFired).toHaveBeenCalledOnce();
+  });
+
+  it("fires ora-block-enter-at-end when Enter pressed at end of text", async () => {
+    // ── Arrange ──────────────────────────────────────────────────────
+    const el = createBlock("zeta", "hello");
+    document.body.append(el);
+    await el.updateComplete;
+
+    if (!el._editor) {
+      const root = el.querySelector("[data-editor]");
+      if (root) {
+        el._editor = createBlockEditor(root, true);
+        const state = parseInitial(el._editor, el.getAttribute("initial-content"));
+        if (state) el._editor.setEditorState(state);
+      }
+    }
+
+    expect(el._editor).toBeTruthy();
+
+    el._editor.update(() => {
+      const textNode = $getRoot().getFirstChild().getFirstChild();
+      const selection = $createRangeSelection();
+      selection.anchor.set(textNode.getKey(), 5, "text");
+      selection.focus.set(textNode.getKey(), 5, "text");
+      $setSelection(selection);
+    });
+    await flush();
+
+    const enterFired = vi.fn();
+    el.addEventListener("ora-block-enter-at-end", enterFired);
+
+    // ── Act ──────────────────────────────────────────────────────────
+    const editorRoot = el.querySelector("[data-editor]");
+    editorRoot.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+
+    // ── Assert ───────────────────────────────────────────────────────
+    expect(enterFired).toHaveBeenCalledOnce();
+  });
+
+  it("does NOT fire ora-block-enter-at-end when Enter pressed at mid-block offset 3", async () => {
+    // ── Arrange ──────────────────────────────────────────────────────
+    const el = createBlock("eta", "hello");
+    document.body.append(el);
+    await el.updateComplete;
+
+    if (!el._editor) {
+      const root = el.querySelector("[data-editor]");
+      if (root) {
+        el._editor = createBlockEditor(root, true);
+        const state = parseInitial(el._editor, el.getAttribute("initial-content"));
+        if (state) el._editor.setEditorState(state);
+      }
+    }
+
+    expect(el._editor).toBeTruthy();
+
+    el._editor.update(() => {
+      const textNode = $getRoot().getFirstChild().getFirstChild();
+      const selection = $createRangeSelection();
+      selection.anchor.set(textNode.getKey(), 3, "text");
+      selection.focus.set(textNode.getKey(), 3, "text");
+      $setSelection(selection);
+    });
+    await flush();
+
+    const enterFired = vi.fn();
+    el.addEventListener("ora-block-enter-at-end", enterFired);
+
+    // ── Act ──────────────────────────────────────────────────────────
+    const editorRoot = el.querySelector("[data-editor]");
+    editorRoot.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+
+    // ── Assert ───────────────────────────────────────────────────────
+    expect(enterFired).not.toHaveBeenCalled();
+  });
 });
