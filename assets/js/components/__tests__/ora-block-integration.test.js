@@ -20,7 +20,7 @@
  * as a regression harness when run in a real browser environment.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { $getRoot, $getSelection, $isRangeSelection } from "lexical";
+import { $createRangeSelection, $getRoot, $getSelection, $isRangeSelection, $setSelection } from "lexical";
 import "../ora-block.js";
 import { createBlockEditor } from "../../lexical/registry.js";
 import { parseInitial } from "../../lexical/state.js";
@@ -157,14 +157,11 @@ describe("ora-block arrow-up integration", () => {
 
     // Place caret at offset 0 of the text node via Lexical API.
     el._editor.update(() => {
-      const root = $getRoot();
-      const paragraph = root.getFirstChild();
-      const textNode = paragraph.getFirstChild();
-      const selection = $getSelection();
-      if ($isRangeSelection(selection)) {
-        selection.anchor.set(textNode.getKey(), 0, "text");
-        selection.focus.set(textNode.getKey(), 0, "text");
-      }
+      const textNode = $getRoot().getFirstChild().getFirstChild();
+      const selection = $createRangeSelection();
+      selection.anchor.set(textNode.getKey(), 0, "text");
+      selection.focus.set(textNode.getKey(), 0, "text");
+      $setSelection(selection);
     });
     // Let the update commit.
     await flush();

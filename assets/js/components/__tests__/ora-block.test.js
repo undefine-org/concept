@@ -2,7 +2,16 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { createEditor, $getRoot, $createParagraphNode, $createTextNode, ParagraphNode, TextNode } from "lexical";
+import {
+  createEditor,
+  $getRoot,
+  $createParagraphNode,
+  $createTextNode,
+  $createRangeSelection,
+  $setSelection,
+  ParagraphNode,
+  TextNode,
+} from "lexical";
 import {
   moveCaretToStart,
   moveCaretToEnd,
@@ -10,6 +19,7 @@ import {
   applyLink,
 } from "../../lexical/commands.js";
 import { oraTheme } from "../../lexical/theme.js";
+import { OraBlock } from "../ora-block.js";
 
 const EDITOR_NODES = [ParagraphNode, TextNode];
 
@@ -137,5 +147,97 @@ describe("helpers are exported", () => {
   it("exports moveCaretToStart and moveCaretToEnd", () => {
     expect(typeof moveCaretToStart).toBe("function");
     expect(typeof moveCaretToEnd).toBe("function");
+  });
+});
+
+describe("_isAtStart / _isAtEnd", () => {
+  let editor;
+  let block;
+
+  beforeEach(() => {
+    const setup = createTestEditor();
+    editor = setup.editor;
+    block = new OraBlock();
+    block._editor = editor;
+  });
+
+  function buildSingleTextNode(text) {
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+      const p = $createParagraphNode();
+      const t = $createTextNode(text);
+      p.append(t);
+      root.append(p);
+    }, { discrete: true });
+  }
+
+  function buildTwoTextNodes(t1, t2) {
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+      const p = $createParagraphNode();
+      const a = $createTextNode(t1);
+      const b = $createTextNode(t2);
+      b.setFormat("bold"); // prevent auto-merge with same-format neighbour
+      p.append(a, b);
+      root.append(p);
+    }, { discrete: true });
+  }
+
+  it("_isAtStart is true at offset 0", () => {
+    buildSingleTextNode("hello");
+    editor.update(() => {
+      $getRoot().getFirstChild().getFirstChild().select(0, 0);
+    }, { discrete: true });
+    expect(block._isAtStart()).toBe(true);
+    expect(block._isAtEnd()).toBe(false);
+  });
+
+  it("_isAtEnd is true at last offset", () => {
+    buildSingleTextNode("hello");
+    editor.update(() => {
+      $getRoot().getFirstChild().getFirstChild().select(5, 5);
+    }, { discrete: true });
+    expect(block._isAtStart()).toBe(false);
+    expect(block._isAtEnd()).toBe(true);
+  });
+
+  it("neither is true in the middle of a text node", () => {
+    buildSingleTextNode("hello");
+    editor.update(() => {
+      $getRoot().getFirstChild().getFirstChild().select(2, 2);
+    }, { discrete: true });
+    expect(block._isAtStart()).toBe(false);
+    expect(block._isAtEnd()).toBe(false);
+  });
+
+  it("works across multiple text nodes", () => {
+    buildTwoTextNodes("hello", "world");
+    // caret at start of first text node
+    editor.update(() => {
+      const p = $getRoot().getFirstChild();
+      p.getFirstChild().select(0, 0);
+    }, { discrete: true });
+    expect(block._isAtStart()).toBe(true);
+    expect(block._isAtEnd()).toBe(false);
+
+    // caret at end of second text node
+    editor.update(() => {
+      const p = $getRoot().getFirstChild();
+      p.getLastChild().select(5, 5);
+    }, { discrete: true });
+    expect(block._isAtStart()).toBe(false);
+    expect(block._isAtEnd()).toBe(true);
+  });
+
+  it("_isAtEnd reflects the current text node, not the block", () => {
+    buildTwoTextNodes("hello", "world");
+    editor.update(() => {
+      $getRoot().getFirstChild().getFirstChild().select(5, 5);
+    }, { discrete: true });
+    expect(block._isAtStart()).toBe(false);
+    // Spec: end of *current* text node, even when more text follows.
+    expect(block._isAtEnd()).toBe(true);
   });
 });

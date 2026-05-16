@@ -1,4 +1,5 @@
 import { LitElement, html } from "lit";
+import { $getSelection, $isRangeSelection } from "lexical";
 import { createBlockEditor } from "../lexical/registry.js";
 import { parseInitial, serialize } from "../lexical/state.js";
 import { moveCaretToStart, moveCaretToEnd } from "../lexical/commands.js";
@@ -98,10 +99,9 @@ export class OraBlock extends LitElement {
     if (!editor) return false;
     let atStart = false;
     editor.getEditorState().read(() => {
-      const selection = editor.getEditorState()._selection;
-      // Quick heuristic: collapsed at offset 0 of first child
-      const node = selection?.anchor?.getNode?.();
-      atStart = selection?.isCollapsed?.() && node && node.getOffset() === 0;
+      const sel = $getSelection();
+      if (!$isRangeSelection(sel) || !sel.isCollapsed()) return;
+      atStart = sel.anchor.offset === 0;
     });
     return atStart;
   }
@@ -111,9 +111,9 @@ export class OraBlock extends LitElement {
     if (!editor) return false;
     let atEnd = false;
     editor.getEditorState().read(() => {
-      const selection = editor.getEditorState()._selection;
-      const node = selection?.anchor?.getNode?.();
-      atEnd = selection?.isCollapsed?.() && node && (node.getTextContentSize?.() ?? 0) === selection?.anchor?.offset;
+      const sel = $getSelection();
+      if (!$isRangeSelection(sel) || !sel.isCollapsed()) return;
+      atEnd = sel.anchor.offset === sel.anchor.getNode().getTextContentSize();
     });
     return atEnd;
   }
