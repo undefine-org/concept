@@ -29,6 +29,22 @@ defmodule Concept.Pages.BlockTypes do
     end
   end
 
+  @doc """
+  Resolve a block type string (from client payload) to a validated atom.
+  Returns `{:ok, atom}` on success or `{:error, :unknown_type}` if the
+  type is not in the registry.
+  """
+  def resolve(type_str) when is_binary(type_str) do
+    type = String.to_existing_atom(type_str)
+
+    case Enum.find(@modules, &(&1.type() == type)) do
+      nil -> {:error, :unknown_type}
+      _mod -> {:ok, type}
+    end
+  rescue
+    ArgumentError -> {:error, :unknown_type}
+  end
+
   @doc "Slash-menu items grouped, hiding internal auxiliaries (`group: :hidden`)."
   def slash_menu_items do
     @modules

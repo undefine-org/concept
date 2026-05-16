@@ -440,4 +440,50 @@ defmodule ConceptWeb.PageEditorTest do
     assert html =~ "<strong>"
     assert html =~ "bold text here"
   end
+
+  # ── BUG-017 ──────────────────────────────────────────────────────────
+
+  test "insert_block_below with type creates typed block", %{
+    conn: conn,
+    ws: ws,
+    page: page,
+    user: user
+  } do
+    {:ok, block} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    view
+    |> find_live_child("page-editor-#{page.id}")
+    |> render_hook("insert_block_below", %{"block_id" => block.id, "type" => "heading_1"})
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    assert length(blocks) == 2
+
+    new_block = Enum.find(blocks, &(&1.id != block.id))
+    assert new_block.type == :heading_1
+    assert new_block.position > block.position
+
+    new_block_id = new_block.id
+    assert_push_event(view, "focus_block_caret", %{block_id: new_block_id, position: "start"})
+  end
+
+  test "insert_block_below backward compat insert_paragraph_below creates paragraph", %{
+    conn: conn,
+    ws: ws,
+    page: page,
+    user: user
+  } do
+    {:ok, block} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    view
+    |> find_live_child("page-editor-#{page.id}")
+    |> render_hook("insert_paragraph_below", %{"block_id" => block.id})
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    assert length(blocks) == 2
+
+    new_block = Enum.find(blocks, &(&1.id != block.id))
+    assert new_block.type == :paragraph
+  end
 end

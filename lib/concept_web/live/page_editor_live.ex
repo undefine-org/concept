@@ -70,6 +70,13 @@ defmodule ConceptWeb.PageEditorLive do
         <ora-format-toolbar />
         <ora-link-editor />
       </div>
+      <div
+        id="slash-menu-host"
+        phx-hook="SlashMenu"
+        phx-update="ignore"
+      >
+        <ora-slash-menu />
+      </div>
     </div>
     """
   end
@@ -169,7 +176,12 @@ defmodule ConceptWeb.PageEditorLive do
   end
 
   @impl true
-  def handle_event("insert_paragraph_below", %{"block_id" => source_id}, socket) do
+  def handle_event("insert_paragraph_below", payload, socket) do
+    handle_event("insert_block_below", Map.put(payload, "type", "paragraph"), socket)
+  end
+
+  @impl true
+  def handle_event("insert_block_below", %{"block_id" => source_id, "type" => type_str}, socket) do
     user = socket.assigns.current_user
     ws_id = socket.assigns.workspace.id
     page_id = socket.assigns.page_id
@@ -179,29 +191,35 @@ defmodule ConceptWeb.PageEditorLive do
 
     socket =
       if source_idx do
-        source = Enum.at(blocks, source_idx)
-        next_block = Enum.at(blocks, source_idx + 1)
+        case Concept.Pages.BlockTypes.resolve(type_str) do
+          {:ok, type_atom} ->
+            source = Enum.at(blocks, source_idx)
+            next_block = Enum.at(blocks, source_idx + 1)
 
-        position =
-          if next_block do
-            Concept.Pages.FractionalIndex.between(source.position, next_block.position)
-          else
-            Concept.Pages.FractionalIndex.after_(source.position)
-          end
+            position =
+              if next_block do
+                Concept.Pages.FractionalIndex.between(source.position, next_block.position)
+              else
+                Concept.Pages.FractionalIndex.after_(source.position)
+              end
 
-        case Pages.create_block(page_id, :paragraph, ws_id, nil, %{position: position},
-               actor: user,
-               tenant: ws_id
-             ) do
-          {:ok, new_block} ->
-            socket
-            |> assign(:blocks, List.insert_at(blocks, source_idx + 1, new_block))
-            |> push_event("focus_block_caret", %{
-              block_id: new_block.id,
-              position: "start"
-            })
+            case Pages.create_block(page_id, type_atom, ws_id, nil, %{position: position},
+                   actor: user,
+                   tenant: ws_id
+                 ) do
+              {:ok, new_block} ->
+                socket
+                |> assign(:blocks, List.insert_at(blocks, source_idx + 1, new_block))
+                |> push_event("focus_block_caret", %{
+                  block_id: new_block.id,
+                  position: "start"
+                })
 
-          {:error, _error} ->
+              {:error, _error} ->
+                socket
+            end
+
+          {:error, :unknown_type} ->
             socket
         end
       else
