@@ -1,10 +1,10 @@
 defmodule Concept.Knowledge.IngestionJob do
   @moduledoc """
   Tracked Ash resource for page ingestion jobs.
-  
+
   AshOban trigger picks up queued rows; state transitions broadcast to PubSub
   for the IndexingPill UI.
-  
+
   States: queued → running → succeeded | failed
   """
   use Ash.Resource,
@@ -19,25 +19,10 @@ defmodule Concept.Knowledge.IngestionJob do
     table "knowledge_ingestion_jobs"
     repo Concept.Repo
 
-    references do
-      reference :page, on_delete: :nilify
-    end
-
     custom_indexes do
       index [:workspace_id, :state]
       index [:workspace_id, :page_id]
     end
-  end
-
-  multitenancy do
-    strategy :attribute
-    attribute :workspace_id
-    global? false
-  end
-
-  archive do
-    attribute :archived_at
-    base_filter?(true)
   end
 
   state_machine do
@@ -51,22 +36,9 @@ defmodule Concept.Knowledge.IngestionJob do
     end
   end
 
-  attributes do
-    uuid_primary_key :id
-    attribute :workspace_id, :uuid, allow_nil?: false, public?: true
-    attribute :page_id, :uuid, allow_nil?: false, public?: true
-    attribute :op, :atom, constraints: [one_of: [:upsert, :delete]], default: :upsert, public?: true
-    attribute :state, :atom, default: :queued, public?: true, allow_nil?: false, constraints: [one_of: [:queued, :running, :succeeded, :failed]]
-    attribute :scheduled_at, :utc_datetime_usec, public?: true
-    attribute :started_at, :utc_datetime_usec, public?: true
-    attribute :finished_at, :utc_datetime_usec, public?: true
-    attribute :chunk_count, :integer, public?: true
-    attribute :embed_tokens, :integer, public?: true
-    attribute :error_kind, :atom, public?: true
-    attribute :error_message, :string, public?: true
-    attribute :attempt, :integer, default: 0, public?: true
-    create_timestamp :inserted_at
-    update_timestamp :updated_at
+  archive do
+    attribute :archived_at
+    base_filter?(true)
   end
 
   oban do
@@ -84,17 +56,12 @@ defmodule Concept.Knowledge.IngestionJob do
     end
   end
 
-  pub_sub do
-    module ConceptWeb.Endpoint
-    prefix "workspace"
-
-    publish :run, ["*", :workspace_id, "ingest"], event: "ingest_started"
-    publish :succeed, ["*", :workspace_id, "ingest"], event: "ingest_succeeded"
-    publish :fail, ["*", :workspace_id, "ingest"], event: "ingest_failed"
-  end
-
   actions do
-    defaults [:read]
+    read :read do
+      primary? true
+      pagination keyset?: true, required?: false
+      prepare build(filter: expr(is_nil(archived_at)))
+    end
 
     create :enqueue do
       accept [:page_id, :op]
@@ -145,5 +112,48 @@ defmodule Concept.Knowledge.IngestionJob do
     policy action_type([:create, :update]) do
       authorize_if actor_attribute_equals(:system?, true)
     end
+  end
+
+  pub_sub do
+    module ConceptWeb.Endpoint
+    prefix "workspace"
+
+    publish :run, ["*", :workspace_id, "ingest"], event: "ingest_started"
+    publish :succeed, ["*", :workspace_id, "ingest"], event: "ingest_succeeded"
+    publish :fail, ["*", :workspace_id, "ingest"], event: "ingest_failed"
+  end
+
+  multitenancy do
+    strategy :attribute
+    attribute :workspace_id
+    global? false
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :workspace_id, :uuid, allow_nil?: false, public?: true
+    attribute :page_id, :uuid, allow_nil?: false, public?: true
+
+    attribute :op, :atom,
+      constraints: [one_of: [:upsert, :delete]],
+      default: :upsert,
+      public?: true
+
+    attribute :state, :atom,
+      default: :queued,
+      public?: true,
+      allow_nil?: false,
+      constraints: [one_of: [:queued, :running, :succeeded, :failed]]
+
+    attribute :scheduled_at, :utc_datetime_usec, public?: true
+    attribute :started_at, :utc_datetime_usec, public?: true
+    attribute :finished_at, :utc_datetime_usec, public?: true
+    attribute :chunk_count, :integer, public?: true
+    attribute :embed_tokens, :integer, public?: true
+    attribute :error_kind, :atom, public?: true
+    attribute :error_message, :string, public?: true
+    attribute :attempt, :integer, default: 0, public?: true
+    create_timestamp :inserted_at
+    update_timestamp :updated_at
   end
 end

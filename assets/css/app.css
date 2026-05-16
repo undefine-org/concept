@@ -107,3 +107,28 @@
   ora-citation-popover { position: relative; display: block; }
   ora-citation-popover[open] .ora-citation-popover-content { display: block; position: fixed; max-width: 24rem; background: var(--color-notion-bg); border: 1px solid var(--color-notion-divider); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); padding: 12px; z-index: 50; }
   .ora-citation-popover-content { display: none; }
+
+  /* Block Flash Animation (Wave 2) */
+  @keyframes ora-block-flash {
+    0%   { background-color: rgb(254 240 138 / 0.6); }
+    100% { background-color: transparent; }
+  }
+  .ora-block-flash {
+    animation: ora-block-flash 1.6s ease-out forwards;
+    border-radius: 4px;
+    margin: -4px;
+    padding: 4px;
+  }
+
+/* IndexingPill */
+.ora-pill { @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium; }
+.ora-pill-idle { @apply bg-gray-200 text-gray-600; }
+.ora-pill-indexing { @apply bg-amber-100 text-amber-900; }
+.ora-pill-indexing::before { content: ""; @apply w-2 h-2 rounded-full bg-amber-500; animation: ora-pulse 1.2s ease-in-out infinite; }
+.ora-pill-error { @apply bg-red-100 text-red-900; }
+@keyframes ora-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* ChatPanel */
+.ora-chat-panel { @apply fixed right-0 top-16 bottom-0 w-96 bg-white border-l border-gray-300 z-40 transition-transform translate-x-full; }
+.ora-chat-panel--open { @apply translate-x-0; }
+

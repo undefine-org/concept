@@ -1,0 +1,76 @@
+#+TITLE: OraBlock _isAtStart/_isAtEnd use wrong Lexical selection API; ArrowUp never fires
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-032-orablock-isatstart-isatend-use-wrong-lex
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W2.6 Slice A puppeteer (2026-05-16) surfaced: BUG-030 fixed the focus-ordering bug but ArrowUp STILL doesn't work in the browser. Root cause is one layer up: =assets/js/components/ora-block.js:104= ~_isAtStart()~ throws ~TypeError: node.getOffset is not a function~ on every ArrowUp keypress \u2014 the boundary check fails silently in the keydown handler, the ~ora-block-arrow-up~ CustomEvent never dispatches, the server never receives ~nav_block~ for direction "up".
+
+Slice A also flagged ~_isAtEnd()~ as stale: after a programmatic ~focusEnd()~ during navigation, the Lexical selection offset reads ~1~ while ~textContentSize == 6~ \u2014 caret visibly at end but state says otherwise. Enter-at-end then misroutes.
+
+* Root cause
+
+In Lexical 0.17, ~selection.anchor~ is a /Point/ with ~.offset~ (number) and ~.getNode()~ (Node). The Node API does NOT have ~getOffset()~. Current code:
+
+#+begin_src js
+// WRONG (assets/js/components/ora-block.js:104)
+atStart = selection?.isCollapsed?.() && node && node.getOffset() === 0;
+#+end_src
+
+Correct:
+
+#+begin_src js
+atStart = selection?.isCollapsed?.() && selection?.anchor?.offset === 0;
+#+end_src
+
+For ~_isAtEnd~: compare ~selection.anchor.offset~ against ~selection.anchor.getNode().getTextContentSize()~. After programmatic focus + selection move, the offset may not yet reflect the move because ~editor.update~ flushes asynchronously. Solutions:
+- (a) Await the next animation frame / microtask before reading.
+- (b) Read inside an ~editor.update(() => \u2026)~ callback rather than ~editor.read~.
+- (c) For the navigation flow specifically: when the server pushes ~focus_block_caret~ with ~position: "end"~, set a flag on the receiving hook that the next keydown should be treated as "at end" until the user types or moves the caret.
+
+Choose (b) for both methods. Run the check inside ~editor.getEditorState().read(() => \u2026)~ which sees the latest committed state.
+
+* Intention & Purpose
+
+~_isAtStart~ and ~_isAtEnd~ correctly report block-edge state in real browsers. ArrowUp dispatches when caret is at offset 0 in the first text node; ArrowDown dispatches when caret is at the end of the last text node. Enter routes correctly to ~insert_block_below~ when at end, or to default Lexical newline when mid-block.
+
+* Scope
+
+- IN: rewrite ~_isAtStart()~ and ~_isAtEnd()~ in =assets/js/components/ora-block.js= using correct selection API; read inside ~editor.getEditorState().read(() => \u2026)~ for fresh state.
+- IN: extend =assets/js/components/__tests__/ora-block.test.js= with assertions on both methods at various caret positions.
+- IN: extend =assets/js/components/__tests__/ora-block-integration.test.js= (created in BUG-030) to drive a real ArrowUp keydown and verify ~ora-block-arrow-up~ event fires.
+- IN: server side already correct (verified BUG-030 hypothesis A check); no server change.
+- OUT: caret column tracking; cross-page nav.
+
+* TDD evidence required
+Phase A: write integration test that fires keydown ArrowUp on a real OraBlock with caret at offset 0; assert ~ora-block-arrow-up~ CustomEvent fires. Run; CURRENT CODE must throw the TypeError (paste FAIL). Phase B: fix; re-run; assert PASS.
+
+* Implementation
+
+** TODO Fix selection-API reads
+:PROPERTIES:
+:CUSTOM_ID: BUG-032-orablock-isatstart-isatend-use-wrong-lex::selection-api
+:END:
+
+- File: =assets/js/components/ora-block.js= ~_isAtStart~ + ~_isAtEnd~.
+- Read selection state through ~this._editor.getEditorState().read(() => \u2026)~. Inside that callback: ~const sel = $getSelection(); if (!$isRangeSelection(sel) || !sel.isCollapsed()) return false;~ then compare ~sel.anchor.offset~ to ~0~ (start) or to ~sel.anchor.getNode().getTextContentSize()~ (end).
+
+** TODO Integration tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-032-orablock-isatstart-isatend-use-wrong-lex::tests
+:DEPENDS: BUG-032-orablock-isatstart-isatend-use-wrong-lex::selection-api
+:END:
+
+- File: =assets/js/components/__tests__/ora-block-integration.test.js= \u2014 ArrowUp at offset 0 fires custom event; ArrowUp mid-block does NOT; ArrowDown at end fires; Enter at end fires insert_block_below; Enter mid-block does NOT (Lexical handles default).
+
+* Acceptance
+- W2.6 Slice A re-run: ArrowUp moves caret to previous block; Enter-at-end creates new block reliably.
+- All new tests green.
+- One commit: ~fix(editor): correct Lexical selection API in _isAtStart/_isAtEnd (BUG-032)~.

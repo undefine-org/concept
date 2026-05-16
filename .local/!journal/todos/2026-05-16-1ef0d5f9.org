@@ -1,0 +1,42 @@
+#+TITLE: Session 14e3f474a1b3d312 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Phase A (red)
+
+** DONE Read existing files and add failing test
+:PROPERTIES:
+:TASK_ID: phase-a
+:STATUS: completed
+:END:
+
+Read assets/js/lexical/__tests__/commands.test.js, assets/js/lexical/registry.js, lib/concept/lexical.ex, assets/package.json. Add real-editor test for setLink -> LinkNode. Run vitest, capture FAIL.
+
+Phase A FAIL confirmed: setLink via production registry fails because nodes lacks LinkNode and no TOGGLE_LINK_COMMAND handler is registered.
+
+** DOING Fix registry.js and package.json
+:PROPERTIES:
+:TASK_ID: fix-registry
+:STATUS: in_progress
+:DEPENDS: phase-a
+:END:
+
+Add @lexical/link dep if missing. Import LinkNode, $toggleLink, TOGGLE_LINK_COMMAND. Add to nodes array. Register TOGGLE_LINK_COMMAND handler in register().
+
+** ITEM Fix server-side to_html for links
+:PROPERTIES:
+:TASK_ID: fix-server
+:STATUS: pending
+:DEPENDS: phase-a
+:END:
+
+Add %{type: "link", url: u, children: c} -> <a href={u}> case in Concept.Lexical.to_html/1.
+
+** ITEM Run tests and commit
+:PROPERTIES:
+:TASK_ID: verify-commit
+:STATUS: pending
+:DEPENDS: fix-registry fix-server
+:END:
+
+Run vitest commands.test.js, run mix test. Capture PASS snippets. Commit.

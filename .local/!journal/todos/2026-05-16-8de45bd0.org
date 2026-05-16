@@ -2,35 +2,22 @@
 #+DATE: 2026-05-16
 #+TODO: ITEM DOING BLOCKED | DONE
 
-* PLAN-005 W2 cleanup + W2.6 slice swarm
+* PLAN-005 W2.7 implementer batch
 
-** DOING Fix BUG-014 ArrowUp integration regression with TDD evidence
+** DOING Register @lexical/link plugin + LinkNode in registry; server HTML serialization for links
 :PROPERTIES:
 :TASK_ID: task-1
 :STATUS: in_progress
 :END:
 
-** ITEM Browser: BUG-014 caret handoff (both directions, Enter creates block)
+** DOING Fix _isAtStart/_isAtEnd Lexical selection API; ArrowUp keydown dispatches
 :PROPERTIES:
 :TASK_ID: task-2
-:STATUS: pending
-:DEPENDS: task-1
+:STATUS: in_progress
 :END:
 
-** DONE Browser: BUG-016 format toolbar bold/italic + save+reload persistence
+** DOING Slash menu: filter normalization + Lexical-pipeline detection + verified trigger deletion
 :PROPERTIES:
-:TASK_ID: task-5
-:STATUS: completed
-:END:
-
-** DONE Browser: BUG-016 link editor round-trip + save+reload
-:PROPERTIES:
-:TASK_ID: task-6
-:STATUS: completed
-:END:
-
-** DOING Browser: BUG-017 + BUG-028 slash menu open/filter/select/keyboard/trigger-deletion
-:PROPERTIES:
-:TASK_ID: task-7
+:TASK_ID: task-3
 :STATUS: in_progress
 :END:

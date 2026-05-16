@@ -19,6 +19,35 @@ defmodule Concept.Knowledge.TokenLedger do
     end
   end
 
+  actions do
+    defaults [:read]
+
+    create :upsert do
+      accept [
+        :workspace_id,
+        :day,
+        :prompt_tokens,
+        :completion_tokens,
+        :embed_tokens,
+        :request_count
+      ]
+
+      upsert? true
+      upsert_identity :one_per_workspace_per_day
+      upsert_fields [:prompt_tokens, :completion_tokens, :embed_tokens, :request_count]
+    end
+  end
+
+  policies do
+    bypass actor_attribute_equals(:system?, true) do
+      authorize_if always()
+    end
+
+    policy action_type(:read) do
+      authorize_if Concept.Pages.Checks.WorkspaceMember
+    end
+  end
+
   multitenancy do
     strategy :attribute
     attribute :workspace_id
@@ -39,26 +68,5 @@ defmodule Concept.Knowledge.TokenLedger do
 
   identities do
     identity :one_per_workspace_per_day, [:workspace_id, :day]
-  end
-
-  actions do
-    defaults [:read]
-
-    create :upsert do
-      accept [:workspace_id, :day, :prompt_tokens, :completion_tokens, :embed_tokens, :request_count]
-      upsert? true
-      upsert_identity :one_per_workspace_per_day
-      upsert_fields [:prompt_tokens, :completion_tokens, :embed_tokens, :request_count]
-    end
-  end
-
-  policies do
-    bypass actor_attribute_equals(:system?, true) do
-      authorize_if always()
-    end
-
-    policy action_type(:read) do
-      authorize_if Concept.Pages.Checks.WorkspaceMember
-    end
   end
 end

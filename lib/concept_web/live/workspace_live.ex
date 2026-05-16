@@ -4,6 +4,7 @@ defmodule ConceptWeb.WorkspaceLive do
 
   import ConceptWeb.Components.Sidebar
   import ConceptWeb.Components.PresenceBar
+  import ConceptWeb.Components.IndexingPill
 
   alias Concept.Accounts
   alias Concept.Pages
@@ -43,6 +44,8 @@ defmodule ConceptWeb.WorkspaceLive do
     case load_workspace(slug, user) do
       {:ok, ws} ->
         Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:pages")
+        Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:ingest")
+        Phoenix.PubSub.subscribe(Concept.PubSub, "palette:#{ws.id}")
         {:ok, pages} = Pages.list_tree(actor: user, tenant: ws.id)
 
         {:noreply,
@@ -52,7 +55,11 @@ defmodule ConceptWeb.WorkspaceLive do
            current_page: nil,
            page_title: ws.name,
            show_palette: false,
-           presence_users: []
+           presence_users: [],
+           indexing_state: %{count: 0, last_succeeded_at: nil, failed?: false},
+           show_indexing_details: false,
+           chat_open?: false,
+           chat_initial_prompt: nil
          )}
 
       {:error, _} ->
@@ -69,6 +76,8 @@ defmodule ConceptWeb.WorkspaceLive do
     case load_workspace(slug, user) do
       {:ok, ws} ->
         Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:pages")
+        Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:ingest")
+        Phoenix.PubSub.subscribe(Concept.PubSub, "palette:#{ws.id}")
         Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:page:#{page_id}:presence")
         {:ok, pages} = Pages.list_tree(actor: user, tenant: ws.id)
 
@@ -81,7 +90,11 @@ defmodule ConceptWeb.WorkspaceLive do
                current_page: page,
                page_title: page.title,
                show_palette: false,
-               presence_users: []
+               presence_users: [],
+               indexing_state: %{count: 0, last_succeeded_at: nil, failed?: false},
+               show_indexing_details: false,
+               chat_open?: false,
+               chat_initial_prompt: nil
              )}
 
           _ ->
@@ -137,6 +150,14 @@ defmodule ConceptWeb.WorkspaceLive do
     {:noreply, push_navigate(socket, to: ~p"/w/#{slug}/p/#{page_id}")}
   end
 
+  def handle_info({:palette_ask, query}, socket) do
+    {:noreply, assign(socket, chat_open?: true, chat_initial_prompt: query)}
+  end
+
+  def handle_info(:close_chat_panel, socket) do
+    {:noreply, assign(socket, chat_open?: false)}
+  end
+
   @impl true
   def handle_info(
         %Phoenix.Socket.Broadcast{event: event, payload: notification},
@@ -170,6 +191,43 @@ defmodule ConceptWeb.WorkspaceLive do
       end
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(
+        %Phoenix.Socket.Broadcast{event: "ingest_started", payload: _notification},
+        socket
+      ) do
+    state = socket.assigns.indexing_state
+    new_state = %{state | count: state.count + 1, failed?: false}
+    {:noreply, assign(socket, :indexing_state, new_state)}
+  end
+
+  @impl true
+  def handle_info(
+        %Phoenix.Socket.Broadcast{event: "ingest_succeeded", payload: _notification},
+        socket
+      ) do
+    state = socket.assigns.indexing_state
+
+    new_state = %{
+      state
+      | count: max(0, state.count - 1),
+        last_succeeded_at: DateTime.utc_now(),
+        failed?: false
+    }
+
+    {:noreply, assign(socket, :indexing_state, new_state)}
+  end
+
+  @impl true
+  def handle_info(
+        %Phoenix.Socket.Broadcast{event: "ingest_failed", payload: _notification},
+        socket
+      ) do
+    state = socket.assigns.indexing_state
+    new_state = %{state | count: max(0, state.count - 1), failed?: true}
+    {:noreply, assign(socket, :indexing_state, new_state)}
   end
 
   @impl true
@@ -250,6 +308,23 @@ defmodule ConceptWeb.WorkspaceLive do
     end
   end
 
+  def handle_event("show_indexing_details", _params, socket) do
+    ws = socket.assigns.workspace
+    user = socket.assigns.current_user
+
+    jobs =
+      Concept.Knowledge.IngestionJob
+      |> Ash.Query.sort(inserted_at: :desc)
+      |> Ash.Query.limit(10)
+      |> Ash.read!(actor: user, tenant: ws.id)
+
+    {:noreply, assign(socket, show_indexing_details: true, indexing_jobs: jobs)}
+  end
+
+  def handle_event("hide_indexing_details", _params, socket) do
+    {:noreply, assign(socket, show_indexing_details: false)}
+  end
+
   @impl true
   def handle_event("global_key", %{"key" => "k", "metaKey" => true}, socket) do
     toggle_palette(socket)
@@ -259,11 +334,19 @@ defmodule ConceptWeb.WorkspaceLive do
     toggle_palette(socket)
   end
 
+  def handle_event("global_key", %{"key" => "j", "metaKey" => true}, socket) do
+    {:noreply, update(socket, :chat_open?, &(!&1))}
+  end
+
+  def handle_event("global_key", %{"key" => "j", "ctrlKey" => true}, socket) do
+    {:noreply, update(socket, :chat_open?, &(!&1))}
+  end
+
   def handle_event("global_key", %{"key" => "Escape"}, socket) do
-    if socket.assigns[:show_palette] do
-      close_palette(socket)
-    else
-      {:noreply, socket}
+    cond do
+      socket.assigns[:show_palette] -> close_palette(socket)
+      socket.assigns[:chat_open?] -> {:noreply, assign(socket, :chat_open?, false)}
+      true -> {:noreply, socket}
     end
   end
 
@@ -367,6 +450,32 @@ defmodule ConceptWeb.WorkspaceLive do
           <% end %>
         </main>
       </div>
+
+      <div class="fixed bottom-4 right-4 z-30">
+        <.indexing_pill
+          state={
+            if @indexing_state.failed?,
+              do: :error,
+              else: if(@indexing_state.count > 0, do: :indexing, else: :idle)
+          }
+          count={@indexing_state.count}
+          last_succeeded_at={@indexing_state.last_succeeded_at}
+          show_details={@show_indexing_details}
+          jobs={Map.get(assigns, :indexing_jobs, [])}
+          workspace={@workspace}
+          current_user={@current_user}
+        />
+      </div>
+
+      <.live_component
+        :if={@chat_open?}
+        module={ConceptWeb.WorkspaceLive.ChatPanel}
+        id="chat-panel"
+        workspace={@workspace}
+        current_user={@current_user}
+        open={@chat_open?}
+        initial_prompt={@chat_initial_prompt}
+      />
 
       <.live_component
         module={ConceptWeb.CommandPaletteLive}

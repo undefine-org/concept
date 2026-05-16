@@ -1,13 +1,14 @@
-import { createEditor, ParagraphNode, TextNode, LineBreakNode } from "lexical";
+import { createEditor, ParagraphNode, TextNode, LineBreakNode, COMMAND_PRIORITY_LOW } from "lexical";
 import {
   HeadingNode,
   QuoteNode,
   registerRichText,
 } from "@lexical/rich-text";
+import { LinkNode, TOGGLE_LINK_COMMAND, $toggleLink } from "@lexical/link";
 import { mergeRegister } from "@lexical/utils";
 import { oraTheme } from "./theme.js";
 
-const nodes = [ParagraphNode, HeadingNode, QuoteNode, TextNode, LineBreakNode];
+export const nodes = [ParagraphNode, HeadingNode, QuoteNode, TextNode, LineBreakNode, LinkNode];
 
 /**
  * Create a Lexical editor configured for an Ora block.
@@ -28,9 +29,22 @@ export function createBlockEditor(rootElement, editable = true) {
   rootElement.setAttribute("aria-multiline", "true");
 
   // Wire input/paste/IME/drag handlers — without this Lexical is read-only.
-  const unregister = registerRichText(editor);
+  // Also wire link toggle so TOGGLE_LINK_COMMAND actually mutates state.
+  const unregister = mergeRegister(
+    registerRichText(editor),
+    editor.registerCommand(
+      TOGGLE_LINK_COMMAND,
+      (url) => {
+        editor.update(() => {
+          $toggleLink(url);
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
+    ),
+  );
   editor._oraUnregister = unregister;
   return editor;
 }
 
-export { ParagraphNode, HeadingNode, QuoteNode, TextNode, LineBreakNode, mergeRegister };
+export { ParagraphNode, HeadingNode, QuoteNode, TextNode, LineBreakNode, LinkNode, mergeRegister };

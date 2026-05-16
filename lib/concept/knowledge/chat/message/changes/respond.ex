@@ -28,12 +28,16 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
 
       new_message_id = Ash.UUIDv7.generate()
 
+      profile_name = message.profile || :default
+      profile = Concept.Knowledge.Profiles.get!(profile_name)
+      model = profile.answer[:model] || "google:gemini-2.5-flash"
+
       final_state =
         prompt_messages
         |> AshAi.ToolLoop.stream(
           otp_app: :concept,
           tools: true,
-          model: "google:gemini-2.5-flash",
+          model: model,
           actor: context.actor,
           tenant: context.tenant,
           context: Map.new(Ash.Context.to_opts(context))

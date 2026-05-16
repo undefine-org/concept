@@ -1,5 +1,5 @@
 #+TITLE: BUG-014 ArrowUp does not move caret to previous block (integration regression)
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-030-bug-014-arrowup-does-not-move-caret-to-p
@@ -70,3 +70,5 @@ Implementer must surface a failing integration test (Phase A) that reproduces th
 - Integration test exercises both directions; both green.
 - Puppeteer slice A re-runs and ArrowUp passes.
 - One commit: ~fix(editor): ArrowUp focuses previous block at end (BUG-030)~.
+
+NOTE [2026-05-16]: Commit b9edec5. Hypothesis B confirmed + fixed: focus() before selection move (Lexical 0.17 $restoreSelectionFromDOM was overriding). Integration test added. BUT W2.6 Slice A surfaced a deeper bug — _isAtStart() TypeError on node.getOffset() means ArrowUp never even reaches the focusStart path. Filed as BUG-032.

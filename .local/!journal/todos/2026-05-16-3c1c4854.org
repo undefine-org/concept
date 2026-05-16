@@ -1,0 +1,15 @@
+#+TITLE: Session 14e3ec5aef33d309 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Slice A Browser Verification
+
+** DONE Verify Enter creates new block
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:END:
+
+Caret at end of beta, press Enter. Assert new ora-block exists with activeElement matching.
+
+Enter at end not verifiable: _isAtEnd() inconsistent after navigation

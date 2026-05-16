@@ -23,6 +23,7 @@ import { registerRichText } from "@lexical/rich-text";
 import { LinkNode, TOGGLE_LINK_COMMAND, $toggleLink, $isLinkNode } from "@lexical/link";
 import { oraTheme } from "../theme.js";
 import { toggleFormat, setLink } from "../commands.js";
+import { nodes, createBlockEditor } from "../registry.js";
 
 const BASE_NODES = [ParagraphNode, TextNode];
 const LINK_NODES = [ParagraphNode, TextNode, LinkNode];
@@ -153,3 +154,42 @@ describe("setLink", () => {
     unregister();
   });
 });
+
+
+describe("setLink via production registry", () => {
+  it("wraps selected text in a LinkNode using production config", () => {
+    // Use the SAME config as production (import from registry.js)
+    const root = document.createElement("div");
+    root.setAttribute("contenteditable", "true");
+    document.body.appendChild(root);
+
+    const editor = createBlockEditor(root);
+
+    insertParagraphWithText(editor, "hello");
+
+    // Production path: setLink dispatches TOGGLE_LINK_COMMAND.
+    // At this stage registry.js does NOT include LinkNode in `nodes`
+    // and does NOT register a TOGGLE_LINK_COMMAND handler, so this
+    // should be a no-op and the assertion below will fail.
+    setLink(editor, "https://x");
+
+    // Read editor state — use editor.update() to flush pending microtasks
+    let hasLink = false;
+    let linkUrl = "";
+    editor.update(() => {
+      const root = $getRoot();
+      const p = root.getFirstChild();
+      expect(p).not.toBeNull();
+      expect(p.getType()).toBe("paragraph");
+
+      const firstChild = p.getFirstChild();
+      expect(firstChild).not.toBeNull();
+      hasLink = firstChild.getType() === "link";
+      linkUrl = firstChild.__url || "";
+    });
+
+    expect(hasLink).toBe(true);
+    expect(linkUrl).toBe("https://x");
+  });
+});
+

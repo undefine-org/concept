@@ -5,6 +5,7 @@ defmodule Concept.Knowledge do
   """
   use Ash.Domain, otp_app: :concept, extensions: [AshAdmin.Domain]
 
+  require Ash.Query
   alias Concept.Knowledge.SystemActor
 
   admin do
@@ -44,5 +45,29 @@ defmodule Concept.Knowledge do
     Concept.Knowledge.IngestionJob
     |> Ash.Changeset.for_create(:enqueue, %{workspace_id: workspace_id, page_id: page_id, op: op})
     |> Ash.create!(actor: %SystemActor{}, tenant: workspace_id)
+  end
+
+  @doc """
+  Reports ingestion queue depth for telemetry periodic measurements.
+  Counts IngestionJob rows in :queued state across all workspaces.
+  Emits telemetry event consumed by Telemetry.Metrics.last_value/1.
+  """
+  # Reads raw SQL count to bypass multitenant TenantRequired; safe since this is a process-wide metric.
+  def report_ingestion_queue_depth do
+    import Ecto.Query
+
+    count =
+      Concept.Repo.aggregate(
+        from(j in "knowledge_ingestion_jobs",
+          where: j.state == "queued" and is_nil(j.archived_at)
+        ),
+        :count
+      )
+
+    :telemetry.execute(
+      [:concept, :knowledge, :ingestion_job, :queue],
+      %{depth: count},
+      %{}
+    )
   end
 end

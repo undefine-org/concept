@@ -38,7 +38,7 @@ defmodule Concept.Knowledge.Chat.Message do
     end
 
     create :create do
-      accept [:text]
+      accept [:text, :scope, :scope_target_id, :profile]
 
       validate match(:text, ~r/\S/) do
         message "Message cannot be empty"
@@ -185,6 +185,25 @@ defmodule Concept.Knowledge.Chat.Message do
     attribute :complete, :boolean do
       allow_nil? false
       default true
+    end
+
+    attribute :scope, :atom do
+      constraints one_of: [:workspace, :page, :subtree]
+      default :workspace
+      public? true
+      allow_nil? false
+    end
+
+    attribute :scope_target_id, :uuid do
+      public? true
+      allow_nil? true
+    end
+
+    attribute :profile, :atom do
+      constraints one_of: [:fast, :default, :thorough, :outline, :contradict, :intent]
+      default :default
+      public? true
+      allow_nil? false
     end
   end
 

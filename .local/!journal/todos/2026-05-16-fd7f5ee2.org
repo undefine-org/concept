@@ -1,0 +1,40 @@
+#+TITLE: Session 14e3f47563f3d314 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* BUG-032
+
+** DOING Phase A: write failing integration test
+:PROPERTIES:
+:TASK_ID: phase-a
+:STATUS: in_progress
+:END:
+
+Add test to ora-block-integration.test.js: mount OraBlock with 'hello', place caret at offset 0, dispatch ArrowUp KeyboardEvent, assert ora-block-arrow-up fires. Must fail with 'node.getOffset is not a function'.
+
+** ITEM Phase B: fix _isAtStart/_isAtEnd in ora-block.js
+:PROPERTIES:
+:TASK_ID: phase-b
+:STATUS: pending
+:DEPENDS: phase-a
+:END:
+
+Use editor.getEditorState().read(() => { ... }) with $getSelection, $isRangeSelection. For start: sel.anchor.offset === 0. For end: sel.anchor.offset === sel.anchor.getNode().getTextContentSize(). Import $getSelection, $isRangeSelection from lexical.
+
+** ITEM Phase C: write unit tests for _isAtStart/_isAtEnd
+:PROPERTIES:
+:TASK_ID: phase-c
+:STATUS: pending
+:DEPENDS: phase-b
+:END:
+
+Extend ora-block.test.js with unit-level tests at start, middle, end, multi-text-node positions.
+
+** ITEM Phase D: run gates and commit
+:PROPERTIES:
+:TASK_ID: phase-d
+:STATUS: pending
+:DEPENDS: phase-c
+:END:
+
+Run vitest on both test files. Commit with message referencing BUG-032.

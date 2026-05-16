@@ -1,0 +1,81 @@
+#+TITLE: Slash menu: case-sensitive filter, ineffective trigger deletion, input listener missed in browsers
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-033-slash-menu-case-sensitive-filter-ineffec
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W2.6 Slice F puppeteer (2026-05-16) found three real defects in the slash menu that unit tests didn't catch:
+
+1. /Filter "h1" returns zero matches/. =assets/js/components/ora-slash-menu.js= filter does ~label.includes(filter) || type.includes(filter)~ literally. "h1" doesn't match "Heading 1" (case + space) nor "heading_1" (underscore vs nothing).
+2. /BUG-028 trigger deletion ineffective in browser/. =assets/js/hooks/slash_menu.js= ~_handleSelectItem~ calls ~root.clear() + $createTextNode(...)~ inside ~editor.update~ but the source paragraph still shows "/" after select. Likely async-flush ordering OR a Lexical-scope issue where the editor reference is stale by the time update runs.
+3. /Hook _handleInput document listener doesn't fire/. Puppeteer ~type~ generates input events that reach the document (verified) but the hook's listener doesn't process them. Possibly Lexical's own input handler ~stopImmediatePropagation~'s the event before document-level capture. Or the listener is registered on ~document~ but Lexical handles at the editor root level.
+
+* Intention & Purpose
+
+- Filter is forgiving: case-insensitive, matches against both label and a normalized type key (`heading_1` => "h1" matches).
+- Selecting an item ACTUALLY removes the slash + filter from the source block in the real browser, not just in vitest mocks.
+- Slash trigger detection works regardless of how the user inputs "/" (keyboard, paste, etc.).
+
+* Hypotheses + fixes
+
+** Filter fix
+=assets/js/components/ora-slash-menu.js= filter expression:
+#+begin_src js
+const f = filter.toLowerCase();
+const labelNorm = label.toLowerCase();
+const typeNorm = type.replace(/[_-]/g, "").toLowerCase();
+const labelKey = labelNorm.replace(/\s+/g, "");  // "heading 1" -> "heading1"
+return labelNorm.includes(f) || typeNorm.includes(f) || labelKey.includes(f);
+#+end_src
+
+** Trigger deletion
+Move the deletion logic to a microtask after ~pushEvent~ resolves, OR ensure ~editor.update(() => \u2026)~ runs against the FOCUSED editor reference (capture via ~document.activeElement~ at select-time, not at trigger-time). Test by reading source block text /after/ a setTimeout(0) settle in the test.
+
+** Input listener
+Switch from ~document.addEventListener("input", \u2026)~ to listening on the focused ~<ora-block>~'s ~_editor~ via ~editor.registerTextContentListener~ or ~editor.registerCommand(KEY_DOWN_COMMAND, \u2026)~. This way we receive the event through Lexical's pipeline, not in spite of it.
+
+* Scope
+
+- IN: fix filter in =assets/js/components/ora-slash-menu.js= (case-fold, normalize type, normalize label).
+- IN: rework trigger detection in =assets/js/hooks/slash_menu.js= to use Lexical's command pipeline rather than document-level input listener.
+- IN: rework trigger deletion to capture the active editor at select-time + verify via a re-read AFTER ~editor.update~ flush.
+- IN: extend =assets/js/hooks/__tests__/slash_menu.test.js= with REAL-BROWSER-EQUIVALENT scenarios using vitest-jsdom + a mounted ora-block + Lexical editor (not the pure-mock variant currently used). Reuse the integration harness pattern from BUG-030.
+- IN: integration test asserts ALL THREE failure modes (filter "h1" returns Heading 1; after select, source has trigger removed; input via dispatched KeyDown reaches hook).
+- OUT: fuzzy matching beyond case-fold + normalize (no Levenshtein etc.).
+- OUT: arrow-key item nav at the hook level (the Lit component handles it).
+
+* TDD evidence required (3 separate Phase-A snippets, one per defect)
+
+* Implementation
+
+** TODO Filter normalization
+:PROPERTIES:
+:CUSTOM_ID: BUG-033-slash-menu-case-sensitive-filter-ineffec::filter
+:END:
+
+** TODO Trigger detection via Lexical command pipeline
+:PROPERTIES:
+:CUSTOM_ID: BUG-033-slash-menu-case-sensitive-filter-ineffec::detection
+:END:
+
+** TODO Trigger deletion verified post-flush
+:PROPERTIES:
+:CUSTOM_ID: BUG-033-slash-menu-case-sensitive-filter-ineffec::deletion
+:END:
+
+** TODO Integration tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-033-slash-menu-case-sensitive-filter-ineffec::tests
+:DEPENDS: BUG-033-slash-menu-case-sensitive-filter-ineffec::filter, BUG-033-slash-menu-case-sensitive-filter-ineffec::detection, BUG-033-slash-menu-case-sensitive-filter-ineffec::deletion
+:END:
+
+* Acceptance
+- Slice F re-runs: all behaviors pass including filter "h1" and post-select source cleanup.
+- One commit: ~fix(editor): slash menu filter normalization + Lexical-pipeline detection + verified deletion (BUG-033)~.

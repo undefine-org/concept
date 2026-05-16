@@ -47,36 +47,62 @@ defmodule ConceptWeb.PageEditorLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="space-y-1 relative">
-      <ul :if={@blocks != []} id={"block-list-#{@page_id}"} phx-hook="BlockList" class="space-y-1">
-        <li :for={b <- @blocks} data-block-id={b.id}>
-          <ConceptWeb.BlockRender.block block={b} />
-        </li>
-      </ul>
-      <div :if={@blocks == []} class="py-8 text-center">
-        <button
-          phx-click="add_first_block"
-          class="text-notion-text-light hover:text-notion-text transition-colors cursor-pointer"
+    <div id="page-editor-root" phx-hook=".PageScroll">
+      <div class="space-y-1 relative">
+        <ul :if={@blocks != []} id={"block-list-#{@page_id}"} phx-hook="BlockList" class="space-y-1">
+          <li :for={b <- @blocks} data-block-id={b.id}>
+            <ConceptWeb.BlockRender.block block={b} />
+          </li>
+        </ul>
+        <div :if={@blocks == []} class="py-8 text-center">
+          <button
+            phx-click="add_first_block"
+            class="text-notion-text-light hover:text-notion-text transition-colors cursor-pointer"
+          >
+            + Click to add your first block
+          </button>
+        </div>
+        <div
+          id="format-toolbar-host"
+          phx-hook="FormatToolbar"
+          phx-update="ignore"
+          class="ora-format-host"
         >
-          + Click to add your first block
-        </button>
+          <ora-format-toolbar />
+          <ora-link-editor />
+        </div>
+        <div
+          id="slash-menu-host"
+          phx-hook="SlashMenu"
+          phx-update="ignore"
+        >
+          <ora-slash-menu />
+        </div>
       </div>
-      <div
-        id="format-toolbar-host"
-        phx-hook="FormatToolbar"
-        phx-update="ignore"
-        class="ora-format-host"
-      >
-        <ora-format-toolbar />
-        <ora-link-editor />
-      </div>
-      <div
-        id="slash-menu-host"
-        phx-hook="SlashMenu"
-        phx-update="ignore"
-      >
-        <ora-slash-menu />
-      </div>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".PageScroll">
+        export default {
+          mounted() {
+            this.scrollToHash()
+            this.hashHandler = () => this.scrollToHash()
+            window.addEventListener('hashchange', this.hashHandler)
+            this.handleEvent('scroll_to_block', ({block_id}) => this.flashBlock(`block-${block_id}`))
+          },
+          destroyed() { window.removeEventListener('hashchange', this.hashHandler) },
+          scrollToHash() {
+            const hash = window.location.hash
+            if (!hash.startsWith('#block-')) return
+            this.flashBlock(hash.slice(1))
+          },
+          flashBlock(elementId) {
+            const el = document.getElementById(elementId)
+            if (!el) return
+            el.scrollIntoView({behavior: 'smooth', block: 'center'})
+            el.classList.add('ora-block-flash')
+            setTimeout(() => el.classList.remove('ora-block-flash'), 1600)
+          }
+        }
+      </script>
     </div>
     """
   end
@@ -442,6 +468,11 @@ defmodule ConceptWeb.PageEditorLive do
 
   @impl true
   def handle_info(_, socket), do: {:noreply, socket}
+
+  @doc "Push a scroll_to_block event to the client."
+  def push_scroll_to_block(socket, block_id) do
+    push_event(socket, "scroll_to_block", %{block_id: block_id})
+  end
 
   @impl true
   def terminate(_reason, socket) do

@@ -1,0 +1,217 @@
+#+TITLE: Session 14e3f2414266cff0 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Schema & Migration
+
+** DONE Add scope+profile attrs to Message
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:END:
+
+File: lib/concept/knowledge/chat/message.ex
+
+Add 3 attributes in the attributes block:
+- :scope (atom; default :workspace; constraints one_of: [:workspace, :page, :subtree])
+- :scope_target_id (uuid; allow_nil?: true; public?: true)
+- :profile (atom; default :default; public?: true; constraints one_of must be dynamic from Profiles.list())
+
+Update :create action to accept [:scope, :scope_target_id, :profile]
+
+Acceptance: mix compile --warnings-as-errors clean
+
+** DONE Update respond.ex to use profile model
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:END:
+
+File: lib/concept/knowledge/chat/message/changes/respond.ex
+
+Line ~76: Replace hardcoded model: "google:gemini-2.5-flash" with:
+profile_name = message.profile || :default
+profile = Concept.Knowledge.Profiles.get!(profile_name)
+model = profile.answer[:model] || "google:gemini-2.5-flash"
+
+Use `model: model` in AshAi.ToolLoop.stream call.
+
+Acceptance: mix compile clean + grep for hardcoded gemini string removed
+
+** DONE Generate and apply migration
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
+:DEPENDS: task-1 task-2
+:END:
+
+Run: mix ash.codegen extend_chat_message_with_scope_and_profile --yes
+Then: mix ecto.migrate
+
+Acceptance: migration applied; mix ecto.rollback && mix ecto.migrate succeeds
+
+* IndexingPill (FEAT-038)
+
+** DONE Create IndexingPill component
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: completed
+:END:
+
+File: lib/concept_web/components/indexing_pill.ex
+
+Function component with:
+- attr :state (:idle | :indexing | :error)
+- attr :count (integer, default 0)
+- attr :last_succeeded_at (DateTime, optional)
+- attr :jobs (list, default [])
+- attr :workspace (required)
+- attr :current_user (required)
+
+Render pill with CSS classes from assignment. Click handler sends "show_indexing_details" event.
+Popover uses details slot with job list.
+
+Acceptance: component renders; no compile warnings
+
+** DONE Wire IndexingPill into WorkspaceLive
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:DEPENDS: task-4
+:END:
+
+File: lib/concept_web/live/workspace_live.ex
+
+1. In handle_workspace_params and handle_page_params: after PubSub subscribe calls, add:
+   Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:ingest")
+
+2. Add assigns in both funcs:
+   indexing_state: %{count: 0, last_succeeded_at: nil, failed?: false}
+
+3. Add handle_info for 3 PubSub events:
+   - "ingest_started" → update(count: count+1)
+   - "ingest_succeeded" → update(count: max(0, count-1), last_succeeded_at: now)
+   - "ingest_failed" → update(count: max(0, count-1), failed?: true)
+
+4. Add handle_event "show_indexing_details" → queries last 10 IngestionJob rows, assigns :indexing_jobs
+
+5. In render: add <ConceptWeb.Components.IndexingPill.indexing_pill /> in footer area
+
+Acceptance: component mounts; no runtime errors
+
+* ChatPanel (FEAT-039)
+
+** DONE Create ChatPanel LiveComponent
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: completed
+:DEPENDS: task-3
+:END:
+
+File: lib/concept_web/live/workspace_live/chat_panel.ex
+
+LiveComponent that:
+- Wraps ConceptWeb.ChatComponent as inner live_component
+- Adds scope selector (3 radio buttons: workspace/page/subtree)
+- Adds profile selector (dropdown from Profiles.list())
+- Passes scope+profile as private args when creating message
+- attr :workspace, :current_user required
+- attr :initial_prompt (optional) — seeds form if present
+- assign :open? (default false)
+
+Render with .ora-chat-panel CSS, conditionally add --open class.
+
+Acceptance: compiles; can mount in isolation
+
+** DONE Wire ChatPanel into WorkspaceLive
+:PROPERTIES:
+:TASK_ID: task-7
+:STATUS: completed
+:DEPENDS: task-6
+:END:
+
+File: lib/concept_web/live/workspace_live.ex
+
+1. In handle_workspace_params + handle_page_params: subscribe to "palette:#{ws.id}"
+2. Add assigns: chat_open?: false, chat_initial_prompt: nil
+3. handle_event "global_key" %{"key" => "j", "metaKey" => true} → toggle chat_open?
+4. handle_info {:palette_ask, query} → assign(chat_open?: true, chat_initial_prompt: query)
+5. handle_event "close_chat_panel" → assign(chat_open?: false)
+6. Render: <.live_component module={ChatPanel} if={@chat_open?} id="chat-panel" workspace={@workspace} current_user={@current_user} initial_prompt={@chat_initial_prompt} />
+
+Acceptance: ⌘J toggles panel; Esc closes
+
+* Tests
+
+** DONE Write IndexingPill tests
+:PROPERTIES:
+:TASK_ID: task-8
+:STATUS: completed
+:DEPENDS: task-5
+:END:
+
+File: test/concept_web/components/indexing_pill_test.exs
+
+4 tests:
+1. renders :idle by default
+2. PubSub ingest_started → :indexing with count 1
+3. ingest_succeeded decrements; count=0 → "Indexed Ns ago"
+4. click → details popover with IngestionJob rows
+
+Acceptance: mix test <file> green
+
+** DONE Write ChatPanel + WorkspaceLive tests
+:PROPERTIES:
+:TASK_ID: task-9
+:STATUS: completed
+:DEPENDS: task-7
+:END:
+
+File: test/concept_web/live/workspace_chat_panel_test.exs
+
+8 tests:
+1. ⌘J toggles panel visibility
+2. Submitting question creates Message (Ash query after submit)
+3. Scope dropdown renders 3 options
+4. Profile dropdown renders all Profiles.list() names
+5. PubSub {:palette_ask, query} opens panel + seeds prompt
+6. Esc closes panel
+7. New-chat creates new Conversation
+8. Stub LLM via Req.Test — verify request made with profile's model
+
+Use Concept.TestSupport.LLMStub.stub_text for test 8.
+
+Acceptance: mix test <file> green
+
+* Polish
+
+** DONE Add CSS to app.css
+:PROPERTIES:
+:TASK_ID: task-10
+:STATUS: completed
+:END:
+
+File: assets/css/app.css
+
+Append CSS from assignment:
+.ora-pill { ... }
+.ora-pill-idle { ... }
+.ora-pill-indexing { ... }
+.ora-pill-error { ... }
+@keyframes ora-pulse { ... }
+.ora-chat-panel { ... }
+.ora-chat-panel--open { ... }
+
+Acceptance: CSS builds; no warnings
+
+** DONE Run precommit + manual check
+:PROPERTIES:
+:TASK_ID: task-11
+:STATUS: completed
+:DEPENDS: task-8 task-9 task-10
+:END:
+
+Run: mix precommit
+Visit: /w/<slug> in browser (if possible)
+
+Acceptance: all green; pill + chat toggle visible

@@ -159,34 +159,22 @@ PerformIngest covers immediate need; full Reactor steps refactor deferred to pos
 
 * Wave 2 Foundation UI
 
-** DOING FEAT-036 CitationCard component
-:PROPERTIES:
-:TASK_ID: task-1
-:STATUS: in_progress
-:END:
-
-** ITEM FEAT-037 PageScroll colocated hook + flash
+** BLOCKED FEAT-037 PageScroll colocated hook + flash
 :PROPERTIES:
 :TASK_ID: task-2
-:STATUS: pending
+:STATUS: failed
 :END:
 
-** DONE FEAT-040 semantic command palette via assign_async
-:PROPERTIES:
-:TASK_ID: task-3
-:STATUS: completed
-:END:
-
-** ITEM FEAT-038 IndexingPill + FEAT-039 ChatPanel (shared WorkspaceLive)
+** BLOCKED FEAT-038 IndexingPill + FEAT-039 ChatPanel (shared WorkspaceLive)
 :PROPERTIES:
 :TASK_ID: task-4
-:STATUS: pending
+:STATUS: failed
 :END:
 
-* Wave 4 (parallelizable backend)
+* Wave 2 regression fix
 
-** DOING FEAT-048 telemetry expansion + Gemini token ledger
+** ITEM Fix 8 test regressions across Link/Knowledge/Palette
 :PROPERTIES:
 :TASK_ID: task-5
-:STATUS: in_progress
+:STATUS: pending
 :END:

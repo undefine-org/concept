@@ -10,6 +10,16 @@ defmodule ConceptWeb.ChatComponent do
   def update(assigns, socket) do
     socket = assign(socket, assigns)
 
+    # Handle initial_prompt if provided
+    socket =
+      if assigns[:initial_prompt] && !socket.assigns[:prompt_seeded] do
+        socket
+        |> assign(:prompt_seeded, true)
+        |> assign(:initial_text, assigns.initial_prompt)
+      else
+        socket
+      end
+
     socket =
       if !socket.assigns[:initialized] do
         conversations =
@@ -344,23 +354,43 @@ defmodule ConceptWeb.ChatComponent do
   end
 
   defp assign_message_form(socket) do
+    # Build base arguments with optional scope+profile from assigns
+    base_args = %{}
+
+    base_args =
+      if socket.assigns[:message_scope],
+        do: Map.put(base_args, :scope, socket.assigns.message_scope),
+        else: base_args
+
+    base_args =
+      if socket.assigns[:message_profile],
+        do: Map.put(base_args, :profile, socket.assigns.message_profile),
+        else: base_args
+
+    base_args =
+      if socket.assigns[:initial_text],
+        do: Map.put(base_args, :text, socket.assigns.initial_text),
+        else: base_args
+
     form =
       if socket.assigns.conversation do
         Concept.Knowledge.Chat.form_to_create_message(
           actor: socket.assigns.current_user,
+          params: base_args,
           private_arguments: %{conversation_id: socket.assigns.conversation.id}
         )
         |> to_form()
       else
-        Concept.Knowledge.Chat.form_to_create_message(actor: socket.assigns.current_user)
+        Concept.Knowledge.Chat.form_to_create_message(
+          actor: socket.assigns.current_user,
+          params: base_args
+        )
         |> to_form()
       end
 
-    assign(
-      socket,
-      :message_form,
-      form
-    )
+    socket
+    |> assign(:message_form, form)
+    |> assign(:initial_text, nil)
   end
 
   defp tool_calls(message), do: safe_extract(message).tool_calls

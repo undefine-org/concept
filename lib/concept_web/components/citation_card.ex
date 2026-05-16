@@ -1,7 +1,7 @@
 defmodule ConceptWeb.Components.CitationCard do
   @moduledoc """
   Citation card component with block preview popover.
-  
+
   Renders a citation as a clickable card with metadata (icon, breadcrumbs, snippet, score).
   On hover, triggers a preview request to the parent LiveView to load and display the
   actual block content via BlockRender.
@@ -10,13 +10,12 @@ defmodule ConceptWeb.Components.CitationCard do
   import ConceptWeb.CoreComponents
 
   alias Concept.Pages
-  alias ConceptWeb.BlockRender
 
   @doc """
   Renders a citation card with preview popover support.
-  
+
   ## Examples
-  
+
       <.citation_card citation={@citation} workspace_slug={@workspace.slug} />
   """
   attr :citation, :map, required: true
@@ -42,7 +41,14 @@ defmodule ConceptWeb.Components.CitationCard do
             <div :if={@citation.snippet} class="ora-citation-card__snippet">
               {@citation.snippet}
             </div>
-            <div class="ora-citation-card__sparkline" role="progressbar" aria-valuenow={sparkline_value(@citation.score)} aria-valuemin="0" aria-valuemax="100" style={sparkline_style(@citation.score)}>
+            <div
+              class="ora-citation-card__sparkline"
+              role="progressbar"
+              aria-valuenow={sparkline_value(@citation.score)}
+              aria-valuemin="0"
+              aria-valuemax="100"
+              style={sparkline_style(@citation.score)}
+            >
             </div>
           </div>
         </div>
@@ -53,11 +59,11 @@ defmodule ConceptWeb.Components.CitationCard do
 
   @doc """
   Helper function for LiveView to load block preview HTML.
-  
+
   Call from `handle_event("load_block_preview", %{"block-id" => block_id}, socket)`.
-  
+
   ## Examples
-  
+
       def handle_event("load_block_preview", %{"block-id" => block_id}, socket) do
         case CitationCard.load_block_preview(block_id, socket) do
           {:ok, html} -> {:reply, %{html: html}, socket}
@@ -71,10 +77,8 @@ defmodule ConceptWeb.Components.CitationCard do
 
     case Ash.get(Pages.Block, block_id, actor: actor, tenant: workspace_id) do
       {:ok, block} ->
-        html =
-          BlockRender.block(%{block: block})
-          |> Phoenix.HTML.Safe.to_iodata()
-          |> IO.iodata_to_binary()
+        # Convert block content to displayable HTML
+        html = Concept.Lexical.to_html(block.content)
 
         {:ok, html}
 
@@ -104,9 +108,11 @@ defmodule ConceptWeb.Components.CitationCard do
 
   # Generates inline style for sparkline gradient based on score
   defp sparkline_style(nil), do: "width: 0%"
+
   defp sparkline_style(score) when is_float(score) do
     percentage = round(score * 100)
     "width: #{percentage}%"
   end
+
   defp sparkline_style(_), do: "width: 0%"
 end

@@ -20,7 +20,7 @@
  * as a regression harness when run in a real browser environment.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { $getSelection, $isRangeSelection } from "lexical";
+import { $getRoot, $getSelection, $isRangeSelection } from "lexical";
 import "../ora-block.js";
 import { createBlockEditor } from "../../lexical/registry.js";
 import { parseInitial } from "../../lexical/state.js";
@@ -137,5 +137,48 @@ describe("ora-block arrow-up integration", () => {
 
     // The arrow-up event was dispatched and handled.
     expect(handler).toHaveBeenCalledOnce();
+  });
+  it("fires ora-block-arrow-up when ArrowUp pressed at offset 0", async () => {
+    // ── Arrange ──────────────────────────────────────────────────────
+    const el = createBlock("gamma", "hello");
+    document.body.append(el);
+    await el.updateComplete;
+
+    if (!el._editor) {
+      const root = el.querySelector("[data-editor]");
+      if (root) {
+        el._editor = createBlockEditor(root, true);
+        const state = parseInitial(el._editor, el.getAttribute("initial-content"));
+        if (state) el._editor.setEditorState(state);
+      }
+    }
+
+    expect(el._editor).toBeTruthy();
+
+    // Place caret at offset 0 of the text node via Lexical API.
+    el._editor.update(() => {
+      const root = $getRoot();
+      const paragraph = root.getFirstChild();
+      const textNode = paragraph.getFirstChild();
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        selection.anchor.set(textNode.getKey(), 0, "text");
+        selection.focus.set(textNode.getKey(), 0, "text");
+      }
+    });
+    // Let the update commit.
+    await flush();
+
+    const arrowUpFired = vi.fn();
+    el.addEventListener("ora-block-arrow-up", arrowUpFired);
+
+    // ── Act ──────────────────────────────────────────────────────────
+    const editorRoot = el.querySelector("[data-editor]");
+    editorRoot.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }),
+    );
+
+    // ── Assert ───────────────────────────────────────────────────────
+    expect(arrowUpFired).toHaveBeenCalledOnce();
   });
 });

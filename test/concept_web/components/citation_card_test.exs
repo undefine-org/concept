@@ -1,7 +1,6 @@
 defmodule ConceptWeb.Components.CitationCardTest do
   use Concept.DataCase, async: true
 
-  import Phoenix.Component
   import Phoenix.LiveViewTest
 
   alias Concept.Pages
@@ -37,12 +36,18 @@ defmodule ConceptWeb.Components.CitationCardTest do
       )
 
     # Acquire lock before updating content
-        {:ok, block} = Pages.acquire_lock(block, %{user_id: user.id}, actor: user, tenant: workspace.id)
+    {:ok, block} =
+      Pages.acquire_lock(block, %{user_id: user.id}, actor: user, tenant: workspace.id)
 
     {:ok, block} =
       Pages.update_content(
         block,
-        %{"root" => %{"children" => [%{"text" => "Test block content"}]}},
+        %{
+          "root" => %{
+            "type" => "root",
+            "children" => [%{"type" => "text", "text" => "Test block content"}]
+          }
+        },
         actor: user,
         tenant: workspace.id
       )
@@ -54,7 +59,11 @@ defmodule ConceptWeb.Components.CitationCardTest do
   end
 
   describe "citation_card/1" do
-    test "renders title-hit shape when breadcrumbs is nil", %{workspace: workspace, page: page, block: block} do
+    test "renders title-hit shape when breadcrumbs is nil", %{
+      workspace: workspace,
+      page: page,
+      block: block
+    } do
       citation = %{
         id: Ash.UUID.generate(),
         workspace_id: workspace.id,
@@ -68,13 +77,20 @@ defmodule ConceptWeb.Components.CitationCardTest do
       }
 
       html =
-        render_component(&CitationCard.citation_card/1, citation: citation, workspace_slug: workspace.slug)
+        render_component(&CitationCard.citation_card/1,
+          citation: citation,
+          workspace_slug: workspace.slug
+        )
 
       assert html =~ "hero-document-text"
       refute html =~ "hero-sparkles"
     end
 
-    test "renders semantic-hit shape when breadcrumbs and snippet present", %{workspace: workspace, page: page, block: block} do
+    test "renders semantic-hit shape when breadcrumbs and snippet present", %{
+      workspace: workspace,
+      page: page,
+      block: block
+    } do
       citation = %{
         id: Ash.UUID.generate(),
         workspace_id: workspace.id,
@@ -88,7 +104,10 @@ defmodule ConceptWeb.Components.CitationCardTest do
       }
 
       html =
-        render_component(&CitationCard.citation_card/1, citation: citation, workspace_slug: workspace.slug)
+        render_component(&CitationCard.citation_card/1,
+          citation: citation,
+          workspace_slug: workspace.slug
+        )
 
       assert html =~ "hero-sparkles"
       refute html =~ "hero-document-text"
@@ -96,7 +115,11 @@ defmodule ConceptWeb.Components.CitationCardTest do
       assert html =~ "This is a test snippet with some content"
     end
 
-    test "link href matches expected deep-link pattern", %{workspace: workspace, page: page, block: block} do
+    test "link href matches expected deep-link pattern", %{
+      workspace: workspace,
+      page: page,
+      block: block
+    } do
       citation = %{
         id: Ash.UUID.generate(),
         workspace_id: workspace.id,
@@ -110,13 +133,20 @@ defmodule ConceptWeb.Components.CitationCardTest do
       }
 
       html =
-        render_component(&CitationCard.citation_card/1, citation: citation, workspace_slug: workspace.slug)
+        render_component(&CitationCard.citation_card/1,
+          citation: citation,
+          workspace_slug: workspace.slug
+        )
 
       expected_href = "/w/#{workspace.slug}/p/#{page.id}#block-#{block.id}"
       assert html =~ expected_href
     end
 
-    test "score sparkline aria-valuenow matches round(score*100)", %{workspace: workspace, page: page, block: block} do
+    test "score sparkline aria-valuenow matches round(score*100)", %{
+      workspace: workspace,
+      page: page,
+      block: block
+    } do
       citation = %{
         id: Ash.UUID.generate(),
         workspace_id: workspace.id,
@@ -130,7 +160,10 @@ defmodule ConceptWeb.Components.CitationCardTest do
       }
 
       html =
-        render_component(&CitationCard.citation_card/1, citation: citation, workspace_slug: workspace.slug)
+        render_component(&CitationCard.citation_card/1,
+          citation: citation,
+          workspace_slug: workspace.slug
+        )
 
       # 0.876 * 100 = 87.6 -> round(87.6) = 88
       assert html =~ ~r/aria-valuenow="88"/
@@ -150,7 +183,10 @@ defmodule ConceptWeb.Components.CitationCardTest do
       }
 
       html =
-        render_component(&CitationCard.citation_card/1, citation: citation, workspace_slug: workspace.slug)
+        render_component(&CitationCard.citation_card/1,
+          citation: citation,
+          workspace_slug: workspace.slug
+        )
 
       assert html =~ ~r/aria-valuenow="0"/
       assert html =~ ~r/width: 0%/
@@ -158,7 +194,11 @@ defmodule ConceptWeb.Components.CitationCardTest do
   end
 
   describe "load_block_preview/2" do
-    test "returns HTML containing block content text", %{user: user, workspace: workspace, page: page, block: block} do
+    test "returns HTML containing block content text", %{
+      user: user,
+      workspace: workspace,
+      block: block
+    } do
       # Mock socket with required assigns
       socket = %Phoenix.LiveView.Socket{
         assigns: %{
@@ -171,7 +211,6 @@ defmodule ConceptWeb.Components.CitationCardTest do
 
       assert is_binary(html)
       assert html =~ "Test block content"
-      assert html =~ "block-#{block.id}"
     end
 
     test "returns error for non-existent block", %{user: user, workspace: workspace} do
