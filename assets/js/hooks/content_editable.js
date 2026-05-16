@@ -1,7 +1,7 @@
 const ContentEditable = {
   mounted() {
     this._onBlur = () => {
-      this.pushEventTo(this.el, "save_title", { value: this.el.innerText });
+      this.pushEventTo(this.el, "save_title", { value: this.el.innerText.trim() });
     };
     this._onKeydown = (e) => {
       if (e.key === "Enter") {

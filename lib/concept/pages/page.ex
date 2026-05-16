@@ -37,11 +37,14 @@ defmodule Concept.Pages.Page do
       accept [:title, :icon_emoji, :parent_page_id]
       argument :workspace_id, :uuid, allow_nil?: false
       change set_attribute(:workspace_id, arg(:workspace_id))
+      change Concept.Pages.Changes.TrimTitle
       change Concept.Pages.Changes.AssignAfterLastSibling
     end
 
     update :rename do
       accept [:title]
+      require_atomic? false
+      change Concept.Pages.Changes.TrimTitle
     end
 
     update :set_icon do
@@ -104,6 +107,9 @@ defmodule Concept.Pages.Page do
 
     publish_all :create, ["*", :workspace_id, "pages"], event: "page_created"
     publish_all :update, ["*", :workspace_id, "pages"], event: "page_updated"
+    publish :rename, ["*", :workspace_id, "pages"], event: "page_updated"
+    publish :set_icon, ["*", :workspace_id, "pages"], event: "page_updated"
+    publish :set_cover_color, ["*", :workspace_id, "pages"], event: "page_updated"
     publish :archive, ["*", :workspace_id, "pages"], event: "page_archived"
     publish :restore, ["*", :workspace_id, "pages"], event: "page_restored"
   end
