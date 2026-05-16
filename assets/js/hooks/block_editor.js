@@ -49,10 +49,14 @@ export const BlockEditor = {
     // Handle server-pushed focus_block_caret event
     this.handleEvent("focus_block_caret", ({ block_id, position }) => {
       if (block_id === this.el.getAttribute("block-id")) {
-        if (position === "start") {
-          this.el.focusStart?.();
-        } else if (position === "end") {
-          this.el.focusEnd?.();
+        try {
+          if (position === "start") {
+            this.el.focusStart();
+          } else if (position === "end") {
+            this.el.focusEnd();
+          }
+        } catch (err) {
+          console.warn("BlockEditor: focus_block_caret failed", err);
         }
       }
     });

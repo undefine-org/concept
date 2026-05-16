@@ -12,55 +12,57 @@ defmodule ConceptWeb.HomeLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-white flex flex-col items-center justify-center gap-8 px-6">
-      <div class="text-center space-y-4 max-w-xl">
-        <div class="text-6xl">📝</div>
-        <h1
-          class="text-5xl font-bold tracking-tight"
-          style="font-family: Inter, system-ui, sans-serif;"
-        >
-          Concept
-        </h1>
-        <p class="text-lg text-notion-text-light">
-          A pixel-perfect, Ash-powered Notion clone. Lit + Lexical blocks, real-time collaboration, paragraph-level locks.
-        </p>
-        <div class="pt-2">
-          <ora-hello data-testid="ora-hello"></ora-hello>
+    <Layouts.app flash={@flash} current_scope={@current_scope}>
+      <div class="min-h-screen bg-white flex flex-col items-center justify-center gap-8 px-6">
+        <div class="text-center space-y-4 max-w-xl">
+          <div class="text-6xl">📝</div>
+          <h1
+            class="text-5xl font-bold tracking-tight"
+            style="font-family: Inter, system-ui, sans-serif;"
+          >
+            Concept
+          </h1>
+          <p class="text-lg text-notion-text-light">
+            A pixel-perfect, Ash-powered Notion clone. Lit + Lexical blocks, real-time collaboration, paragraph-level locks.
+          </p>
+          <div class="pt-2">
+            <ora-hello data-testid="ora-hello"></ora-hello>
+          </div>
+        </div>
+        <div class="flex gap-3 pt-2">
+          <%= if @current_user do %>
+            <.link
+              navigate={~p"/w"}
+              class="px-4 py-2 bg-notion-text text-white rounded-md font-medium"
+              data-testid="enter-workspace"
+            >
+              Enter your workspace →
+            </.link>
+            <.link
+              href={~p"/sign-out"}
+              method="delete"
+              class="px-4 py-2 border border-notion-divider rounded-md font-medium"
+            >
+              Sign out
+            </.link>
+          <% else %>
+            <.link
+              navigate={~p"/register"}
+              class="px-4 py-2 bg-notion-text text-white rounded-md font-medium"
+              data-testid="get-started"
+            >
+              Get started
+            </.link>
+            <.link
+              navigate={~p"/sign-in"}
+              class="px-4 py-2 border border-notion-divider rounded-md font-medium"
+            >
+              Sign in
+            </.link>
+          <% end %>
         </div>
       </div>
-      <div class="flex gap-3 pt-2">
-        <%= if @current_user do %>
-          <.link
-            navigate={~p"/w"}
-            class="px-4 py-2 bg-notion-text text-white rounded-md font-medium"
-            data-testid="enter-workspace"
-          >
-            Enter your workspace →
-          </.link>
-          <.link
-            href={~p"/sign-out"}
-            method="delete"
-            class="px-4 py-2 border border-notion-divider rounded-md font-medium"
-          >
-            Sign out
-          </.link>
-        <% else %>
-          <.link
-            navigate={~p"/register"}
-            class="px-4 py-2 bg-notion-text text-white rounded-md font-medium"
-            data-testid="get-started"
-          >
-            Get started
-          </.link>
-          <.link
-            navigate={~p"/sign-in"}
-            class="px-4 py-2 border border-notion-divider rounded-md font-medium"
-          >
-            Sign in
-          </.link>
-        <% end %>
-      </div>
-    </div>
+    </Layouts.app>
     """
   end
 end

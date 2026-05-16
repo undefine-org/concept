@@ -1,0 +1,114 @@
+#+TITLE: Session 14d5ce1e90eed313 Todos
+#+DATE: 2026-05-05
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* wave-1
+
+** DONE Allow position on Block.create_block action (BUG-002::create-block-accept-position)
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:ORG_ITEM_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n
+:ORG_ITEM_CLOSING_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n::create-block-accept-position
+:END:
+
+File: lib/concept/pages/block.ex
+Append :position to accept list in create_block action
+
+** DONE Wire PageHeader live_component into WorkspaceLive (BUG-003::wire-page-header-component)
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
+:ORG_ITEM_ID: BUG-003-page-title-is-not-editable-rename-does-n
+:ORG_ITEM_CLOSING_ID: BUG-003-page-title-is-not-editable-rename-does-n::wire-page-header-component
+:END:
+
+File: lib/concept_web/live/workspace_live.ex
+Replace inline <h1> with <.live_component module={PageHeader}>
+
+* wave-2
+
+** DONE Merge keyboard listeners into BlockEditor; remove BlockKeyboard (BUG-002::merge-keyboard-into-block-editor)
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:DEPENDS: task-2
+:ORG_ITEM_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n
+:ORG_ITEM_CLOSING_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n::merge-keyboard-into-block-editor
+:END:
+
+Files: assets/js/hooks/block_editor.js, assets/js/components/ora-block.js, assets/js/hooks/index.js
+Merge keyboard event listeners, preventDefault on Enter, remove BlockKeyboard
+
+** DONE Fix WorkspaceLive page broadcast handlers (BUG-003::fix-workspace-page-broadcasts)
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: completed
+:DEPENDS: task-3
+:ORG_ITEM_ID: BUG-003-page-title-is-not-editable-rename-does-n
+:ORG_ITEM_CLOSING_ID: BUG-003-page-title-is-not-editable-rename-does-n::fix-workspace-page-broadcasts
+:END:
+
+File: lib/concept_web/live/workspace_live.ex
+Delete dead :ash_pubsub clause, add correct Phoenix.Socket.Broadcast handlers
+
+* wave-3
+
+** DONE Add server handlers for nav_block/insert_paragraph_below/delete_block_merge (BUG-002::server-keyboard-handlers)
+:PROPERTIES:
+:TASK_ID: task-8
+:STATUS: completed
+:DEPENDS: task-5
+:ORG_ITEM_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n
+:ORG_ITEM_CLOSING_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n::server-keyboard-handlers
+:END:
+
+File: lib/concept_web/live/page_editor_live.ex
+Add handle_event clauses for keyboard events
+
+* wave-4
+
+** DONE De-duplicate block_created broadcast and clean up add_first_block (BUG-002::dedup-block-created)
+:PROPERTIES:
+:TASK_ID: task-9
+:STATUS: completed
+:DEPENDS: task-8
+:ORG_ITEM_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n
+:ORG_ITEM_CLOSING_ID: BUG-002-enter-inside-a-block-does-not-insert-a-n::dedup-block-created
+:END:
+
+File: lib/concept_web/live/page_editor_live.ex
+Fix duplicate block from add_first_block + PubSub broadcast
+
+* tests
+
+** DONE Write page_editor_test.exs (BUG-001 scenarios 1-3 + BUG-002 scenarios 1-8)
+:PROPERTIES:
+:TASK_ID: task-10
+:STATUS: completed
+:DEPENDS: task-9
+:END:
+
+File: test/concept_web/live/page_editor_test.exs
+Reuse auth setup from command_palette_test.exs
+BUG-001: block-handle renders, format-toolbar singletons, row layout class
+BUG-002: insert_paragraph_below (tail, between), nav_block (down, up, boundary), delete_block_merge (empty, only), block_created dedup
+
+** DONE Write page_header_test.exs (BUG-003 scenarios 1-5)
+:PROPERTIES:
+:TASK_ID: task-11
+:STATUS: completed
+:DEPENDS: task-6
+:END:
+
+File: test/concept_web/live/page_header_test.exs
+Reuse auth setup from command_palette_test.exs
+Scenarios: contenteditable title, save_title updates page, sidebar propagation, tab title propagation, empty title placeholder
+
+* Setup Pattern (from command_palette_test.exs)
+
+** DONE Write page_editor_test.exs covering BUG-001 + BUG-002
+:PROPERTIES:
+:TASK_ID: task-12
+:STATUS: completed
+:END:

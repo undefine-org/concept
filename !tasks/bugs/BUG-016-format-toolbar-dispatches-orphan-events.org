@@ -1,0 +1,143 @@
+#+TITLE: Format toolbar dispatches orphan events; link editor unreachable
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-016-format-toolbar-dispatches-orphan-events
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16). =<ora-format-toolbar>= is rendered once in =PageEditorLive.render/1= (=page_editor_live.ex:49-68=) but its CustomEvents are orphans. =ora-format-toolbar.js:118-132= dispatches ~toggle-format~ and ~request-link~ with ~bubbles: true, composed: true~. Nothing — no hook, no LV, no parent element — listens for them. =<ora-link-editor>= is registered but never instantiated; the only path to open it was ~request-link~. Bold/italic/underline/strike/code/link buttons render and animate on click but produce zero state change.
+
+PLAN-002 BUG-001 (DONE) claimed "Render single format-toolbar instance + container relative positioning" — the DOM was rendered, the JS was never wired.
+
+* Intention & Purpose
+
+Wire the toolbar end-to-end with Lexical commands. Clicking B/I/U/S/code toggles the corresponding format on the current selection; clicking link opens =<ora-link-editor>= positioned near the selection, and "Apply" sets a link node on the selection. Selection bubble shows/hides based on Lexical selection range (collapsed vs. non-collapsed).
+
+* Context & Narrative
+
+Lexical 0.17 format commands (=@lexical/rich-text= + core):
+- ~FORMAT_TEXT_COMMAND~ with payload ~"bold" | "italic" | "underline" | "strikethrough" | "code"~ — dispatch via ~editor.dispatchCommand(FORMAT_TEXT_COMMAND, "bold")~.
+- Link: ~TOGGLE_LINK_COMMAND~ from =@lexical/link= with URL string or null.
+
+=assets/js/lexical/commands.js= already exists (24 lines per audit) — extend with ~toggleFormat(editor, format)~ and ~setLink(editor, url)~ wrappers. Keep ora-block component as the editor owner; the toolbar should be a sibling that resolves "currently focused block" via document.activeElement or an explicit setter.
+
+Selection-bubble positioning: =<ora-format-toolbar>= uses absolute positioning relative to the page-editor container. Listen for ~selectionchange~ on the document (filtered to selections inside one of our ora-block hosts) → compute caret rect via =window.getSelection().getRangeAt(0).getBoundingClientRect()= → set ~style.top/left~ + ~hidden~ attribute.
+
+Link editor: dispatch ~request-link~ → page-level listener mounts =<ora-link-editor>= as overlay with anchor rect → user types URL → editor emits ~apply-link~ → call ~setLink(editor, url)~ → close overlay.
+
+* Scope
+
+- IN: extend =assets/js/lexical/commands.js= with ~toggleFormat/2~ and ~setLink/2~.
+- IN: a new =assets/js/hooks/format_toolbar.js= hook attached to a host element wrapping the toolbar; subscribes to ~selectionchange~, resolves the active editor, owns the show/hide + position logic, and wires the toolbar's CustomEvents to Lexical commands.
+- IN: register the hook in =assets/js/hooks/index.js=.
+- IN: =page_editor_live.ex= renders the toolbar host with ~phx-hook="FormatToolbar"~, plus a hidden =<ora-link-editor>= overlay.
+- IN: link editor wiring — toolbar emits ~request-link~ → hook reveals overlay → on ~apply-link~ → hook calls Lexical ~TOGGLE_LINK_COMMAND~ on the resolved editor.
+- IN: vitest unit on commands.js wrappers; vitest interaction test on toolbar→hook event flow; LV manual smoke (puppeteer in reviewer wave).
+- OUT: keyboard shortcuts (Cmd-B etc.) — separate item, see existing FEAT-011 ~shortcuts~.
+- OUT: color, highlight, font-size affordances.
+
+* Existing Patterns
+
+- =assets/js/hooks/block_editor.js= — hook pattern (mounted/destroyed, ~this.handleEvent~). New ~FormatToolbar~ mirrors structure.
+- =assets/js/components/ora-format-toolbar.js= — already has props for ~visible~ + ~rect~; we drive them from the hook.
+- =assets/js/components/ora-link-editor.js= — already emits ~apply-link~ + ~cancel~ events; same wiring pattern.
+- ~ConceptWeb.Lexical.to_html/1~ (server) — already produces format bitmask HTML. After format toggles save → server renders correctly. No server change needed for B/I/U/S/code.
+- Link nodes: =Concept.Lexical= already serializes LinkNode. Verify by saving a content with a link mark and reloading.
+
+* Tests
+
+** Vitest
+
+1. ~toggleFormat(editor, "bold")~ — given a paragraph with selected text "abc", after toggle, the selection text node has format & 1 (bold bit).
+2. ~setLink(editor, "https://x")~ — selected text becomes a LinkNode with url, plus reverses on null.
+3. Toolbar interaction harness: mount toolbar inside FormatToolbar-hook host, dispatch ~toggle-format~ CustomEvent, assert spy on Lexical ~dispatchCommand~ called with the right args.
+4. ~request-link~ → assert overlay element gains ~visible~ attribute.
+
+** ExUnit (LiveView)
+
+5. Save block with bold content via ~save_content~ event. Reload; ~Pages.get_block/1~ ~content~ JSON contains ~format: 1~ on the relevant text node; rendered HTML contains ~<strong>~.
+
+** Puppeteer (reviewer wave)
+
+6. Open a page, type "hello world", select "world", click B in toolbar → assert "world" rendered with =font-weight: bold=. Save, reload page, assert it persists.
+
+* Implementation
+
+** TODO Lexical command wrappers
+:PROPERTIES:
+:CUSTOM_ID: BUG-016-format-toolbar-dispatches-orphan-events::lexical-wrappers
+:END:
+
+- File: =assets/js/lexical/commands.js= — add:
+
+#+begin_src js
+import { FORMAT_TEXT_COMMAND } from "lexical";
+import { TOGGLE_LINK_COMMAND } from "@lexical/link";
+
+export function toggleFormat(editor, format) {
+  editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+}
+export function setLink(editor, url) {
+  editor.dispatchCommand(TOGGLE_LINK_COMMAND, url || null);
+}
+#+end_src
+
+** TODO FormatToolbar hook
+:PROPERTIES:
+:CUSTOM_ID: BUG-016-format-toolbar-dispatches-orphan-events::hook
+:DEPENDS: BUG-016-format-toolbar-dispatches-orphan-events::lexical-wrappers
+:END:
+
+- File: =assets/js/hooks/format_toolbar.js= (new).
+- Resolves active editor by walking up from =document.activeElement= to the nearest =<ora-block>= and reading its ~._editor~.
+- Subscribes to ~selectionchange~ on document; computes rect via window selection; toggles toolbar's ~visible~/~rect~ props.
+- Listens for ~toggle-format~ + ~request-link~ on its el; routes to ~toggleFormat~/~setLink~ or reveals link overlay.
+- Listens for ~apply-link~/~cancel~ from link overlay; routes accordingly.
+- Cleanup in ~destroyed()~.
+
+** TODO Register hook
+:PROPERTIES:
+:CUSTOM_ID: BUG-016-format-toolbar-dispatches-orphan-events::register
+:DEPENDS: BUG-016-format-toolbar-dispatches-orphan-events::hook
+:END:
+
+- File: =assets/js/hooks/index.js= — import + add FormatToolbar to Hooks export.
+
+** TODO Render host + overlay in PageEditorLive
+:PROPERTIES:
+:CUSTOM_ID: BUG-016-format-toolbar-dispatches-orphan-events::render
+:DEPENDS: BUG-016-format-toolbar-dispatches-orphan-events::register
+:END:
+
+- File: =lib/concept_web/live/page_editor_live.ex= around line 49-68:
+
+#+begin_src heex
+<div id="format-toolbar-host" phx-hook="FormatToolbar" phx-update="ignore" class="ora-format-host">
+  <ora-format-toolbar />
+  <ora-link-editor />
+</div>
+#+end_src
+
+(Both Lit elements hidden by default; hook reveals.)
+
+** TODO Tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-016-format-toolbar-dispatches-orphan-events::tests
+:DEPENDS: BUG-016-format-toolbar-dispatches-orphan-events::render
+:END:
+
+- Vitest: =assets/js/hooks/__tests__/format_toolbar.test.js=.
+- ExUnit: extend =test/concept_web/live/page_editor_test.exs= with save+reload bold roundtrip.
+
+* Acceptance
+
+- Selecting text shows the toolbar; clicking B toggles bold visually and on save.
+- Clicking link opens overlay; entering URL + Enter wraps selection in a link.
+- After save+reload, formatting persists.
+- All tests green.

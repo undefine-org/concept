@@ -1,0 +1,38 @@
+#+TITLE: Live citation rail — ambient cross-block awareness while editing
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-045-live-citation-rail-ambient-cross-block-a
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+While editing a block, surface the top-3 semantically related blocks elsewhere in the workspace as a sticky right-rail. Retrieval is ambient: the document tells you what it already knows about what you're writing.
+
+* Scope (IN)
+- ~ConceptWeb.Components.LiveCitationRail~ rendered next to the page editor (responsive: collapses to icon on narrow screens).
+- WorkspaceLive subscribes to ~focus_block~ events; when a block gains focus + 1.5s passes without further input, debounced ~Knowledge.search~ runs on the block's plain text with ~exclude_page: current, limit: 3~.
+- Results render as CitationCard rail. Hovering still shows live-block preview.
+- A small "🔗 Link this" action per card pre-fills the Knowledge.Link creation form (FEAT-046).
+- Rail toggleable via sidebar button (default off until user enables; setting persisted to localStorage; sync to user prefs is FUP).
+
+* Files
+- ~lib/concept_web/components/live_citation_rail.ex~ (new)
+- ~lib/concept_web/live/workspace_live.ex~ (state + debounce)
+- ~lib/concept_web/live/page_editor_live.ex~ (forward focus_block to parent)
+- ~assets/css/app.css~
+- ~test/concept_web/components/live_citation_rail_test.exs~
+
+* Tests (6 scenarios)
+1. Rail off by default; toggle persists.
+2. Focus block → wait 1.5s → search runs with the block's text.
+3. Results exclude current page.
+4. Hovering a result shows live block preview.
+5. Empty workspace: rail shows "No related blocks yet".
+6. Rapid focus shifts cancel pending searches.
+
+* Acceptance
+- Edit a block about "Q3 retro"; within 2s the rail shows ≤3 related blocks from other pages.

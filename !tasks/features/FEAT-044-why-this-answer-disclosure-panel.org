@@ -1,0 +1,38 @@
+#+TITLE: Why-this-answer disclosure panel
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-044-why-this-answer-disclosure-panel
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Make RAG audit-able to users. Every answered Query exposes a "Why this answer?" disclosure: rewritten prompt, retrieved chunks (pre-rerank with scores), the answer's citations (post-rerank), profile used, model, latency, grounding score (when FUP enables).
+
+* Scope (IN)
+- Function component ~ConceptWeb.Components.WhyThisAnswer~ taking a ~%Query{}~ (preloaded with ~:citations~).
+- Renders 4 sections:
+  1. Prompt: user prompt + rewritten_prompt (diff visualization if rewritten).
+  2. Retrieval: top-k chunks from ~search_trace~ jsonb with scores, color-coded.
+  3. Reranking: which chunks survived (if profile had rerank).
+  4. Generation: model, profile name, latency, token counts, grounding score if present.
+- Mounted as a collapsible ~<details>~ on ChatPanel finalized messages + AI block answered mode.
+
+* Files
+- ~lib/concept_web/components/why_this_answer.ex~ (new)
+- ~lib/concept_web/live/workspace_live/chat_panel.ex~ (embed)
+- ~assets/js/components/ora-ai-block.js~ (embed in slot)
+- ~test/concept_web/components/why_this_answer_test.exs~
+
+* Tests (5 scenarios)
+1. Renders all 4 sections when fully populated.
+2. Rewritten prompt section hidden if profile.rewrite? = false.
+3. Reranking section hidden if profile.rerank? = false.
+4. Grounding score hidden when nil.
+5. Component is a pure function of Query — no side effects.
+
+* Acceptance
+- Open a finalized chat answer → expand "Why this answer?" → see the retrieval ladder, the kept chunks, and timing.

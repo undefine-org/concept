@@ -1,5 +1,6 @@
 [
   import_deps: [
+    :ash_ai,
     :ash_admin,
     :ash_oban,
     :oban,

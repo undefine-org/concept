@@ -1,0 +1,31 @@
+#+TITLE: Block-level dirty hash — skip re-embed on unchanged chunks
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FUP-010-block-level-dirty-hash-skip-re-embed-on
+#+LAYER: ingestion
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+Today, any block edit re-embeds the whole page. For long pages (50+ blocks), this is a token+latency cliff. Add a content_hash check that skips embed for unchanged chunks; re-uses prior chunk's vector.
+
+* Trigger
+Token-cost telemetry from FEAT-048 shows the cliff; or a workspace with 100+ blocks per page surfaces during dogfood.
+
+* Design substrate (already in place)
+- BlockChunker emits chunk text + metadata.block_ids — natural keys for content addressing.
+- Arcana likely already supports chunk dedupe; verify.
+
+* Implementation sketch
+- Chunker computes ~content_hash = :crypto.hash(:sha256, text)~ per chunk; included in metadata.
+- Reactor ~build_chunks~ step queries existing Arcana.Chunk by source_id + content_hash; for matches, marks chunk as ~:reuse~.
+- ~upsert_document~ step skips embed call for reuse chunks; copies prior vector.
+- Worst case (all chunks changed) is no slower than today.
+
+* Files (preview)
+- ~lib/concept/knowledge/block_chunker.ex~ (add hash)
+- ~lib/concept/knowledge/reactors/steps/build_chunks.ex~ (dedupe pass)
+- ~lib/concept/knowledge/reactors/steps/upsert_document.ex~ (skip-embed branch)

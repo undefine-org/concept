@@ -1,0 +1,23 @@
+#+TITLE: Session 14d58dbaeb9df8c3 Todos
+#+DATE: 2026-05-05
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Fix
+
+** DONE Fix update_content call in PageEditorLive
+:PROPERTIES:
+:TASK_ID: fix-editor-call
+:STATUS: completed
+:END:
+
+Check if Pages.update_content(block, %{content: content}, ...) is correct or should be Pages.update_content(block, content, ...). If wrong, fix it. Also add error logging for debugging.
+Accept: update_content saves correct shape
+
+** DONE Run smoke test end-to-end
+:PROPERTIES:
+:TASK_ID: run-smoke
+:STATUS: completed
+:END:
+
+Run the smoke test from context.md in mix run or iex to verify acquire_lock + update_content works. Fix any remaining issues.
+Accept: updated.content contains text 'hi'

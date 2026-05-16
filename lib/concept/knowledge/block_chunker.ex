@@ -45,7 +45,7 @@ defmodule Concept.Knowledge.BlockChunker do
     blocks_map = Map.new(blocks, &{&1.id, &1})
 
     blocks
-    |> Enum.group_by(&(&1.parent_block_id))
+    |> Enum.group_by(& &1.parent_block_id)
     |> then(fn groups ->
       # Start with top-level blocks (parent_block_id == nil)
       children_of(nil, groups, blocks_map)
@@ -90,20 +90,25 @@ defmodule Concept.Knowledge.BlockChunker do
   defp block_prefix(:heading_3, _), do: "### "
   defp block_prefix(:quote, _), do: "> "
   defp block_prefix(:bulleted_list_item, _), do: "- "
+
   defp block_prefix(:numbered_list_item, block) do
     index = Map.get(block.props || %{}, "number", 1)
     "#{index}. "
   end
+
   defp block_prefix(:to_do, block) do
     checked = Map.get(block.props || %{}, "checked", false)
     if checked, do: "- [x] ", else: "- [ ] "
   end
+
   defp block_prefix(:callout, _), do: "> "
   defp block_prefix(:toggle, _), do: ""
+
   defp block_prefix(:code, block) do
     lang = Map.get(block.props || %{}, "language", "")
     if lang != "", do: "```#{lang}\n", else: "```\n"
   end
+
   defp block_prefix(_, _), do: ""
 
   defp render_children(children, parent_type) do
@@ -111,12 +116,15 @@ defmodule Concept.Knowledge.BlockChunker do
       children
       |> Enum.map(&render_block/1)
       |> Enum.reject(&(String.trim(&1.text) == ""))
-      |> Enum.map(&(if parent_type == :code, do: &1.text, else: String.replace(&1.text, "\n", "\n  ")))
+      |> Enum.map(
+        &if parent_type == :code, do: &1.text, else: String.replace(&1.text, "\n", "\n  ")
+      )
 
     if rendered == [], do: "", else: Enum.join(rendered, "\n")
   end
 
   defp collect_child_ids([]), do: []
+
   defp collect_child_ids(children) do
     Enum.flat_map(children, fn {block, sub_children} ->
       [block.id | collect_child_ids(sub_children)]
@@ -126,9 +134,11 @@ defmodule Concept.Knowledge.BlockChunker do
   # Coalesce small siblings to reduce chunk count
   defp coalesce_small(chunks, acc \\ [])
   defp coalesce_small([], acc), do: Enum.reverse(acc)
+
   defp coalesce_small([chunk | rest], []) do
     coalesce_small(rest, [chunk])
   end
+
   defp coalesce_small([chunk | rest], [prev | prev_rest]) do
     prev_tokens = max(1, div(byte_size(prev.text), 4))
     curr_tokens = max(1, div(byte_size(chunk.text), 4))
@@ -140,6 +150,7 @@ defmodule Concept.Knowledge.BlockChunker do
           block_ids: prev.block_ids ++ chunk.block_ids,
           token_count: prev_tokens + curr_tokens
       }
+
       coalesce_small(rest, [merged | prev_rest])
     else
       coalesce_small(rest, [chunk, prev | prev_rest])

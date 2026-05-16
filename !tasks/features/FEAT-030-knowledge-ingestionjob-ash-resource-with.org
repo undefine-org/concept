@@ -1,0 +1,44 @@
+#+TITLE: Knowledge.IngestionJob Ash resource with AshOban + AshStateMachine
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-030-knowledge-ingestionjob-ash-resource-with
+#+LAYER: ingestion
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Promote ad-hoc per-page reindexing into a tracked Ash resource. Every ingest attempt is a row with state, timing, chunk counts, and errors. AshOban triggers run queued rows. PubSub broadcasts transitions for the IndexingPill UI.
+
+* Scope (IN)
+- Resource ~Concept.Knowledge.IngestionJob~ with attributes: ~workspace_id~ (tenant), ~page_id~, ~op~ (~:upsert | :delete~), ~state~ (~:queued | :running | :succeeded | :failed~), ~scheduled_at~, ~started_at~, ~finished_at~, ~chunk_count~, ~embed_tokens~, ~error_kind~, ~error_message~, ~attempt~.
+- ~ash_state_machine~ with the four transitions.
+- ~ash_archival~ for soft-delete of completed jobs older than 30 days.
+- ~pub_sub~ publishing ~workspace:<id>:ingest~ on every transition.
+- AshOban trigger ~:run~ that picks up ~:queued~ rows, transitions to ~:running~, calls FEAT-035 Reactor, transitions to ~:succeeded~ or ~:failed~ with measurements.
+- Multitenant by ~workspace_id~ (global? false).
+- Policies: read for workspace members; write only for system actor.
+- ~AshAdmin~ visibility.
+
+* Files
+- ~lib/concept/knowledge/ingestion_job.ex~ (new)
+- ~lib/concept/knowledge.ex~ (register resource)
+- ~lib/concept/knowledge/workers/ingest_page.ex~ (becomes thin shim that creates the IngestionJob row; the Oban trigger does the work)
+- ~priv/repo/migrations/<timestamp>_create_knowledge_ingestion_jobs.exs~
+- ~test/concept/knowledge/ingestion_job_test.exs~
+
+* Tests (8 scenarios)
+1. Creation requires workspace_id + page_id.
+2. State machine rejects invalid transitions (~:queued → :succeeded~ without running).
+3. PubSub broadcasts on every transition (~assert_receive~).
+4. AshOban trigger ~:run~ picks up queued, processes, transitions.
+5. Policy: non-member ~:read~ → forbidden.
+6. Policy: ~:create~ by user (not system) → forbidden.
+7. Archival: completed jobs > 30d soft-deleted.
+8. Concurrent updates use ~require_atomic? false~ + optimistic concurrency.
+
+* Acceptance
+- ~/admin~ lists IngestionJob.
+- Manual: edit a block → row created (~:queued~) → row updated (~:running~) → ~:succeeded~ — observable in admin within ~5s.

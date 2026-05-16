@@ -4,6 +4,12 @@ config :concept, token_signing_secret: "7VblMjWeJHZb37nzIMPv0V61eHKpxzAO"
 config :bcrypt_elixir, log_rounds: 1
 config :ash, policies: [show_policy_breakdowns?: true], disable_async?: true
 
+# Use deterministic offline embedder for tests — no network, reproducible vectors.
+config :arcana,
+  embedder: Concept.Knowledge.MockEmbedder,
+  chunker: Concept.Knowledge.BlockChunker,
+  search: [mode: :hybrid, limit: 10]
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used

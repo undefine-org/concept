@@ -1,0 +1,26 @@
+#+TITLE: Block resource missing KnowledgeReindex notifier subscription
+#+STATE: DONE
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: BUG-011-block-resource-missing-knowledgereindex
+#+LAYER: ingestion
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+~lib/concept/pages/block.ex~ has ~notifiers: [Ash.Notifier.PubSub]~ but does not include ~Concept.Pages.Notifiers.KnowledgeReindex~. Even after BUG-007 fixes the notifier body, the wire is cut for Block. Same audit on Page resource (currently subscribed only to PubSub).
+
+* Files
+- ~lib/concept/pages/block.ex~ (notifiers list)
+- ~lib/concept/pages/page.ex~ (notifiers list)
+
+* Implementation
+- Change to ~notifiers: [Ash.Notifier.PubSub, Concept.Pages.Notifiers.KnowledgeReindex]~ on both resources.
+- Verify with a test that a block update triggers the reindex notifier exactly once.
+
+* Acceptance
+- Test using ~Oban.Testing.assert_enqueued~ proves the wire.
+
+NOTE [2026-05-16]: Wired KnowledgeReindex notifier into both Block and Page resources in Wave 0.

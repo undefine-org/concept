@@ -1,0 +1,41 @@
+#+TITLE: Session 14e3c72fa773d2d7 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Create vitest ora-block.test.js
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: completed
+:END:
+
+New file: assets/js/components/__tests__/ora-block.test.js
+Test focusStart moves to root start, focusEnd to root end
+Both work on empty roots
+document.activeElement after focus
+
+** DONE Create ExUnit page_editor_test.exs
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:END:
+
+New file: test/concept_web/live/page_editor_test.exs
+Reuse auth/workspace setup from command_palette_test.exs
+Test nav_block down pushes focus_block_caret with position start
+Symmetric up with position end
+insert_paragraph_below pushes focus_block_caret for new id with start
+Boundary: no event at first/last block
+
+** DOING Verify tests green + commit
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: in_progress
+:END:
+
+Run: cd assets && npx vitest run
+Run: mix test
+Run: mix precommit
+Commit: one commit with message
+fix(editor): add OraBlock.focusStart/End + lexical caret helpers (BUG-014)

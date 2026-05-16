@@ -1,0 +1,97 @@
+#+TITLE: Empty title placeholder broken on whitespace input
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-023-empty-title-placeholder-broken-on-whites
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16). The "Untitled" placeholder relies on CSS ~.ora-page-title:empty::before { content: attr(data-placeholder); }~. But =ContentEditable= hook saves ~this.el.innerText~ verbatim into ~save_title~. If the user clears the title and then a stray space-key or autofill leaves a single ~" "~ in the element, the title is non-empty (one whitespace char), the ~:empty~ pseudo doesn't match, the placeholder disappears, and the user sees a header with no title and no placeholder.
+
+Same hazard on initial render: if =Page= has ~title: " "~ from a corrupt save, the placeholder is invisible.
+
+* Intention & Purpose
+
+Trim whitespace at the boundaries. Server normalizes incoming titles to ~String.trim/1~ then either ~""~ (which uses placeholder) or a non-empty string. JS hook never sends pure-whitespace values. UI never shows a header with neither title nor placeholder.
+
+* Context & Narrative
+
+Server normalization lives in the =rename_page= action of =Concept.Pages.Page=. Already accepts a string. Add an Ash change ~trim_title~ in =lib/concept/pages/changes/= (mirror existing changes layout).
+
+JS hook trim is cosmetic — server is source of truth — but reduces noise. Do both.
+
+* Scope
+
+- IN: Ash change module to trim title on rename + create actions.
+- IN: =ContentEditable= hook trims locally before push.
+- IN: ExUnit asserting ~rename_page(page, title: " ")~ → ~page.title == ""~.
+- OUT: rich-content title (no formatting allowed; existing constraint).
+
+* Existing Patterns
+
+- =lib/concept/pages/changes/= — already has multiple `Ash.Resource.Change` modules. Mirror style.
+- =lib/concept_web/components/page_header.ex= renders ~<h1 ...><%= @page.title || "" %></h1>~. Already coerces nil to "". Good.
+
+* Tests
+
+** ExUnit
+
+1. ~Pages.rename_page(page, "  ")~ → ~{:ok, %{title: ""}}~.
+2. ~Pages.rename_page(page, "  hello world  ")~ → ~{:ok, %{title: "hello world"}}~.
+3. ~Pages.create_page(workspace_id: ws.id, title: "  ")~ → empty after trim (or rejected if Page has presence constraint; clarify in implementation).
+
+** Vitest
+
+4. ContentEditable hook with element innerText="   " → ~pushEventTo~ called with ~%{value: ""}~.
+
+* Implementation
+
+** TODO Ash change: trim_title
+:PROPERTIES:
+:CUSTOM_ID: BUG-023-empty-title-placeholder-broken-on-whites::trim-change
+:END:
+
+- File: =lib/concept/pages/changes/trim_title.ex= (new).
+
+#+begin_src elixir
+defmodule Concept.Pages.Changes.TrimTitle do
+  use Ash.Resource.Change
+  @impl true
+  def change(cs, _, _) do
+    case Ash.Changeset.get_attribute(cs, :title) do
+      nil -> cs
+      title when is_binary(title) -> Ash.Changeset.change_attribute(cs, :title, String.trim(title))
+      _ -> cs
+    end
+  end
+end
+#+end_src
+
+- Wire into =Page= ~:create_page~ + ~:rename_page~ actions via ~change Concept.Pages.Changes.TrimTitle~.
+
+** TODO JS trim
+:PROPERTIES:
+:CUSTOM_ID: BUG-023-empty-title-placeholder-broken-on-whites::js-trim
+:END:
+
+- File: =assets/js/hooks/content_editable.js= — ~this.pushEventTo(this.el, "save_title", { value: this.el.innerText.trim() })~.
+
+** TODO Tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-023-empty-title-placeholder-broken-on-whites::tests
+:DEPENDS: BUG-023-empty-title-placeholder-broken-on-whites::trim-change
+:END:
+
+- File: =test/concept/pages/page_title_test.exs= (new or extend existing pages test).
+- Vitest: =assets/js/hooks/__tests__/content_editable.test.js=.
+
+* Acceptance
+
+- Saving whitespace-only title produces ~""~ and placeholder shows.
+- Saving padded title strips padding on persist.
+- Tests green.

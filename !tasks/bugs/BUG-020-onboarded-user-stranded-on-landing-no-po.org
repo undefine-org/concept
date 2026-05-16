@@ -1,0 +1,118 @@
+#+TITLE: Onboarded user stranded on landing; no post-auth redirect to workspace
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-020-onboarded-user-stranded-on-landing-no-po
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16). =Concept.Accounts.Reactors.Onboarding= correctly creates a personal Workspace + owner Membership atomically post-register. But =sign_in_route= / ~confirm_route~ in =router.ex:46-77= use ash_authentication_phoenix defaults, which redirect to ~/~. =HomeLive= (=lib/concept_web/live/home_live.ex:1-67=) shows a "Get started" CTA the user has to click. New users see "Concept" landing, conclude there's nothing here, and bounce. Workspace exists in the DB but is invisible.
+
+* Intention & Purpose
+
+After register-confirm-magic-link, redirect the user to their primary workspace at ~/w/<slug>~, with empty-state CTAs ("Pick a page or create one") instead of a marketing landing. For returning sign-in flow, redirect to the most-recently-visited workspace (or primary if no preference).
+
+* Context & Narrative
+
+ash_authentication_phoenix exposes ~on_mount~ chain plus a ~live_view= hook for post-auth navigation. Idiomatic Ash pattern: implement a custom on_mount hook ~ConceptWeb.LiveUserAuth.AfterSignIn~ that, on session establishment, resolves the user's primary workspace and ~push_navigate(to: ~p"/w/#{slug}")~.
+
+Primary workspace resolution: =Concept.Accounts.Workspace= has no ~:primary~ attribute today. Two options:
+- (A) Add ~:primary?~ boolean default false; Onboarding reactor marks the personal workspace primary.
+- (B) Pick first owner-membership workspace by created_at.
+
+Choose (A) — Onboarding already runs once per user; making the bit explicit avoids reading the wrong workspace when the user joins others later.
+
+Alternative path: instead of an on_mount hook, override ash_authentication_phoenix's ~AuthController~ success callback. Less idiomatic in LiveView world; prefer on_mount.
+
+* Scope
+
+- IN: ~:primary?~ boolean attribute on Workspace (migration).
+- IN: Onboarding reactor sets ~primary?: true~ on the created workspace.
+- IN: ~Concept.Accounts.get_primary_workspace(user, opts)~ helper.
+- IN: ~ConceptWeb.LiveUserAuth.AfterSignIn~ on_mount hook that, when on a route in ~~p"/sign-in"~ / ~~p"/register"~ / ~~p"/auth/*"~ family, resolves primary workspace and ~push_navigate(to: ~p"/w/#{ws.slug}")~.
+- IN: wire the hook into ~sign_in_route~, ~confirm_route~, ~magic_sign_in_route~ via the ~on_mount~ list.
+- IN: HomeLive distinguishes signed-out (CTA to /sign-in) vs signed-in (auto-redirect to /w on mount).
+- IN: ExUnit: full register → confirm → redirect to /w/<slug> scenario.
+- IN: Fallback: if user has no workspace (data corruption), fall back to /w (workspace_live :index) which creates one.
+- OUT: most-recently-visited tracking (separate FUP).
+- OUT: invited-user flow (different membership lifecycle).
+
+* Existing Patterns
+
+- =lib/concept_web/live_user_auth.ex= — existing on_mount hooks ~live_user_required~, ~live_user_optional~, ~live_no_user~. Add ~after_sign_in~ alongside.
+- =lib/concept/accounts/reactors/onboarding.ex= — already creates workspace; add ~primary?: true~ to the input map.
+- =priv/repo/migrations/= — add migration ~add_primary_to_workspaces~ with default false + backfill (set primary for users with exactly one owner-workspace).
+- =test/concept_web/live/= — pattern from existing auth tests for confirmation flow.
+
+* Tests
+
+** ExUnit (LiveView integration)
+
+1. Register a fresh user → follow confirmation link → land on ~/w/<slug>~. ~live_redirect~ asserts.
+2. Sign in an existing user with one workspace → land on ~/w/<slug>~.
+3. Sign in a user with no workspace (corrupt fixture) → land on ~/w~ which creates the workspace.
+4. Onboarding reactor sets ~primary?: true~ on created workspace.
+5. ~get_primary_workspace/2~ returns the primary; returns the only one if no primary marked (legacy fallback).
+
+* Implementation
+
+** TODO Workspace primary? attribute + migration
+:PROPERTIES:
+:CUSTOM_ID: BUG-020-onboarded-user-stranded-on-landing-no-po::primary-attr
+:END:
+
+- File: =lib/concept/accounts/workspace.ex= — add attribute ~attribute :primary?, :boolean, default: false, allow_nil?: false~.
+- File: =priv/repo/migrations/<ts>_add_primary_to_workspaces.exs= (new) — add column + backfill ~UPDATE workspaces SET primary = true WHERE id IN (SELECT MIN(id) FROM workspaces GROUP BY ... user)~ (resolve correct relation).
+
+** TODO Onboarding sets primary
+:PROPERTIES:
+:CUSTOM_ID: BUG-020-onboarded-user-stranded-on-landing-no-po::onboarding-primary
+:DEPENDS: BUG-020-onboarded-user-stranded-on-landing-no-po::primary-attr
+:END:
+
+- File: =lib/concept/accounts/reactors/onboarding.ex= — pass ~primary?: true~ to workspace create step.
+
+** TODO Accounts.get_primary_workspace helper
+:PROPERTIES:
+:CUSTOM_ID: BUG-020-onboarded-user-stranded-on-landing-no-po::helper
+:DEPENDS: BUG-020-onboarded-user-stranded-on-landing-no-po::primary-attr
+:END:
+
+- File: =lib/concept/accounts.ex= — define helper that queries by user membership filtered to ~primary?: true~, falls back to first by ~created_at~.
+
+** TODO AfterSignIn on_mount + router wiring
+:PROPERTIES:
+:CUSTOM_ID: BUG-020-onboarded-user-stranded-on-landing-no-po::on-mount
+:DEPENDS: BUG-020-onboarded-user-stranded-on-landing-no-po::helper
+:END:
+
+- File: =lib/concept_web/live_user_auth.ex= — new ~on_mount(:after_sign_in, _, _session, socket)~ branch; resolves primary workspace; ~{:halt, push_navigate(socket, to: ~p"/w/#{ws.slug}")}~.
+- File: =lib/concept_web/router.ex= — add ~{ConceptWeb.LiveUserAuth, :after_sign_in}~ to the ~on_mount:~ list of sign_in_route + confirm_route + magic_sign_in_route.
+
+** TODO HomeLive signed-in branch
+:PROPERTIES:
+:CUSTOM_ID: BUG-020-onboarded-user-stranded-on-landing-no-po::home-redirect
+:DEPENDS: BUG-020-onboarded-user-stranded-on-landing-no-po::helper
+:END:
+
+- File: =lib/concept_web/live/home_live.ex= — in mount, if ~current_user~ present, ~push_navigate(socket, to: ~p"/w/#{primary_slug}")~ before rendering.
+
+** TODO Tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-020-onboarded-user-stranded-on-landing-no-po::tests
+:DEPENDS: BUG-020-onboarded-user-stranded-on-landing-no-po::on-mount
+:END:
+
+- File: =test/concept_web/live/auth_flow_test.exs= (new).
+
+* Acceptance
+
+- Register → confirm → automatic land on /w/<slug>.
+- Sign in → land on /w/<slug>.
+- Hitting / while signed in redirects to /w/<slug>.
+- Migration applied cleanly; tests green.

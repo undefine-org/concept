@@ -1,7 +1,9 @@
 defmodule Concept.Knowledge.GeminiEmbedder do
   @moduledoc """
-  Arcana-compatible embedder using Google's text-embedding-004 API via Req.
-  Returns 768-dimensional vectors.
+  Arcana-compatible embedder using Google's `gemini-embedding-001` API via Req.
+  Returns 768-dimensional vectors (truncated via Matryoshka MRL from the 3072 native size).
+  FUP-012 will migrate to `gemini-embedding-2` for multimodal (image/audio/video) coverage;
+  same 768d output via outputDimensionality keeps pgvector indexes stable across the migration.
   """
   @behaviour Arcana.Embedder
 
@@ -13,7 +15,7 @@ defmodule Concept.Knowledge.GeminiEmbedder do
   end
 
   @base_url "https://generativelanguage.googleapis.com/v1beta"
-  @model "models/text-embedding-004"
+  @model "models/gemini-embedding-001"
   @max_batch 100
 
   @impl Arcana.Embedder
@@ -65,7 +67,8 @@ defmodule Concept.Knowledge.GeminiEmbedder do
   defp request_for(text, intent) do
     %{
       model: @model,
-      content: %{parts: [%{text: text}]}
+      content: %{parts: [%{text: text}]},
+      outputDimensionality: 768
     }
     |> maybe_put_task_type(intent)
   end

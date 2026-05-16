@@ -17,8 +17,8 @@ defmodule ConceptWeb.Components.Sidebar do
 
       <button
         type="button"
-        class="ora-sidebar-row mx-2 mb-1 text-notion-text-light cursor-default"
-        disabled
+        phx-click="open_command_palette"
+        class="ora-sidebar-row mx-2 mb-1 text-notion-text-light"
       >
         <.icon name="hero-magnifying-glass-micro" class="size-4" />
         <span>Search... (⌘K)</span>

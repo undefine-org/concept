@@ -1,0 +1,56 @@
+#+TITLE: Knowledge Conversation+Message via mix ash_ai.gen.chat + extensions
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-033-knowledge-query-ash-resource-with-stream
+#+LAYER: retrieval
+
+* Intention & Purpose
+Center of gravity for all AI answers. Use ~mix ash_ai.gen.chat --live~ to generate ~Knowledge.Conversation~ + ~Knowledge.Message~ resources (state machines, AshOban backing, PubSub streaming, LiveView scaffolding). Extend the generated Message resource with Concept-specific fields and link to Citation (FEAT-032). Streaming via ~AshAi.ToolLoop.stream/2~ broadcasts tokens on ~conversation:<id>~ topic — no custom answerer.
+
+* Scope (IN)
+- Run ~mix ash_ai.gen.chat --live~. Move generated files into ~lib/concept/knowledge/~ namespace.
+- Generated resources (AshAI):
+  - ~Concept.Knowledge.Conversation~: id, workspace_id (tenant), user_id, title (LLM-generated from first message), last_message_at, archived.
+  - ~Concept.Knowledge.Message~: id, conversation_id, role (~:user | :assistant | :tool~), content, tool_calls jsonb, tool_results jsonb, model, state SM (~:pending → :streaming → :complete | :failed | :cancelled~).
+- Extensions we add to ~Message~:
+  - ~scope~ attribute (~:workspace | :page | :subtree | :block~)
+  - ~scope_target_id~ attribute (uuid|nil)
+  - ~profile~ attribute (atom — refs Spark profile in FEAT-034)
+  - ~search_trace~ attribute (jsonb — top-k pre-rerank chunks with scores)
+  - ~rewritten_prompt~ attribute (string)
+  - ~latency_ms~, ~prompt_tokens~, ~completion_tokens~ attributes
+  - ~has_many :citations~ (FEAT-032)
+- Domain-level ~tools do ... end~ block exposing:
+  - ~tool :search_workspace, Knowledge, :search~
+  - ~tool :answer_question, Knowledge, :ask~
+  - ~tool :create_page, Pages.Page, :create_page~
+  - ~tool :link_blocks, Knowledge.Link, :create~
+  - ~tool :summarize_page, Pages.Page, :summarize_subtree~
+- Pre-LLM retrieval step happens inside the ~:search~ action; AshAI's loop then sees results as tool output.
+- Multitenant by workspace_id; system actor bypass.
+
+* Files
+- ~lib/concept/knowledge/conversation.ex~ (generated, then edited)
+- ~lib/concept/knowledge/message.ex~ (generated, then extended)
+- ~lib/concept/knowledge/changes/append_search_trace.ex~ (new)
+- ~lib/concept/knowledge.ex~ (~tools do ... end~ block)
+- ~lib/concept_web/live/workspace_live/chat_panel.ex~ (consumes generated PubSub topic)
+- ~priv/repo/migrations/<ts>_*~ (generated)
+- ~test/concept/knowledge/message_test.exs~
+- ~test/concept/knowledge/conversation_test.exs~
+
+* Tests (8 scenarios)
+1. ~Conversation~ + ~Message~ resources compile and register on the domain.
+2. ~Knowledge.ask(prompt, opts)~ creates Conversation (if none) + user Message + assistant Message in ~:pending~ → ~:streaming~.
+3. ~AshAi.ToolLoop.stream/2~ broadcasts tokens on ~conversation:<id>~ topic (assert via PubSub subscribe).
+4. On completion, Message transitions to ~:complete~ with answer + tool_results.
+5. ~search_trace~ populated by the search tool execution callback.
+6. Policy: only workspace members can create Conversations; system bypass works for streaming worker.
+7. Cancellation transitions ~:streaming → :cancelled~ and stops the worker.
+8. Generated chat LiveView at ~/chat~ renders + persists messages (smoke test).
+
+* Acceptance
+- ~/admin~ shows Conversation + Message history.
+- ChatPanel streams tokens against live Gemini ~gemini-3-flash~.
+- ~AshAi.ToolLoop.run~ picks the right tool given a natural-language prompt.

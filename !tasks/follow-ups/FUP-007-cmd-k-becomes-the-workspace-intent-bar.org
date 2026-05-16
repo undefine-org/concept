@@ -1,0 +1,44 @@
+#+TITLE: Cmd-K becomes the workspace intent bar
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FUP-007-cmd-k-becomes-the-workspace-intent-bar
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+Promote ⌘K from search palette to universal verb bar: navigate, ask, create, link, summarize. Cheap controller LLM classifies the intent.
+
+* Trigger
+After FEAT-040 + FEAT-046 land. Need (1) semantic palette infra, (2) Link creation flow, (3) reliable streaming Query.
+
+* Design substrate (already in place from waves)
+- Knowledge.Query.scope already includes block-level scope (~:block~) — handles "summarize this".
+- Knowledge.Link create action — handles "Cmd-K connect A to B".
+- Profile DSL — add a ~:intent~ profile bound to ~google:gemini-2.0-flash-lite~ for controller classification.
+
+* Implementation sketch
+- ~ConceptWeb.IntentBar~ replaces CommandPaletteLive top input.
+- Prefix detection (instant): ~/ask~, ~/link~, ~/summarize~, ~/new~ → direct dispatch.
+- Else: 100ms typing pause → ~AshAi.ToolLoop.run/2~ with profile ~:intent~ (gemini-3.1-flash-lite). The LLM picks the right tool from the domain-registered tool list. *No custom intent classifier* — AshAI does it.
+- Each tool call routes naturally:
+  - ~:search_workspace~ → palette result rows
+  - ~:answer_question~ → ChatPanel open
+  - ~:create_page~ → push_navigate
+  - ~:link_blocks~ → Link modal
+  - ~:summarize_page~ → AI block insertion
+- Ambiguous results → render top-3 candidate tool calls as palette rows for confirmation.
+- Tool execution callbacks (~on_tool_start~) show progress indicator.
+
+
+* Files (preview)
+- ~lib/concept_web/live/intent_bar_live.ex~
+- ~lib/concept/knowledge/intent_classifier.ex~ (uses Profile :intent)
+- ~test/concept_web/live/intent_bar_test.exs~
+
+* Notes
+- Latency budget: classifier <250ms; prefix dispatch <10ms.
+- Ambiguous results → render top-3 intent candidates as palette rows.

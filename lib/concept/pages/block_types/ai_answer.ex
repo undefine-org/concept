@@ -3,6 +3,7 @@ defmodule Concept.Pages.BlockTypes.AiAnswer do
   AI Answer block type — embeds RAG-powered answers inside Concept pages.
   Cached answer in content; refresh button re-runs scoped pipeline.
   """
+  # TODO(FEAT-041): real evaluate action lands via Concept.Pages.Block.evaluate_ai backed by AshAI Conversation/Message.
   @behaviour Concept.Pages.BlockType
 
   @scopes ~w(subtree page workspace)

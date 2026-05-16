@@ -1,0 +1,23 @@
+#+TITLE: Session 14e3c7302bb3d2d9 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Write scope_test.exs
+:PROPERTIES:
+:TASK_ID: task-7
+:STATUS: completed
+:END:
+
+** DOING Write scope_assign_test.exs
+:PROPERTIES:
+:TASK_ID: task-8
+:STATUS: in_progress
+:END:
+
+** ITEM Run tests + format + commit
+:PROPERTIES:
+:TASK_ID: task-9
+:STATUS: pending
+:END:

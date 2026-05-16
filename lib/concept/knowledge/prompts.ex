@@ -34,18 +34,18 @@ defmodule Concept.Knowledge.Prompts do
     """
     You are an AI assistant helping a user understand their workspace content.
     Answer the question based ONLY on the provided source chunks.
-    
+
     Rules:
     - Cite sources inline using the format [block-<id>]
     - If the chunks don't contain enough information, say "I don't have enough information to answer this question."
     - Preserve markdown formatting from the sources when relevant
     - Be concise but thorough
-    
+
     Sources:
     #{chunks_text}
-    
+
     Question: #{query}
-    
+
     Answer:
     """
   end

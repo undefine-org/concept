@@ -1,0 +1,25 @@
+#+TITLE: Knowledge.Search swallows errors and uses brittle metadata access
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: BUG-013-knowledge-search-swallows-errors-and-use
+#+LAYER: retrieval
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+~Search.search/3~ wraps everything in ~rescue _e in [Ecto.NoResultsError, FunctionClauseError] -> {:ok, []}~ which hides real bugs (incl. BUG-005). ~get_meta/2~ uses ~String.to_existing_atom/1~ on dynamic chunk metadata keys — crashes when a new key appears.
+
+* Files
+- ~lib/concept/knowledge/search.ex~
+- ~test/concept/knowledge/search_test.exs~
+
+* Implementation
+- Replace broad rescue with: log and return ~{:error, reason}~. Callers (palette, chat) decide UI degradation.
+- ~get_meta/2~ uses only string keys; ~Map.get(meta, key)~ — no atom conversion.
+- Test: ingest 1 page → search returns hits with normalized metadata; missing key returns ~nil~ not crash.
+
+* Acceptance
+- Search returns ~{:ok, hits} | {:error, reason}~; consumers updated to handle both.

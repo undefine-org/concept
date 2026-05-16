@@ -1,0 +1,98 @@
+#+TITLE: AuthOverrides module is empty; sign-in renders raw DaisyUI
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-019-authoverrides-module-is-empty-sign-in-re
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16). =lib/concept_web/auth_overrides.ex= has every override commented out — the module body is comments only. =lib/concept_web/router.ex:46-57= still passes ~[ConceptWeb.AuthOverrides, AshAuthentication.Phoenix.Overrides.DaisyUI]~ to ~sign_in_route~, ~reset_route~, ~confirm_route~, ~magic_sign_in_route~. The DaisyUI defaults win uncontested. Sign-in / register / reset look nothing like the rest of the app. PLAN-001 §completion claims "AshAuthentication.Phoenix DaisyUI overrides retained (Phoenix-supplied)" — i.e. punted — but the rest of the styling pass (FEAT-017) clearly intended consistency.
+
+* Intention & Purpose
+
+Bring sign-in / register / reset / confirm / magic-link visual identity in line with the Notion-style shell. Same Inter typography, same neutral palette, same button shapes as the workspace UI. Forms should feel like part of Concept, not a stock DaisyUI page wedged in.
+
+* Context & Narrative
+
+AshAuthentication.Phoenix overrides API (=AshAuthentication.Phoenix.Overrides=) lets us override Tailwind classes per component:
+
+#+begin_src elixir
+override AshAuthentication.Phoenix.Components.SignIn do
+  set :root_class, "ora-auth-root"
+  set :show_banner, false
+end
+override AshAuthentication.Phoenix.Components.Password.SignInForm do
+  set :submit_class, "ora-btn-primary w-full"
+  set :slot_class, "ora-auth-slot"
+end
+#+end_src
+
+Components we need to touch (per AshAuthentication.Phoenix.Overrides docs): SignIn, Banner, Password.SignInForm, Password.RegisterForm, Password.ResetForm, Password.Input, Reset, Confirm. Magic link sign-in if visible.
+
+Tailwind classes already exist in =assets/css/app.css= for ~.ora-btn-primary~ surface — we need a thin auth wrapper layer.
+
+* Scope
+
+- IN: populate =auth_overrides.ex= with override blocks for SignIn root, banner suppression, password forms, submit buttons, input fields, link styling.
+- IN: add =.ora-auth-*= utility classes to =assets/css/app.css= (root wrapper, card, input, submit).
+- IN: visual parity: page background, card with subtle shadow + 8px radius, Inter typography, neutral inputs with notion-blue focus ring.
+- IN: route-level: keep DaisyUI overrides as a fallback in the override list so any component we don't customize still renders.
+- IN: a small ExUnit asserting GET /sign-in 200s with text "Sign in" present (smoke).
+- IN: puppeteer screenshot in reviewer wave compared against the workspace shell screenshot for parity.
+- OUT: replacing AshAuthentication's LiveView with a custom one (too invasive).
+- OUT: dark-mode parity (no app-wide dark mode yet).
+
+* Existing Patterns
+
+- =lib/concept_web/components/core_components.ex= — buttons, inputs, flash. Reuse class names where possible.
+- =assets/css/app.css= — define =.ora-auth-card=, =.ora-auth-input=, =.ora-auth-submit=.
+- =assets/css/app.css= ~.ora-page-canvas~ — model the auth card spacing on this.
+- =lib/concept_web/router.ex:46-57= — keep the override list ordering: ConceptWeb.AuthOverrides FIRST so ours wins.
+
+* Tests
+
+** ExUnit (controller / conn)
+
+1. ~get conn, ~p"/sign-in"~ → 200 + body contains "Sign in" + body contains class ~ora-auth-root~.
+2. ~get conn, ~p"/register"~ → 200 + form selector present.
+3. ~get conn, ~p"/reset"~ → 200.
+
+** Puppeteer (reviewer wave)
+
+4. Screenshot /sign-in and /register. Compare against workspace shell screenshot — manual review for visual parity: matching font, matching button color, matching input radius.
+
+* Implementation
+
+** TODO Auth CSS layer
+:PROPERTIES:
+:CUSTOM_ID: BUG-019-authoverrides-module-is-empty-sign-in-re::css
+:END:
+
+- File: =assets/css/app.css= — append a block of ~.ora-auth-*~ classes (root, card, header, input, label, submit, secondary-link, error-text).
+
+** TODO Populate AuthOverrides
+:PROPERTIES:
+:CUSTOM_ID: BUG-019-authoverrides-module-is-empty-sign-in-re::overrides
+:DEPENDS: BUG-019-authoverrides-module-is-empty-sign-in-re::css
+:END:
+
+- File: =lib/concept_web/auth_overrides.ex= — override SignIn root_class, Banner (hide), Password.SignInForm, Password.RegisterForm, Password.ResetForm, Password.Input field classes, submit button classes.
+
+** TODO Smoke tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-019-authoverrides-module-is-empty-sign-in-re::smoke
+:DEPENDS: BUG-019-authoverrides-module-is-empty-sign-in-re::overrides
+:END:
+
+- File: =test/concept_web/controllers/auth_controller_test.exs= (extend existing test file if present; else new).
+
+* Acceptance
+
+- /sign-in, /register, /reset render with =.ora-auth-root= wrapper visible in HTML.
+- Visual screenshot review by reviewer wave shows parity with workspace shell.
+- Tests green.

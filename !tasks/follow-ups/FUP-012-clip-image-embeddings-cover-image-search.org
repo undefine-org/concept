@@ -1,0 +1,35 @@
+#+TITLE: Image + multimodal embedding via gemini-embedding-2
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FUP-012-clip-image-embeddings-cover-image-search
+#+LAYER: retrieval
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+Multi-modal Arcana. Image blocks + cover images get CLIP embeddings via Bumblebee; image and text vectors join the same hybrid retrieval.
+
+* Trigger
+After FEAT-035 ingest Reactor stabilizes; needs Bumblebee + EXLA in the supervision tree.
+
+* Design substrate (already in place)
+- Arcana supports custom embedders per chunk via metadata-driven dispatch (verify).
+- Image block type exists; cover_color exists.
+
+* Implementation sketch
+- Add ~Concept.Knowledge.CLIPEmbedder~ implementing ~Arcana.Embedder~ for image chunks.
+- Extend ~BlockChunker~ to emit image chunks with ~metadata.modality: "image"~ + a base64 or URL pointer.
+- Replace ~Page.cover_color~ with ~Page.cover_image_url~ (keep color as fallback default).
+- Add cover image upload UI (Phoenix upload + local file or S3 later).
+- Hybrid search ranks image + text chunks together (Gemini text embedder for text; CLIP for image).
+
+* Files (preview)
+- ~lib/concept/knowledge/clip_embedder.ex~
+- ~lib/concept/pages/block_types/image.ex~ (extend)
+- ~lib/concept_web/components/page_header.ex~ (cover upload)
+
+* Notes
+- Heavy: Bumblebee + EXLA adds significant compile + memory cost. Probably gated behind a config flag.

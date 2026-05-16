@@ -1,4 +1,4 @@
-import { FORMAT_TEXT_COMMAND } from "lexical";
+import { FORMAT_TEXT_COMMAND, $getRoot } from "lexical";
 import { $toggleLink } from "@lexical/link";
 
 /**
@@ -20,5 +20,31 @@ export function toggleFormat(editor, format) {
 export function applyLink(editor, url) {
   editor.update(() => {
     $toggleLink(url || null);
+  });
+}
+
+/**
+ * Move the editor caret to the start of the root (first child, offset 0).
+ * Falls back to root.select() for empty roots.
+ *
+ * @param {import("lexical").LexicalEditor} editor
+ */
+export function moveCaretToStart(editor) {
+  editor.update(() => {
+    const r = $getRoot();
+    r.getFirstChild() ? r.selectStart() : r.select();
+  });
+}
+
+/**
+ * Move the editor caret to the end of the root (last child, end offset).
+ * Falls back to root.select() for empty roots.
+ *
+ * @param {import("lexical").LexicalEditor} editor
+ */
+export function moveCaretToEnd(editor) {
+  editor.update(() => {
+    const r = $getRoot();
+    r.getLastChild() ? r.selectEnd() : r.select();
   });
 }

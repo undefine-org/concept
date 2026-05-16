@@ -76,19 +76,19 @@ defmodule ConceptWeb.Telemetry do
       ),
 
       # Arcana / Knowledge Metrics
-            summary("arcana.search.stop.duration", unit: {:native, :millisecond}),
-            counter("arcana.search.stop.count"),
-            summary("arcana.embedder.embed.stop.duration", unit: {:native, :millisecond}),
-            counter("arcana.embedder.embed.stop.count"),
-            summary("arcana.pipeline.answer.stop.duration", unit: {:native, :millisecond}),
-            counter("arcana.pipeline.answer.stop.count"),
-            summary("arcana.ingest.stop.duration", unit: {:native, :millisecond}),
-            counter("arcana.ingest.stop.count"),
-            summary("concept.knowledge.ask.stop.duration", unit: {:native, :millisecond}),
-            counter("concept.knowledge.ask.stop.count"),
-            summary("concept.knowledge.embedder.gemini.stop.duration", unit: {:native, :millisecond}),
+      summary("arcana.search.stop.duration", unit: {:native, :millisecond}),
+      counter("arcana.search.stop.count"),
+      summary("arcana.embedder.embed.stop.duration", unit: {:native, :millisecond}),
+      counter("arcana.embedder.embed.stop.count"),
+      summary("arcana.pipeline.answer.stop.duration", unit: {:native, :millisecond}),
+      counter("arcana.pipeline.answer.stop.count"),
+      summary("arcana.ingest.stop.duration", unit: {:native, :millisecond}),
+      counter("arcana.ingest.stop.count"),
+      summary("concept.knowledge.ask.stop.duration", unit: {:native, :millisecond}),
+      counter("concept.knowledge.ask.stop.count"),
+      summary("concept.knowledge.embedder.gemini.stop.duration", unit: {:native, :millisecond}),
 
-            # VM Metrics
+      # VM Metrics
       summary("vm.memory.total", unit: {:byte, :kilobyte}),
       summary("vm.total_run_queue_lengths.total"),
       summary("vm.total_run_queue_lengths.cpu"),

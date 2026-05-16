@@ -1,0 +1,141 @@
+#+TITLE: OraBlock missing focusStart/focusEnd; arrow nav silently fails
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-014-orablock-missing-focusstart-focusend-arr
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+User reports "Concept is unusable at this stage" (session 2026-05-16). Frontend audit by parallel review subagents found that BUG-002 (PLAN-002), marked DONE, regressed on the JS side: =BlockEditor= hook pushes ~nav_block~, server replies ~focus_block_caret~, hook then calls ~this.el.focusStart?.()~ / ~this.el.focusEnd?.()~ on the =<ora-block>= Lit element. Neither method exists on =OraBlock=. The optional-chain swallows the failure silently, no caret moves, no console error. ArrowUp/Down across blocks and Enter-after-create appear inert.
+
+* Intention & Purpose
+
+Restore caret handoff between sibling blocks. After this lands: ArrowUp/Down across siblings parks the caret at end/start of the destination block; Enter at end-of-block creates a sibling below and caret enters it at offset 0. This is the prerequisite for BUG-016 (format toolbar — needs valid Lexical selection), BUG-017 (slash menu — needs caret in the host block), and BUG-022 (PageHeader cross-tab refresh isn't blocked by this but exercises the same focus discipline).
+
+* Context & Narrative
+
+=assets/js/hooks/block_editor.js:48-58= already wires the handler optimistically:
+
+#+begin_src js
+this.handleEvent("focus_block_caret", ({ block_id, position }) => {
+  if (block_id === this.el.getAttribute("block-id")) {
+    if (position === "start")    this.el.focusStart?.();
+    else if (position === "end") this.el.focusEnd?.();
+  }
+});
+#+end_src
+
+=assets/js/components/ora-block.js= owns the Lexical editor (in light DOM, not shadow — Lexical's IME quirks require it). It exposes ~focus()~ (delegates to ~this._editor.focus()~), ~getContent()~, ~setContent()~. It has no selection-positioned variants.
+
+Lexical 0.17 selection API used here: ~$getRoot()~ inside ~editor.update(() => …)~ then ~root.selectStart()~ / ~root.selectEnd()~. For empty roots, ~root.select()~ creates a valid selection at root start.
+
+The server side (=page_editor_live.ex= handlers ~nav_block~, ~insert_paragraph_below~, ~delete_block_merge~) is correct. The handler emits ~focus_block_caret~ with the right block_id; the JS side just can't execute the focus.
+
+* Scope
+
+- IN: implement ~focusStart()~ and ~focusEnd()~ on =OraBlock= (light-DOM contentEditable + Lexical selection move).
+- IN: empty-block case (no children → ~root.select()~).
+- IN: remove silent optional-chain in =BlockEditor= hook; missing method should surface in dev console via thrown error caught by hook ~onError~.
+- IN: vitest unit asserting both methods move Lexical selection + DOM focus.
+- IN: ExUnit ~assert_push_event~ for ~focus_block_caret~ round-trip on ~nav_block~ and ~insert_paragraph_below~.
+- OUT: caret column tracking across rich content (mid-line up/down preserves column) — fall back to start/end on cross-block nav per existing contract in =SERVER_CONTRACT.md=.
+- OUT: cross-page caret handoff.
+
+* Existing Patterns
+
+- =assets/js/components/ora-block.js= ~focus()~, ~getContent()~, ~setContent()~ — new methods mirror this surface.
+- =assets/js/lexical/commands.js= — factory helpers; add ~moveCaretToStart(editor)~ / ~moveCaretToEnd(editor)~ here so other Lit blocks (=ora-ai-block= eventually) reuse them.
+- =test/concept_web/live/command_palette_test.exs= — auth + workspace setup helpers to reuse in the new editor test.
+- =assets/js/hooks/SERVER_CONTRACT.md= — defines ~focus_block_caret~ shape; do not rename.
+
+* Tests
+
+** Vitest (assets/js/components/__tests__/ora-block.test.js — new)
+
+1. ~focusStart()~ moves selection to root start. Mount ora-block with two paragraphs; call ~el.focusStart()~; assert ~editor.getEditorState().read(() => $getSelection().anchor.offset)~ is 0 and anchor node key === root.getFirstChild().getKey().
+2. ~focusEnd()~ moves selection to root end (symmetric).
+3. Both methods on an empty block return without throwing; selection is at root.
+4. Both methods leave =document.activeElement= matching the host's inner contentEditable.
+
+** ExUnit (test/concept_web/live/page_editor_test.exs — new; reuse command_palette_test setup)
+
+1. ~nav_block~ down at sibling boundary pushes ~focus_block_caret~ with ~position: "start"~.
+2. Symmetric ~"up"~ pushes ~position: "end"~.
+3. ~insert_paragraph_below~ pushes ~focus_block_caret~ for the new block id with ~"start"~.
+4. ~nav_block~ at first/last with no neighbor pushes no event.
+
+* Implementation
+
+** TODO Add lexical caret helpers
+:PROPERTIES:
+:CUSTOM_ID: BUG-014-orablock-missing-focusstart-focusend-arr::lexical-helpers
+:END:
+
+- File: =assets/js/lexical/commands.js=. Export:
+
+#+begin_src js
+import { $getRoot } from "lexical";
+export function moveCaretToStart(editor) {
+  editor.update(() => {
+    const r = $getRoot();
+    r.getFirstChild() ? r.selectStart() : r.select();
+  });
+}
+export function moveCaretToEnd(editor) {
+  editor.update(() => {
+    const r = $getRoot();
+    r.getLastChild() ? r.selectEnd() : r.select();
+  });
+}
+#+end_src
+
+** TODO Implement focusStart/focusEnd on OraBlock
+:PROPERTIES:
+:CUSTOM_ID: BUG-014-orablock-missing-focusstart-focusend-arr::focus-methods
+:DEPENDS: BUG-014-orablock-missing-focusstart-focusend-arr::lexical-helpers
+:END:
+
+- File: =assets/js/components/ora-block.js= — add methods after ~focus()~:
+
+#+begin_src js
+focusStart() { moveCaretToStart(this._editor); this._editor.focus(); }
+focusEnd()   { moveCaretToEnd(this._editor);   this._editor.focus(); }
+#+end_src
+
+- Add import ~{ moveCaretToStart, moveCaretToEnd } from "../lexical/commands.js"~.
+
+** TODO Tighten BlockEditor hook to surface missing methods
+:PROPERTIES:
+:CUSTOM_ID: BUG-014-orablock-missing-focusstart-focusend-arr::tighten-hook
+:DEPENDS: BUG-014-orablock-missing-focusstart-focusend-arr::focus-methods
+:END:
+
+- File: =assets/js/hooks/block_editor.js:48-58= — drop optional chain. Wrap in try/catch logging ~console.warn~ on misuse so future regressions are visible.
+
+** TODO Vitest harness
+:PROPERTIES:
+:CUSTOM_ID: BUG-014-orablock-missing-focusstart-focusend-arr::vitest
+:DEPENDS: BUG-014-orablock-missing-focusstart-focusend-arr::focus-methods
+:END:
+
+- File: =assets/js/components/__tests__/ora-block.test.js= (new). Use vitest+jsdom (already in package.json).
+
+** TODO LiveView round-trip test
+:PROPERTIES:
+:CUSTOM_ID: BUG-014-orablock-missing-focusstart-focusend-arr::lv-test
+:DEPENDS: BUG-014-orablock-missing-focusstart-focusend-arr::focus-methods
+:END:
+
+- File: =test/concept_web/live/page_editor_test.exs= (new).
+
+* Acceptance
+
+- Cursor moves to start/end of destination block after Arrow{Up,Down}.
+- After Enter at end of a block, caret is at offset 0 of the new sibling; typed text appears in the new block.
+- Vitest + ExUnit suites green.
+- ~mix precommit~ green.

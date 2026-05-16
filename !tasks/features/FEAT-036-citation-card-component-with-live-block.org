@@ -1,0 +1,37 @@
+#+TITLE: Citation card component with live block hover preview
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-036-citation-card-component-with-live-block
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Single source of truth for rendering a Citation row. Hover triggers a popover that renders the *actual* target block via ~ConceptWeb.BlockRender.block/1~ — the citation preview IS the document. Shared between ChatPanel, AI block, SemanticPalette, LiveCitationRail.
+
+* Scope (IN)
+- Function component ~ConceptWeb.Components.CitationCard~ taking ~%Citation{}~ + ~workspace~.
+- Renders: source-type icon (~hero-document-text~ for title hits, ~hero-sparkles~ for semantic), breadcrumb chevron path, 2-line snippet, score sparkline.
+- Hover (mouseenter, 300ms debounce): pushes ~load_block_preview~ event with block_id; on reply, renders inline popover containing ~BlockRender.block/1~ of the live block.
+- Click: navigates to ~/w/<slug>/p/<page_id>#block-<block_id>~ via ~<.link navigate=...>~.
+- Colocated Lit element ~ora-citation-popover~ handles positioning + outside-click dismiss.
+
+* Files
+- ~lib/concept_web/components/citation_card.ex~ (new)
+- ~assets/js/components/ora-citation-popover.js~ (new Lit)
+- ~assets/js/components/index.js~ (register)
+- ~assets/css/app.css~ (~.ora-citation-*~ styles)
+- ~test/concept_web/components/citation_card_test.exs~
+
+* Tests (5 scenarios)
+1. Renders title-hit shape (no snippet, document icon).
+2. Renders semantic-hit shape (snippet, sparkles icon, breadcrumb).
+3. Score sparkline reflects ~score~ float (test against ~aria-valuenow~).
+4. Click target href matches deep-link pattern.
+5. Hover triggers ~load_block_preview~ event (use ~render_hook~).
+
+* Acceptance
+- Used identically by ChatPanel + Palette + LiveCitationRail with no per-call branches.

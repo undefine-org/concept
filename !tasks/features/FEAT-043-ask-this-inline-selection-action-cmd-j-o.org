@@ -1,0 +1,40 @@
+#+TITLE: Ask-this inline selection action (Cmd-J on highlighted text)
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-043-ask-this-inline-selection-action-cmd-j-o
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Contextual ask: select text in any block → floating "Ask about this" button in the existing ora-format-toolbar → ChatPanel opens pre-seeded with the highlighted text as a virtual chunk + ~scope :subtree~ on current page.
+
+* Scope (IN)
+- Extend ~ora-format-toolbar~ Lit component with an "Ask" action (✨ icon) when range is non-empty.
+- Dispatches bubbling ~ora-ask-selection~ event with payload ~{text, block_id, page_id}~.
+- New hook ~AskSelection~ on the page editor catches the event and ~pushEvent("ask_selection", payload)~.
+- WorkspaceLive's handler creates a ~Knowledge.Query~ with ~scope :subtree~, scope_target_id: page_id, and a special ~seed_chunk~ argument the Reactor (FEAT-035) prepends to retrieval as a synthetic chunk with score 1.0.
+- ChatPanel auto-opens, streams the answer, displays "Asking about: <text>" header.
+- Bonus action: a button on the *answered* message "Insert as AI block below" — creates an :ai_answer block under the source block, content pointing at this Query.
+
+* Files
+- ~assets/js/components/ora-format-toolbar.js~ (add Ask button)
+- ~assets/js/hooks/ask_selection.js~ (new)
+- ~lib/concept_web/live/page_editor_live.ex~ (handler)
+- ~lib/concept_web/live/workspace_live.ex~ (forward to ChatPanel)
+- ~lib/concept/knowledge/query.ex~ (accept ~seed_chunk~ argument)
+- ~lib/concept/knowledge/answerers/streaming_gemini.ex~ (honor seed_chunk)
+- ~test/concept_web/live/ask_selection_test.exs~
+
+* Tests (5 scenarios)
+1. Selection event triggers pushEvent (LV test via render_hook).
+2. Query is created with ~scope :subtree~ + seed_chunk in args.
+3. ChatPanel opens automatically with seeded header.
+4. Insert-as-AI-block creates a new :ai_answer block linked to the Query.
+5. Empty selection (no text) — button hidden.
+
+* Acceptance
+- Highlight "OKR" → Ask → ChatPanel streams an answer grounded in OKR-mentioning blocks.

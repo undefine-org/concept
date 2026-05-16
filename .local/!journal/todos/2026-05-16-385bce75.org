@@ -1,0 +1,250 @@
+#+TITLE: Session 14e3b087d426cfb5 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Wave -1 Setup
+
+** DOING Apply migrations; mix precommit baseline green
+:PROPERTIES:
+:TASK_ID: setup-baseline
+:STATUS: in_progress
+:GATE_CMD: mix precommit
+:END:
+
+* Wave 0 BUGs
+
+** ITEM BUG-005+013: fix Arcana.search/Maintenance callsites + search resilience
+:PROPERTIES:
+:TASK_ID: bug-search
+:STATUS: pending
+:END:
+
+** ITEM BUG-006: strip dead Stream branch in Knowledge.Ask
+:PROPERTIES:
+:TASK_ID: bug-ask
+:STATUS: pending
+:END:
+
+** ITEM BUG-007+011: real KnowledgeReindex notifier + subscribe on Page/Block
+:PROPERTIES:
+:TASK_ID: bug-notifier
+:STATUS: pending
+:END:
+
+** ITEM BUG-008: remove dead evaluate_ai_block change
+:PROPERTIES:
+:TASK_ID: bug-dead-change
+:STATUS: pending
+:END:
+
+** ITEM BUG-010: BlockRender dispatches :ai_answer placeholder
+:PROPERTIES:
+:TASK_ID: bug-block-render
+:STATUS: pending
+:END:
+
+** ITEM BUG-012: GraphBuilder schema regression test
+:PROPERTIES:
+:TASK_ID: bug-graph-schema
+:STATUS: pending
+:END:
+
+* Wave 0.5 Review
+
+** ITEM Smoke: ingest fixture page → chunks visible → search returns hits
+:PROPERTIES:
+:TASK_ID: review-0-smoke
+:STATUS: pending
+:END:
+
+** ITEM Audit: mix precommit + manual end-to-end notifier→ingest→arcana
+:PROPERTIES:
+:TASK_ID: review-0-audit
+:STATUS: pending
+:END:
+
+* Wave 1 Knowledge Domain
+
+** ITEM FEAT-030: IngestionJob Ash resource (SM + AshOban + pub_sub)
+:PROPERTIES:
+:TASK_ID: feat-ingestion-job
+:STATUS: pending
+:END:
+
+** ITEM FEAT-033: Extend AshAI Message with scope/profile/search_trace + domain tools block
+:PROPERTIES:
+:TASK_ID: feat-message
+:STATUS: pending
+:END:
+
+** ITEM FEAT-032: Citation Ash resource
+:PROPERTIES:
+:TASK_ID: feat-citation
+:STATUS: pending
+:END:
+
+** ITEM FEAT-031: Link Ash resource + Arcana.Graph mirror
+:PROPERTIES:
+:TASK_ID: feat-link
+:STATUS: pending
+:END:
+
+** ITEM FEAT-034: Knowledge.Profiles Spark DSL
+:PROPERTIES:
+:TASK_ID: feat-profiles
+:STATUS: pending
+:END:
+
+** ITEM FEAT-035: Knowledge.Reactors.Ingest
+:PROPERTIES:
+:TASK_ID: feat-reactor
+:STATUS: pending
+:END:
+
+* Wave 1.5 Review
+
+** ITEM Admin renders all resources; policies enforce tenancy; notifier→IngestionJob→Reactor end-to-end
+:PROPERTIES:
+:TASK_ID: review-1
+:STATUS: pending
+:END:
+
+* Wave 2 Foundation UI
+
+** ITEM FEAT-036: CitationCard with live block hover preview
+:PROPERTIES:
+:TASK_ID: feat-citation-card
+:STATUS: pending
+:END:
+
+** ITEM FEAT-037: PageScroll colocated hook + flash animation
+:PROPERTIES:
+:TASK_ID: feat-page-scroll
+:STATUS: pending
+:END:
+
+** ITEM FEAT-038: IndexingPill in workspace shell
+:PROPERTIES:
+:TASK_ID: feat-indexing-pill
+:STATUS: pending
+:END:
+
+** ITEM FEAT-039: ChatPanel bound to AshAI Conversation/Message
+:PROPERTIES:
+:TASK_ID: feat-chat-panel
+:STATUS: pending
+:END:
+
+** ITEM FEAT-040: Semantic palette via assign_async
+:PROPERTIES:
+:TASK_ID: feat-semantic-palette
+:STATUS: pending
+:END:
+
+* Wave 2.5 Review
+
+** ITEM UI smoke + screenshots: chat panel, palette, citation hover, indexing pill
+:PROPERTIES:
+:TASK_ID: review-2
+:STATUS: pending
+:END:
+
+* Wave 3 In-Document AI
+
+** ITEM FEAT-041: AI block end-to-end via AshAI
+:PROPERTIES:
+:TASK_ID: feat-ai-block
+:STATUS: pending
+:END:
+
+** ITEM FEAT-042: AI block staleness detection
+:PROPERTIES:
+:TASK_ID: feat-staleness
+:STATUS: pending
+:END:
+
+** ITEM FEAT-043: Ask-this inline selection action
+:PROPERTIES:
+:TASK_ID: feat-ask-this
+:STATUS: pending
+:END:
+
+** ITEM FEAT-044: Why-this-answer disclosure panel
+:PROPERTIES:
+:TASK_ID: feat-why
+:STATUS: pending
+:END:
+
+* Wave 3.5 Review
+
+** ITEM Smoke + screenshots: AI block streams, refresh, staleness badge, ask-this, why panel
+:PROPERTIES:
+:TASK_ID: review-3
+:STATUS: pending
+:END:
+
+* Wave 4 Awareness Magic
+
+** ITEM FEAT-045: Live citation rail
+:PROPERTIES:
+:TASK_ID: feat-rail
+:STATUS: pending
+:END:
+
+** ITEM FEAT-046: Link-this-block UI
+:PROPERTIES:
+:TASK_ID: feat-link-ui
+:STATUS: pending
+:END:
+
+** ITEM FEAT-047: Workspace graph view + communities
+:PROPERTIES:
+:TASK_ID: feat-graph-view
+:STATUS: pending
+:END:
+
+** ITEM FEAT-048: Telemetry expansion + token ledger
+:PROPERTIES:
+:TASK_ID: feat-telemetry
+:STATUS: pending
+:END:
+
+** ITEM FEAT-049: MCP server
+:PROPERTIES:
+:TASK_ID: feat-mcp
+:STATUS: pending
+:END:
+
+* Wave 4.5 Final Review
+
+** ITEM Full PLAN-003 verification flow + ambient-awareness smoke + screenshots
+:PROPERTIES:
+:TASK_ID: review-final
+:STATUS: pending
+:END:
+
+** ITEM PLAN-004 status to DONE; manifest report committed
+:PROPERTIES:
+:TASK_ID: plan-done
+:STATUS: pending
+:END:
+
+* Wave 0 BUGs
+
+** DOING BUG-005+013: Knowledge.Search + Community fix + resilience
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: in_progress
+:END:
+
+** DOING BUG-007+011: KnowledgeReindex notifier + subscribe Page+Block
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: in_progress
+:END:
+
+** DONE BUG-012: GraphBuilder schema regression test
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
+:END:

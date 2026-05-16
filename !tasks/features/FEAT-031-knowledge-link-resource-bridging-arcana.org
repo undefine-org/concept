@@ -1,0 +1,38 @@
+#+TITLE: Knowledge.Link resource bridging Arcana.Graph for user-authored edges
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-031-knowledge-link-resource-bridging-arcana
+#+LAYER: graph
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Let users explicitly assert block-to-block relationships. Each Link row mirrors into ~Arcana.Graph.Relationship~ via an idempotent after_action upsert, enriching GraphRAG with curation signal.
+
+* Scope (IN)
+- Resource ~Concept.Knowledge.Link~ with: ~workspace_id~ (tenant), ~source_block_id~, ~target_block_id~, ~kind~ (atom: ~:relates_to | :cites | :contradicts | :see_also~), ~note~ (string), ~created_by_user_id~.
+- ~ash_paper_trail~ for edit history.
+- after_action change ~Concept.Knowledge.Changes.MirrorToArcanaGraph~ upserts ~Arcana.Graph.Relationship~ with ~kind: "USER_#{atom |> Atom.to_string |> String.upcase}"~ (e.g. ~"USER_CONTRADICTS"~). before_destroy removes the mirror.
+- Policy: create/update/destroy by workspace members; system bypass present.
+- Uniqueness: ~(source_block_id, target_block_id, kind)~.
+
+* Files
+- ~lib/concept/knowledge/link.ex~ (new)
+- ~lib/concept/knowledge/changes/mirror_to_arcana_graph.ex~ (new)
+- ~lib/concept/knowledge.ex~ (register)
+- ~priv/repo/migrations/<ts>_create_knowledge_links.exs~
+- ~test/concept/knowledge/link_test.exs~
+
+* Tests (6 scenarios)
+1. Create Link with valid kind → row + Arcana.Graph.Relationship upsert exists.
+2. Duplicate (same source/target/kind) → ~{:error, :unique_constraint}~.
+3. Destroy Link removes the mirrored graph row.
+4. Cross-workspace target rejected (target must be same workspace).
+5. PaperTrail records create + destroy.
+6. Self-loop (source == target) rejected.
+
+* Acceptance
+- Manual: insert two blocks on two pages, link ~:relates_to~ → workspace graph view shows the edge.

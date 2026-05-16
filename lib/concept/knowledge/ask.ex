@@ -1,6 +1,7 @@
 defmodule Concept.Knowledge.Ask do
   @moduledoc "Streaming Q&A via Arcana Pipeline with PubSub token broadcast."
 
+  @deprecated "Use Concept.Knowledge.Chat (AshAI-generated) for streaming answers; this module remains only for backward compatibility until FEAT-039 lands."
   @doc """
   Starts an async streaming Q&A task.
   Returns immediately with {:ok, %{answer_id: uuid, topic: topic}}.
@@ -45,48 +46,40 @@ defmodule Concept.Knowledge.Ask do
             llm: {llm_model, api_key: api_key}
           )
 
-        case ctx.answer do
-          {:ok, stream} ->
-            full =
-              stream
-              |> Stream.map(fn token ->
-                Phoenix.PubSub.broadcast(Concept.PubSub, topic,
-                  {:knowledge_token, answer_id, token}
-                )
-                token
-              end)
-              |> Enum.join()
+        if is_binary(ctx.answer) do
+          sources =
+            Map.get(ctx, :chunks, [])
+            |> Enum.map(fn c ->
+              meta = Map.get(c, :metadata) || Map.get(c, "metadata", %{})
 
-            sources =
-              Map.get(ctx, :chunks, [])
-              |> Enum.map(fn c ->
-                meta = Map.get(c, :metadata) || Map.get(c, "metadata", %{})
-                %{
-                  block_id: meta["block_id"],
-                  page_id: meta["page_id"],
-                  breadcrumbs: meta["breadcrumbs"],
-                  snippet: String.slice(Map.get(c, :text, "") || "", 0, 240),
-                  score: Map.get(c, :score) || 0.0
-                }
-              end)
+              %{
+                block_id: meta["block_id"],
+                page_id: meta["page_id"],
+                breadcrumbs: meta["breadcrumbs"],
+                snippet: String.slice(Map.get(c, :text, "") || "", 0, 240),
+                score: Map.get(c, :score) || 0.0
+              }
+            end)
 
-            Phoenix.PubSub.broadcast(Concept.PubSub, topic,
-              {:knowledge_done, answer_id,
-               %{answer: full, sources: sources, model: llm_model}}
-            )
-            {:ok, %{measurements: %{}}}
+          Phoenix.PubSub.broadcast(
+            Concept.PubSub,
+            topic,
+            {:knowledge_done, answer_id, %{answer: ctx.answer, sources: sources, model: llm_model}}
+          )
 
-          {:error, reason} ->
-            Phoenix.PubSub.broadcast(Concept.PubSub, topic,
-              {:knowledge_error, answer_id, reason}
-            )
-            {{:error, reason}, %{}}
+          {:ok, %{measurements: %{}}}
+        else
+          Phoenix.PubSub.broadcast(Concept.PubSub, topic, {:knowledge_error, answer_id, "Invalid answer format"})
+          {{:error, "Invalid answer format"}, %{}}
         end
       rescue
         e ->
-          Phoenix.PubSub.broadcast(Concept.PubSub, topic,
+          Phoenix.PubSub.broadcast(
+            Concept.PubSub,
+            topic,
             {:knowledge_error, answer_id, Exception.message(e)}
           )
+
           reraise e, __STACKTRACE__
       end
     end)
@@ -96,6 +89,7 @@ defmodule Concept.Knowledge.Ask do
     case Keyword.get(opts, :scope_filter) do
       %{page_ids: page_ids} when is_list(page_ids) ->
         Arcana.Pipeline.search(pipeline, filter: %{page_id: page_ids})
+
       _ ->
         pipeline
     end

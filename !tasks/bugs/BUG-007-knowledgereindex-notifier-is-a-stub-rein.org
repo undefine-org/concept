@@ -1,0 +1,31 @@
+#+TITLE: KnowledgeReindex notifier is a stub — reindex never happens
+#+STATE: DONE
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: BUG-007-knowledgereindex-notifier-is-a-stub-rein
+#+LAYER: ingestion
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+~lib/concept/pages/notifiers/knowledge_reindex.ex~ is ~notify/1 -> {:ok, notification}~ — a no-op. Page/Block writes never enqueue ingestion. Implement it for *real*, dispatching via ~Knowledge.IngestionJob~ (which lands in FEAT-030). Until FEAT-030 exists, fall back to direct AshOban worker invocation.
+
+* Files
+- ~lib/concept/pages/notifiers/knowledge_reindex.ex~
+- ~lib/concept/knowledge/workers/ingest_page.ex~ (new; thin worker)
+- ~test/concept/pages/notifiers/knowledge_reindex_test.exs~ (new)
+
+* Implementation
+1. ~notify/1~ inspects ~notification.action.name~ and ~notification.data~.
+2. For Page actions: ~:create~ / ~:update~ / ~:archive~ → enqueue ~IngestPage.new(%{page_id, workspace_id, op})~ via Oban with ~unique: [period: 5, fields: [:args], keys: [:page_id, :op]]~ + ~scheduled_at: 2s ahead~ (debounce).
+3. For Block actions: same with the block's ~page_id~. On ~:reparent~, enqueue jobs for both old + new page.
+4. Worker calls Reactor (FEAT-035) once that lands; pre-Reactor, calls ~Arcana.ingest/2~ directly with chunker_opts.
+
+* Acceptance
+- Notifier returns ~{:ok, notification}~ and dispatches Oban job.
+- Two block edits within 1s collapse to a single job (unique replace).
+- Tests assert via ~Oban.Testing.assert_enqueued/2~.
+
+NOTE [2026-05-16]: Implemented in Wave 0 - notifier now enqueues IngestPage jobs for all page and block changes with proper debouncing.

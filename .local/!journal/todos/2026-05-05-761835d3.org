@@ -1,0 +1,13 @@
+#+TITLE: Session 14d58dbdcbddf8cb Todos
+#+DATE: 2026-05-05
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Style and Test
+
+** DONE Run tests and gates
+:PROPERTIES:
+:TASK_ID: gates
+:STATUS: completed
+:END:
+
+mix test test/concept_web/integration/full_flow_test.exs, mix format, mix compile --warnings-as-errors

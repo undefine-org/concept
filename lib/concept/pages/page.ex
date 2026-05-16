@@ -10,7 +10,7 @@ defmodule Concept.Pages.Page do
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
     extensions: [AshArchival.Resource],
-    notifiers: [Ash.Notifier.PubSub]
+    notifiers: [Ash.Notifier.PubSub, Concept.Pages.Notifiers.KnowledgeReindex]
 
   postgres do
     table "pages"
@@ -63,6 +63,7 @@ defmodule Concept.Pages.Page do
 
     update :archive do
       accept []
+      require_atomic? false
       change Concept.Pages.Changes.CascadeArchive
     end
 

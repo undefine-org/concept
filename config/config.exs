@@ -7,12 +7,13 @@
 # General application configuration
 import Config
 
+config :concept, Concept.Repo, types: Concept.PostgrexTypes
 config :ash_oban, pro?: false
 
 config :concept, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
-  queues: [default: 10, locks: 5],
+  queues: [default: 10, locks: 5, knowledge_ingest: 5, chat_responses: [limit: 10], conversations: [limit: 10]],
   repo: Concept.Repo,
   plugins: [{Oban.Plugins.Cron, []}]
 
@@ -64,7 +65,7 @@ config :spark,
 config :concept,
   ecto_repos: [Concept.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true],
-  ash_domains: [Concept.Accounts, Concept.Pages, Concept.Knowledge]
+  ash_domains: [Concept.Knowledge.Chat, Concept.Accounts, Concept.Pages, Concept.Knowledge]
 
 # Configure the endpoint
 config :concept, ConceptWeb.Endpoint,
@@ -128,8 +129,8 @@ config :concept, :block_types, [
   Concept.Pages.BlockTypes.TableCell,
   Concept.Pages.BlockTypes.Columns,
   Concept.Pages.BlockTypes.Column,
-    Concept.Pages.BlockTypes.AiAnswer
-  ]
+  Concept.Pages.BlockTypes.AiAnswer
+]
 
 config :arcana,
   repo: Concept.Repo,

@@ -1,0 +1,50 @@
+#+TITLE: BlockKeyboard hook is dead code; PLAN-002 cleanup incomplete
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-024-blockkeyboard-hook-is-dead-code-plan-002
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16). =assets/js/hooks/block_keyboard.js= still exists. PLAN-002 BUG-002 explicitly stated "Merge keyboard listeners into BlockEditor; remove BlockKeyboard" (subtask CUSTOM_ID ~::merge-keyboard-into-block-editor~, marked DONE). The merge happened — =block_editor.js= owns the listeners. The remove never did. The file is no longer exported from =assets/js/hooks/index.js= so it's dead code, but it confuses readers and risks accidental re-import.
+
+* Intention & Purpose
+
+Delete =block_keyboard.js= and confirm no references remain anywhere in the repo. Trivial cleanup; flagged separately so its review can run in parallel with the W4 wave instead of blocking shipping.
+
+* Scope
+
+- IN: ~rm assets/js/hooks/block_keyboard.js~.
+- IN: grep entire repo for any residual reference (=assets/=, =lib/=, =test/=).
+- IN: remove if any residual ~phx-hook="BlockKeyboard"~ attribute slips through (likely none — was never used).
+- OUT: Nothing else.
+
+* Existing Patterns
+
+- =assets/js/hooks/index.js= already does not import it — confirmed in audit.
+
+* Tests
+
+- No new tests. Confirm vitest + ExUnit still green.
+- Reviewer wave runs ~grep -r "BlockKeyboard\|block_keyboard" .~ → zero hits.
+
+* Implementation
+
+** TODO Delete file
+:PROPERTIES:
+:CUSTOM_ID: BUG-024-blockkeyboard-hook-is-dead-code-plan-002::delete
+:END:
+
+- File: =assets/js/hooks/block_keyboard.js= — delete.
+- Grep audit: ~rg "BlockKeyboard|block_keyboard" lib test assets~.
+
+* Acceptance
+
+- File gone.
+- No residual reference.
+- ~mix precommit~ + vitest green.

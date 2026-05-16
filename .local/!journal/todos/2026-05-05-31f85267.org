@@ -1,0 +1,23 @@
+#+TITLE: Session 14d5d4e50c2bbf66 Todos
+#+DATE: 2026-05-05
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Write GraphBuilder module
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:GATE_CMD: mix compile
+:END:
+
+Overwrite lib/concept/knowledge/graph_builder.ex with provided implementation. Must compile cleanly.
+
+** DONE Write Community module
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:GATE_CMD: mix compile
+:END:
+
+Overwrite lib/concept/knowledge/community.ex with provided implementation. Must compile cleanly.

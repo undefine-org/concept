@@ -1,0 +1,33 @@
+#+TITLE: PageScroll colocated hook with block-flash animation
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-037-pagescroll-colocated-hook-with-block-fla
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Make clicking a citation feel native: navigate → scroll-to-anchor → 1.6s yellow flash on the target block.
+
+* Scope (IN)
+- Colocated hook ~PageScroll~ on the page editor root that:
+  1. On mount, reads ~window.location.hash~; if ~#block-<uuid>~, ~scrollIntoView({behavior: "smooth", block: "center"})~ then toggles ~.ora-block-flash~ for 1.6s.
+  2. Listens for ~hashchange~ events; same behavior.
+  3. Handles ~phx:scroll_to_block~ events (server-pushed) for in-page deep-links without changing URL.
+- CSS keyframe ~@keyframes ora-block-flash~ — background fades from yellow-100 to transparent.
+
+* Files
+- ~lib/concept_web/live/page_editor_live.ex~ (~phx-hook="PageScroll"~ + colocated ~<script :type={ColocatedHook}>~)
+- ~assets/css/app.css~ (.ora-block-flash + keyframe)
+- ~test/concept_web/live/page_editor_test.exs~ (extend; assert anchor presence + hook attribute)
+
+* Tests (3 scenarios)
+1. Hook is attached to editor root.
+2. Block anchors (id="block-<uuid>") render on every block.
+3. Server can push ~phx:scroll_to_block~ via ~push_event~ — LV test verifies dispatch.
+
+* Acceptance
+- Manual: open ~/w/<slug>/p/<page>#block-<uuid>~ in a fresh tab → page scrolls to the block; block flashes yellow.

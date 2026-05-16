@@ -1,0 +1,39 @@
+#+TITLE: Semantic command palette via assign_async (title + semantic merge)
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-040-semantic-command-palette-via-assign-asyn
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Promote ⌘K from title-only to hybrid: title hits (instant) + semantic hits (~150–300ms) + an "Ask answer for <query>" tier that delegates to ChatPanel. Uses LiveView ~assign_async~ for non-blocking semantic.
+
+* Scope (IN)
+- ~CommandPaletteLive~ refactor:
+  - On query change: ~assign_async(:title_results, ...)~ + ~assign_async(:semantic_results, ...)~.
+  - Merge in render: title first (max 4), then semantic on different pages (max 6), then a single "Ask answer" row.
+  - Semantic results render as CitationCard (block-level hits with breadcrumb + snippet).
+  - Selecting "Ask answer" sends ~{:palette_ask, query}~ to WorkspaceLive → opens ChatPanel pre-seeded.
+- Semantic search uses Knowledge.search (fixed in BUG-005); profile ~:fast~.
+- Source indicator icons: ~hero-document-text~ (title), ~hero-sparkles~ (semantic), ~hero-chat-bubble-left-right~ (ask).
+
+* Files
+- ~lib/concept_web/live/command_palette_live.ex~
+- ~test/concept_web/live/command_palette_test.exs~
+
+* Tests (8 scenarios)
+1. Title-only query: only title rows.
+2. Query matching block content (not title): semantic row appears with breadcrumb.
+3. Title + semantic on same page: title wins, page appears once.
+4. Empty query: recent pages.
+5. Semantic timeout: title still renders; semantic absent (no crash).
+6. "Ask answer" row always last; Enter dispatches palette_ask.
+7. Click semantic row navigates with anchor.
+8. Non-member workspace: semantic returns empty (policy).
+
+* Acceptance
+- ⌘K with a phrase only in a block returns a sparkles result; clicking deep-links to the block.

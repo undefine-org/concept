@@ -1,0 +1,39 @@
+#+TITLE: Knowledge.Citation Ash resource
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-032-knowledge-citation-ash-resource
+#+LAYER: retrieval
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Materialize answer citations as queryable rows so the UI, audit, and graph-view consumers all share one source. Each Citation belongs_to Query + points at a block.
+
+* Scope (IN)
+- Resource ~Concept.Knowledge.Citation~ with: ~message_id~ (AshAI Message FK), ~block_id~, ~page_id~, ~rank~ (int), ~score~ (float), ~snippet~ (string), ~breadcrumbs~ (string), ~workspace_id~ (tenant).
+- Created in batch by Message ~:finalize~ after the streaming Answerer completes (AshAI ~on_tool_end~ callback for ~:search_workspace~ tool feeds this).
+- Read actions ~:for_message~ (sorted by rank), ~:for_block~ (used by FEAT-042 staleness — "which messages cited this block?").
+- Policy: inherit from Message.
+- Multitenant.
+- ~belongs_to :block, Concept.Pages.Block~ and ~belongs_to :message, Concept.Knowledge.Message~.
+
+
+* Files
+- ~lib/concept/knowledge/citation.ex~ (new)
+- ~lib/concept/knowledge.ex~ (register)
+- ~priv/repo/migrations/<ts>_create_knowledge_citations.exs~
+- ~test/concept/knowledge/citation_test.exs~
+
+* Tests (5 scenarios)
+1. Create Citation requires query_id + block_id + score.
+2. ~:for_query~ returns rows sorted by rank ascending.
+3. Cascade: archiving the Query soft-deletes citations.
+4. Policy: non-member ~:read~ forbidden.
+5. Score range validation: 0.0..1.0.
+
+* Acceptance
+- Finalizing a Query writes ≥1 Citation row when search returned chunks.
+- AshAdmin lists citations grouped by query.

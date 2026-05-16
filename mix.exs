@@ -41,6 +41,8 @@ defmodule Concept.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:mdex, "~> 0.7"},
+      {:ash_ai, "~> 0.6"},
       {:bcrypt_elixir, "~> 3.0"},
       {:picosat_elixir, "~> 0.2"},
       {:sourceror, "~> 1.8", only: [:dev, :test]},
@@ -81,10 +83,10 @@ defmodule Concept.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-            {:arcana, "~> 2.0"},
-            {:pgvector, "~> 0.2"},
-            {:req_llm, "~> 1.2"},
-            {:earmark, "~> 1.4"}
+      {:arcana, "~> 2.0"},
+      {:pgvector, "~> 0.2"},
+      {:req_llm, "~> 1.2"},
+      {:earmark, "~> 1.4"}
     ]
   end
 

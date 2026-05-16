@@ -1,0 +1,27 @@
+#+TITLE: Arcana dashboard router mount commented out
+#+STATE: DONE
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: BUG-009-arcana-dashboard-router-mount-commented
+#+LAYER: ops
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+~lib/concept_web/router.ex:102~ has ~# arcana_dashboard "/arcana"~ disabled. Owners cannot view the Arcana dashboard despite FEAT-029 claiming DONE. Mount it behind the existing ~:require_owner~ pipeline.
+
+* Files
+- ~lib/concept_web/router.ex~
+- ~test/concept_web/integration/admin_routes_test.exs~ (extend or new)
+
+* Implementation
+- ~import Arcana.Web.Router~ at the top of the router (if needed; check ~deps/arcana/lib/arcana_web/router.ex~).
+- Uncomment ~arcana_dashboard "/arcana"~ inside the ~/admin~ scope.
+- Add a router test: owner GET ~/admin/arcana~ → 200; non-owner → 403.
+
+* Acceptance
+- Owner can navigate to ~/admin/arcana~ and see the Arcana dashboard.
+
+NOTE [2026-05-16]: Fixed during Wave -1 foundation: mounted under /admin/arcana with :require_owner pipeline; added import ArcanaWeb.Router.

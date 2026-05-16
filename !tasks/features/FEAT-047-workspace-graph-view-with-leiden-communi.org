@@ -1,0 +1,43 @@
+#+TITLE: Workspace graph view with Leiden communities
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-047-workspace-graph-view-with-leiden-communi
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Visualize Concept's self-built knowledge graph. Force-directed view of pages + (optionally) blocks, colored by Leiden community (from Arcana.Maintenance.detect_communities), edge thickness from authored Link + structural CONTAINS/PARENT_OF counts.
+
+* Scope (IN)
+- New route ~live "/w/:workspace_slug/graph", WorkspaceGraphLive~.
+- Server-side: build a serialized graph payload via ~Knowledge.graph_for_workspace/2~ (reads ~Arcana.Graph.Entity~ + ~Relationship~ + community summaries).
+- Client-side: Lit element ~ora-workspace-graph~ uses d3-force imported into app.js (no external script tags). Renders SVG.
+- Node click → side panel with community summary + member pages list.
+- Filters: by block_type, by community, by "ego graph from page X" (uses ~Arcana.Graph.fusion_search~ neighborhood query).
+- V1 limits: pages-only view by default; "show blocks" toggle off by default. Block view for FUP if perf becomes an issue.
+- Scheduled weekly community rebuild: AshOban global cron in supervisor → ~Concept.Knowledge.Workers.RebuildCommunities.perform_all_workspaces/0~.
+
+* Files
+- ~lib/concept_web/live/workspace_graph_live.ex~ (new)
+- ~lib/concept_web/router.ex~ (route)
+- ~lib/concept/knowledge.ex~ (define :graph_for_workspace)
+- ~lib/concept/knowledge/graph_query.ex~ (assembly)
+- ~lib/concept/knowledge/workers/rebuild_communities.ex~ (new)
+- ~assets/js/components/ora-workspace-graph.js~ (new Lit + d3-force)
+- ~assets/js/lib/d3-force.js~ (vendored or via npm)
+- ~test/concept_web/live/workspace_graph_test.exs~
+
+* Tests (6 scenarios)
+1. Empty workspace: graph shows "Add pages to see the graph".
+2. 5-page workspace: 5 nodes + edges from structural graph.
+3. Authored Link (FEAT-033) → edge appears.
+4. Community color mapping consistent within view (deterministic by community id).
+5. Click node → side panel with community summary.
+6. RebuildCommunities worker runs weekly (cron config asserted).
+
+* Acceptance
+- ~/w/<slug>/graph~ renders in <3s for a 50-page workspace; communities visibly color-grouped.

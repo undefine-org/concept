@@ -74,7 +74,9 @@ defmodule Concept.Lexical do
   def to_html(_), do: ""
 
   @doc "Render Lexical state to Markdown. Unknown nodes fall back to plain text."
-  def to_markdown(%{"root" => root}), do: md_node(root, %{}) |> IO.iodata_to_binary() |> String.trim_trailing("\n")
+  def to_markdown(%{"root" => root}),
+    do: md_node(root, %{}) |> IO.iodata_to_binary() |> String.trim_trailing("\n")
+
   def to_markdown(_), do: ""
 
   defp md_node(%{"type" => "root", "children" => children}, ctx) do
@@ -239,12 +241,23 @@ defmodule Concept.Lexical do
 
   defp md_inline_children(children, ctx) do
     Enum.map_join(children, "", fn
-      %{"type" => "paragraph", "children" => c} -> md_inline_children(c, ctx)
-      %{"type" => "text", "text" => text} = node -> md_format(text, Map.get(node, "format", 0))
-      %{"type" => "link", "url" => url, "children" => c} -> ["[", md_inline_children(c, ctx), "](", url, ")"]
-      %{"type" => "linebreak"} -> "\n"
-      %{"children" => c} -> md_inline_children(c, ctx)
-      _ -> ""
+      %{"type" => "paragraph", "children" => c} ->
+        md_inline_children(c, ctx)
+
+      %{"type" => "text", "text" => text} = node ->
+        md_format(text, Map.get(node, "format", 0))
+
+      %{"type" => "link", "url" => url, "children" => c} ->
+        ["[", md_inline_children(c, ctx), "](", url, ")"]
+
+      %{"type" => "linebreak"} ->
+        "\n"
+
+      %{"children" => c} ->
+        md_inline_children(c, ctx)
+
+      _ ->
+        ""
     end)
   end
 

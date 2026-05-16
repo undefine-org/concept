@@ -29,7 +29,7 @@ defmodule ConceptWeb.Layouts do
 
   attr :current_scope, :map,
     default: nil,
-    doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
+    doc: "the current user/workspace scope"
 
   slot :inner_block, required: true
 
@@ -39,7 +39,9 @@ defmodule ConceptWeb.Layouts do
       <div class="flex-1">
         <a href="/" class="flex-1 flex w-fit items-center gap-2">
           <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
+          <span class="text-sm font-semibold">
+            Concept<%= if @current_scope && @current_scope.workspace, do: " / " <> to_string(@current_scope.workspace.name) %>
+          </span>
         </a>
       </div>
       <div class="flex-none">
@@ -53,11 +55,26 @@ defmodule ConceptWeb.Layouts do
           <li>
             <.theme_toggle />
           </li>
-          <li>
-            <a href="https://hexdocs.pm/phoenix/overview.html" class="btn btn-primary">
-              Get Started <span aria-hidden="true">&rarr;</span>
-            </a>
-          </li>
+          <%= if @current_scope do %>
+            <li class="dropdown dropdown-end">
+              <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar placeholder">
+                <div class="bg-neutral text-neutral-content rounded-full w-8">
+                  <span><%= @current_scope.user.email |> to_string() |> String.first() |> String.upcase() %></span>
+                </div>
+              </div>
+              <ul tabindex="0" class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
+                <li class="menu-title"><%= @current_scope.user.email %></li>
+                <li><a href={~p"/w"}>Dashboard</a></li>
+                <li><a href={~p"/sign-out"} method="delete">Sign out</a></li>
+              </ul>
+            </li>
+          <% else %>
+            <li>
+              <a href="https://hexdocs.pm/phoenix/overview.html" class="btn btn-primary">
+                Get Started <span aria-hidden="true">&rarr;</span>
+              </a>
+            </li>
+          <% end %>
         </ul>
       </div>
     </header>
@@ -122,7 +139,7 @@ defmodule ConceptWeb.Layouts do
   """
   def theme_toggle(assigns) do
     ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
+    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-100 rounded-full">
       <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 transition-[left]" />
 
       <button

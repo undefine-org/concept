@@ -1,0 +1,31 @@
+#+TITLE: Session 14e3c78c6ae6cfbb Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Write notifier integration test
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:END:
+
+File: test/concept/pages/notifiers/knowledge_reindex_test.exs (new)
+5 scenarios:
+1. Creating block enqueues IngestPage for page_id
+2. Two updates within 1s collapse via unique constraint
+3. Reparenting enqueues jobs for both old + new page
+4. Archiving page enqueues op: :delete
+5. Updating page metadata enqueues op: :upsert
+Use Oban.Testing
+Acceptance: mix test passes
+
+** DONE Mark BUG org items DONE
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: completed
+:END:
+
+IDs: BUG-007-knowledgereindex-notifier-is-a-stub-rein, BUG-011-block-resource-missing-knowledgereindex
+Set state: DONE
+Acceptance: org query shows DONE

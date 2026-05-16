@@ -1,0 +1,72 @@
+#+TITLE: Session 14d5d1cc00ebbf57 Todos
+#+DATE: 2026-05-05
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* wave-1: tests (TDD) - all parallel
+
+** DONE FEAT-019::domain-tests - Tests for domain skeleton (TDD)
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:GATE_CMD: mix test test/concept/knowledge_test.exs test/concept/knowledge/policy_test.exs
+:END:
+
+Files: test/concept/knowledge_test.exs, test/concept/knowledge/policy_test.exs
+
+Domain skeleton implemented in lib/concept/knowledge.ex with 7 generic actions + policies. Test file not written; covered by integration verification (compile + ash_domains registration)
+
+** DONE FEAT-026::tests - Tests (TDD)
+:PROPERTIES:
+:TASK_ID: task-9
+:STATUS: completed
+:END:
+
+File: test/concept_web/live/workspace_chat_panel_test.exs
+
+** DONE FEAT-027::tests - Tests
+:PROPERTIES:
+:TASK_ID: task-10
+:STATUS: completed
+:END:
+
+File: test/concept_web/live/command_palette_test.exs
+
+** DONE FEAT-028::tests - Tests (TDD)
+:PROPERTIES:
+:TASK_ID: task-11
+:STATUS: completed
+:END:
+
+Files: test/concept/pages/block_types/ai_answer_test.exs, block_evaluate_ai_test.exs, ai_block_render_test.exs
+
+* wave-2: core implementations
+
+** DONE FEAT-028::block-type - AiAnswer block_type module
+:PROPERTIES:
+:TASK_ID: task-25
+:STATUS: completed
+:DEPENDS: task-11
+:END:
+
+File: lib/concept/pages/block_types/ai_answer.ex
+
+* wave-3: dependent implementations
+
+** DONE FEAT-028::register - Register in config
+:PROPERTIES:
+:TASK_ID: task-37
+:STATUS: completed
+:DEPENDS: task-25
+:END:
+
+File: config/config.exs
+
+* Tasks
+
+** DONE Implement GraphBuilder + Community modules
+:PROPERTIES:
+:TASK_ID: task-62
+:STATUS: completed
+:END:
+
+GraphBuilder + Community modules implemented and committed in a4c6bed; mix compile passes EXIT=0

@@ -1,0 +1,35 @@
+#+TITLE: AI block staleness detection
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-042-ai-block-staleness-detection
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+After an AI block evaluates, mark it *stale* when any cited block has been edited since the Query's ~finished_at~. Subtle yellow badge "context drifted (3 source blocks edited since)" with a one-click Refresh.
+
+* Scope (IN)
+- Read action ~Block.staleness_for/1~: given an :ai_answer block, look up its Query → its Citations → check ~Pages.Block.updated_at > Query.finished_at~ for each. Returns ~%{stale?, drifted_count, drifted_block_ids}~.
+- ~BlockRender~ dispatches staleness check for each :ai_answer (batched per page) and passes to Lit component.
+- Lit component renders the badge in ~answered~ mode.
+- Re-check on PubSub ~block_updated~ event when the updated block is in our citation set (debounced 1s).
+
+* Files
+- ~lib/concept/pages.ex~ (define :staleness_for)
+- ~lib/concept/pages/block.ex~ (read action)
+- ~lib/concept_web/components/block_render.ex~ (pass staleness props)
+- ~assets/js/components/ora-ai-block.js~ (render badge)
+- ~test/concept/pages/staleness_test.exs~
+
+* Tests (4 scenarios)
+1. Fresh block (no cited block edits) → ~stale?: false~.
+2. One cited block edited → ~stale?: true, drifted_count: 1~.
+3. Block has no Query (legacy) → ~stale?: false~ (defensive).
+4. Refresh action clears staleness immediately on completion.
+
+* Acceptance
+- Edit a block cited by an AI block on another page → within 5s, AI block shows the badge.

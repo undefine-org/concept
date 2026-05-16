@@ -99,4 +99,33 @@ defmodule ConceptWeb.CommandPaletteTest do
 
     refute html =~ "Search pages or run a command"
   end
+
+  test "closed palette does not capture window keydowns (regression: KeyError :selected_index on Enter)",
+       %{conn: conn, ws: ws} do
+    {:ok, view, html} = live(conn, ~p"/w/#{ws.slug}")
+
+    # When the palette is closed, no phx-window-keydown="palette_key" listener
+    # may be attached. Otherwise every keystroke (e.g. Enter while typing in a
+    # block) is sent to the LV, where it crashed with KeyError :selected_index
+    # because update/2 only seeds that assign while @show_palette is true.
+    refute html =~ ~s(phx-window-keydown="palette_key")
+
+    # Open + close to force the catch-all update/2 path, then re-check.
+    view |> element("#workspace-root") |> render_hook("open_command_palette", %{})
+    html_after_close = view |> element("#workspace-root") |> render_keydown(%{key: "Escape"})
+    refute html_after_close =~ ~s(phx-window-keydown="palette_key")
+  end
+
+  test "palette opens from a page editor route via open_command_palette",
+       %{conn: conn, ws: ws, page: page} do
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    html =
+      view
+      |> element("#workspace-root")
+      |> render_hook("open_command_palette", %{})
+
+    assert html =~ "Search pages or run a command"
+    assert html =~ ~s(phx-window-keydown="palette_key")
+  end
 end

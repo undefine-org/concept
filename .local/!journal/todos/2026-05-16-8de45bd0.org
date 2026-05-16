@@ -1,0 +1,17 @@
+#+TITLE: Session 14e3b0af9e33d2cc Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* PLAN-005 Wave 1 (task)
+
+** DOING OraBlock focusStart/focusEnd + lexical caret helpers
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: in_progress
+:END:
+
+** DOING Concept.Accounts.Scope + current_scope assign + Layouts.app threading
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: in_progress
+:END:

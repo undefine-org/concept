@@ -1,0 +1,38 @@
+#+TITLE: Knowledge.Conversation — thread queries as persistent objects
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FUP-008-knowledge-conversation-thread-queries-as
+#+LAYER: retrieval
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+Persist ChatPanel sessions as named threads. Multi-turn context retrieval. Every answer becomes citable as a block. History sidebar.
+
+* Trigger
+After FEAT-031 (Query) + FEAT-039 (ChatPanel). High user demand expected.
+
+* Design substrate (already in place)
+- ~Knowledge.Query.parent_query_id~ self-relationship — substrate for chains.
+- Search trace jsonb captures pre-rerank context for each turn.
+
+* Implementation sketch
+*Substantially smaller than originally planned.* AshAI's ~gen.chat~ already generates ~Conversation~ + ~Message~ resources (landed in FEAT-033 Wave 1). What's left for this FUP:
+
+- History sidebar UI: lists Conversations sorted by ~last_message_at~; click → loads thread into ChatPanel via ~send_update~.
+- Conversation title auto-generation: AshAi prompt-backed action ~Conversation.generate_title~ that calls gemini-3.1-flash-lite on the first 2 messages → title.
+- Pin/star action: ~:pin~ Ash action toggling a ~pinned?~ attribute.
+- Drag-to-block: drag a finalized assistant Message → drops as an AI block on current page (block content ~{message_id: msg.id}~ — reuses FEAT-041 substrate).
+- Multi-turn retrieval: prior assistant messages' citations join the search context for the next turn (modify the ~:search_workspace~ tool to read parent message's search_trace).
+
+* Files (preview)
+- ~lib/concept_web/live/workspace_live/conversation_sidebar.ex~
+- ~lib/concept/knowledge/conversation.ex~ (extend with ~pinned?~ + ~:pin~ action + ~:generate_title~ prompt action)
+
+
+* Files (preview)
+- ~lib/concept/knowledge/conversation.ex~
+- ~lib/concept_web/live/workspace_live/conversation_sidebar.ex~

@@ -1,0 +1,109 @@
+#+TITLE: Block lock indicators not rendered from presence metadata
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-021-block-lock-indicators-not-rendered-from
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16). =assets/css/app.css= has rules keyed on ~[data-locked-by]~ for a colored left-edge indicator, but no code path writes the attribute. =assets/js/hooks/block_editor.js= handles ~lock_granted~/~lock_denied~ server-pushed events but only as a self-flag (the block being edited); other clients of the same page see no indication that a peer is editing a block. PLAN-001 FEAT-015 claimed "Lock indicator on blocks" + "color hashing helper" done.
+
+* Intention & Purpose
+
+When user A starts editing block X, all other users on the same page see block X with a colored left-bar (the color hashed from user A's id). When A blurs or the lock TTL expires, the bar disappears within ~1s for everyone. Use existing PubSub presence channel + the existing ~ConceptWeb.Colors.for_user_id/1~ helper.
+
+* Context & Narrative
+
+=lib/concept_web/presence.ex= — Phoenix.Presence with topic ~workspace:#{ws.id}:page:#{page.id}:presence~. Metadata already carries ~user_id~ + (potentially) ~locked_block_id~ on focus events.
+
+Today =PageEditorLive= handles ~lock_granted~ from the server but doesn't push a presence diff carrying ~locked_block_id~. The other clients on the same page therefore never learn what block is locked.
+
+Approach: when ~focus_block~ event arrives at the server, =Pages.acquire_lock= currently grants/denies — extend to also update presence metadata for the current LV's tracker entry with ~%{locked_block_id: block_id}~. Sibling LVs' ~handle_info({:DOWN | "presence_diff"}, …)~ rebuilds a map ~%{block_id => %{user_id, color}}~ and re-streams blocks with the new ~locked_by~ assign. =BlockRender= picks the assign up and emits ~data-locked-by~ + ~data-lock-color~.
+
+* Scope
+
+- IN: extend presence metadata schema with ~:locked_block_id~ + ~:color~.
+- IN: =PageEditorLive= ~handle_event("focus_block", …)~ now updates presence track entry.
+- IN: =PageEditorLive= ~handle_info("presence_diff", …)~ builds ~@locked_blocks~ assign mapping block_id → %{user_id, color}.
+- IN: =BlockRender= reads ~@locked_blocks~ (passed in via assigns) and emits ~data-locked-by~ + inline style for the bar color on the ~.ora-block-row~.
+- IN: CSS in =app.css= confirms the visual (already partially there).
+- IN: ExUnit: two simulated LVs on same page → focus block in one → other observes ~data-locked-by~ attribute.
+- IN: Tooltip on hover showing "User X is editing" (basic title attr; UX polish elsewhere).
+- OUT: avatar bubbles on individual blocks (separate visual treatment).
+- OUT: lock TTL change visualization (countdown).
+
+* Existing Patterns
+
+- =lib/concept_web/colors.ex= ~for_user_id/1~ — phash2 → palette color. Reuse.
+- =lib/concept_web/presence.ex= — Phoenix.Presence subclass.
+- =lib/concept_web/components/presence_bar.ex= — already renders presence avatars at page level. Same source of truth.
+- =assets/css/app.css= — has the rule for ~[data-locked-by]~ ::before bar.
+- =lib/concept_web/live/page_editor_live.ex= ~focus_block~ + ~blur_block~ handlers already exist; presence update is additive.
+
+* Tests
+
+** ExUnit (LiveView)
+
+1. Two test LVs (~live_isolated~) connect to the same page topic. LV1 fires ~focus_block~ on block A. LV2 ~render(view)~ contains ~data-locked-by="<user1_id>"~ on the block A row.
+2. After ~blur_block~, ~data-locked-by~ absent.
+3. Lock color is deterministic (matches ~ConceptWeb.Colors.for_user_id(user1.id)~).
+4. Self does not see its own lock indicator (filtered out).
+
+** Puppeteer (reviewer)
+
+5. Two browser sessions on same page; one focuses block; the other shows the left-bar colored.
+
+* Implementation
+
+** TODO Extend presence metadata on focus/blur
+:PROPERTIES:
+:CUSTOM_ID: BUG-021-block-lock-indicators-not-rendered-from::presence-meta
+:END:
+
+- File: =lib/concept_web/live/page_editor_live.ex= ~handle_event("focus_block", ...)~ — after lock_granted, call ~Presence.update(self(), topic, user_id, fn meta -> Map.put(meta, :locked_block_id, block_id) end)~.
+- File: same ~handle_event("blur_block", ...)~ — clear ~:locked_block_id~.
+
+** TODO Build locked_blocks assign from presence diffs
+:PROPERTIES:
+:CUSTOM_ID: BUG-021-block-lock-indicators-not-rendered-from::diff-handler
+:DEPENDS: BUG-021-block-lock-indicators-not-rendered-from::presence-meta
+:END:
+
+- File: =lib/concept_web/live/page_editor_live.ex= ~handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff"}, …)~ — rebuild ~@locked_blocks :: %{block_id => %{user_id, color}}~ filtering out self.
+- Pass ~@locked_blocks~ down to BlockRender via the block stream or via a separate assign read inside the component.
+
+** TODO BlockRender emits data-locked-by
+:PROPERTIES:
+:CUSTOM_ID: BUG-021-block-lock-indicators-not-rendered-from::render
+:DEPENDS: BUG-021-block-lock-indicators-not-rendered-from::diff-handler
+:END:
+
+- File: =lib/concept_web/components/block_render.ex= — accept optional ~:locked_by~ assign per block; if present, emit ~data-locked-by~ + inline style ~--lock-color~ var on ~.ora-block-row~.
+
+** TODO CSS confirmation
+:PROPERTIES:
+:CUSTOM_ID: BUG-021-block-lock-indicators-not-rendered-from::css
+:DEPENDS: BUG-021-block-lock-indicators-not-rendered-from::render
+:END:
+
+- File: =assets/css/app.css= — verify the ~[data-locked-by]::before~ rule consumes ~--lock-color~ and renders a 3px left-bar; tweak as needed.
+
+** TODO Tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-021-block-lock-indicators-not-rendered-from::tests
+:DEPENDS: BUG-021-block-lock-indicators-not-rendered-from::render
+:END:
+
+- File: =test/concept_web/live/lock_indicator_test.exs= (new).
+
+* Acceptance
+
+- Peer LV sees ~data-locked-by~ within one presence_diff cycle (≤1s).
+- Color is stable per-user (same user always gets same bar color).
+- Self never sees its own bar.
+- Tests green.

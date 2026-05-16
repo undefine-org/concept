@@ -1,0 +1,24 @@
+#+TITLE: evaluate_ai_block change is a no-op
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: BUG-008-evaluate-ai-block-change-is-a-no-op
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+~lib/concept/pages/block/changes/evaluate_ai_block.ex~ returns the changeset untouched. AI blocks cannot evaluate. Stabilize by removing the dead change from the resource (the real implementation lands in FEAT-041 via Knowledge.Query); avoids a misleading dependency.
+
+* Files
+- ~lib/concept/pages/block/changes/evaluate_ai_block.ex~ (delete)
+- ~lib/concept/pages/block.ex~ (drop any ~:evaluate_ai_block~ action references if present)
+
+* Implementation
+- Search ~lib/concept/pages/block.ex~ for ~evaluate_ai_block~ — currently absent (verified). Delete the orphan module file.
+- Leave a single TODO comment in ~AiAnswer~ block_type pointing to FEAT-041.
+
+* Acceptance
+- File deleted, no stale references, compile clean.

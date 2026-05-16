@@ -1,0 +1,123 @@
+#+TITLE: Slash menu never mounted; typing slash does nothing
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-017-slash-menu-never-mounted-typing-slash-do
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16). =assets/js/components/ora-slash-menu.js= is a 227-line Lit element with keyboard nav, group filtering, FALLBACK_ITEMS containing all 19 block types. =assets/js/components/index.js= side-effect-imports it (registers the custom element). But no HEEx template ever instantiates =<ora-slash-menu>=. Typing "/" in a block does nothing.
+
+PLAN-001 FEAT-009 (DONE) claimed "slash-menu" subitem complete. The Lit element was built; no integration shipped.
+
+* Intention & Purpose
+
+Typing "/" in any focused block opens the slash menu anchored at the caret. Arrow keys navigate items; Enter selects; Escape closes. Selecting an item dispatches a server event ~insert_block_below~ with the chosen type, persisting via =Concept.Pages.create_block/N=, then focuses the new block.
+
+* Context & Narrative
+
+State machine:
+- Per-page: at most one slash menu open at a time.
+- Trigger: ~beforeinput~ / ~input~ event on the focused =<ora-block>= where the inserted text is "/" and the prior character is whitespace or start-of-line.
+- Position: anchor rect from current selection.
+- Filter: subsequent characters typed are forwarded as filter; backspacing past the "/" closes.
+- Selection: Enter/Tab/Click → dispatch CustomEvent ~select-item~ with ~{type: "heading_1"}~.
+
+Server side: handler ~insert_block_below~ already exists in =page_editor_live.ex= for paragraph (created by PLAN-002). Extend to accept ~type~ param. Reuse =FractionalIndex.between/2= for position between the source block and its next sibling.
+
+The Lit element's existing API exposes ~items~ attribute (JSON) for dynamic block types. FALLBACK_ITEMS is the default. We can pass server-driven items later (Arcana ai_answer etc.) — out of scope here.
+
+* Scope
+
+- IN: a =assets/js/hooks/slash_menu.js= hook owning the open/close + filter + dispatch lifecycle. Mounted on a page-level host that contains =<ora-slash-menu>=.
+- IN: hook listens for ~input~ events bubbling from =<ora-block>= elements; detects "/" at start-of-token; reveals menu at caret rect.
+- IN: when item selected → ~pushEvent("insert_block_below", {block_id, type})~; on server-confirmed ~focus_block_caret~ for new id, menu closes.
+- IN: server: extend ~insert_block_below~ handler in =page_editor_live.ex= to accept ~type~ param; default ~paragraph~ for backward compat.
+- IN: server: ~delete_slash_prefix~ — when a slash-menu item is selected, the host block's content still contains the "/" + filter chars. Server should pop them. Implement client-side by storing the trigger range on open and replacing it with empty on select.
+- IN: register hook in =assets/js/hooks/index.js=; render host in =page_editor_live.ex=.
+- IN: vitest interaction + LV ExUnit.
+- OUT: server-driven items (Arcana / per-workspace types) — substrate ready via ~items~ attribute.
+- OUT: nested menus, drag-into-from-menu.
+
+* Existing Patterns
+
+- =assets/js/components/ora-slash-menu.js= already has ~items~, ~visible~, ~rect~, ~filter~ properties and ~select-item~ event. Hook drives.
+- =lib/concept_web/live/page_editor_live.ex= ~insert_paragraph_below~ handler — extend signature, don't fork.
+- =lib/concept/pages.ex= ~create_block~ with position option already supports ~:type~ via PLAN-002 BUG-002 fix.
+- =assets/js/hooks/block_editor.js= — pattern for listening on the hosted Lit element.
+
+* Tests
+
+** Vitest
+
+1. Slash hook detects "/" at start-of-line → reveals menu with full FALLBACK_ITEMS.
+2. Subsequent character filters items; backspace narrows; backspace past "/" closes.
+3. Arrow Down then Enter → ~select-item~ event with selected item type.
+4. Clicking item → same event.
+5. Esc closes without dispatch.
+
+** ExUnit
+
+6. ~render_hook(view, "page-editor-#{page.id}", "insert_block_below", %{"block_id" => b.id, "type" => "heading_1"})~ → ~Pages.list_for_page~ returns 2 blocks; second is heading_1 with empty content; ~focus_block_caret~ pushed with the new id.
+7. Type defaults to ~paragraph~ if absent (backward compat with PLAN-002 callers).
+
+** Puppeteer (reviewer)
+
+8. Open page, focus a block, type "/", arrow-down twice, press Enter → new heading_2 block appears below.
+
+* Implementation
+
+** TODO Extend server insert_block_below to accept type
+:PROPERTIES:
+:CUSTOM_ID: BUG-017-slash-menu-never-mounted-typing-slash-do::server-type
+:END:
+
+- File: =lib/concept_web/live/page_editor_live.ex= ~handle_event("insert_paragraph_below", ...)~ (rename internally to ~insert_block_below~; keep old event name as alias).
+- Accept ~"type"~ key from payload, default ~"paragraph"~. Resolve to BlockType atom via =Concept.Pages.BlockTypes.resolve/1=.
+
+** TODO Slash menu hook
+:PROPERTIES:
+:CUSTOM_ID: BUG-017-slash-menu-never-mounted-typing-slash-do::hook
+:END:
+
+- File: =assets/js/hooks/slash_menu.js= (new).
+- State: ~_open~, ~_triggerRange~, ~_filter~.
+- Detection: ~document.addEventListener("input", ...)~ filtered to events whose target is inside an =<ora-block>=. On input data "/": save the current selection range, set ~_open = true~, set menu ~items~, ~rect~, ~visible~.
+- Filtering: while open, every keystroke updates ~_filter~ and the menu's ~filter~ property.
+- Cancel: Escape or click outside.
+- Select: on ~select-item~ → restore trigger range → delete the "/" + filter chars from Lexical (via ~editor.update(() => $getSelection().removeText())~) → ~pushEvent("insert_block_below", {block_id, type})~ → close.
+- Cleanup in ~destroyed()~.
+
+** TODO Register + render
+:PROPERTIES:
+:CUSTOM_ID: BUG-017-slash-menu-never-mounted-typing-slash-do::register
+:DEPENDS: BUG-017-slash-menu-never-mounted-typing-slash-do::hook
+:END:
+
+- File: =assets/js/hooks/index.js= — add SlashMenu.
+- File: =lib/concept_web/live/page_editor_live.ex= — render host:
+
+#+begin_src heex
+<div id="slash-menu-host" phx-hook="SlashMenu" phx-update="ignore">
+  <ora-slash-menu />
+</div>
+#+end_src
+
+** TODO Tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-017-slash-menu-never-mounted-typing-slash-do::tests
+:DEPENDS: BUG-017-slash-menu-never-mounted-typing-slash-do::register
+:END:
+
+- Vitest: =assets/js/hooks/__tests__/slash_menu.test.js=.
+- ExUnit: extend =test/concept_web/live/page_editor_test.exs= with typed-insert scenarios.
+
+* Acceptance
+
+- Typing "/" in any block opens the menu; selecting an item creates a block of that type below the source and focuses it.
+- Tests green.

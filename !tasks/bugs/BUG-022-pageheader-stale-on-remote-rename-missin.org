@@ -1,0 +1,86 @@
+#+TITLE: PageHeader stale on remote rename; missing send_update
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-022-pageheader-stale-on-remote-rename-missin
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16). =WorkspaceLive.handle_info= (lines 135-165) correctly updates ~@current_page~ + ~@page_title~ on the ~page_updated~ broadcast (PLAN-002 BUG-003 fix). But =PageHeader= is a =Phoenix.LiveComponent= rendered via ~<.live_component module={...} id={...} page={@current_page} …>=. Phoenix sends the new ~page~ assign to the component only when the parent re-renders; if WorkspaceLive renders without changing the slot (e.g. same template result), the component holds the old ~page~ struct in its own state — and worse, its own ~mount/update~ callback overwrites it on initial mount but not on parent-driven update unless explicitly re-rendered.
+
+In practice: cross-tab rename updates browser tab title (driven by ~@page_title~ in root layout) and the sidebar (driven by ~@pages~), but the =PageHeader='s ~<h1>~ still shows the old title until you refresh.
+
+* Intention & Purpose
+
+Cross-tab and cross-user renames update the header immediately. Same for emoji and cover color changes (set_emoji / set_cover_color flow through the same broadcast). The component is always in sync with =@current_page=.
+
+* Context & Narrative
+
+Two acceptable fixes:
+- (A) Explicit ~Phoenix.LiveView.send_update(PageHeader, id: ..., page: new_page)~ from WorkspaceLive's ~handle_info~ after assigning ~@current_page~.
+- (B) PageHeader subscribes to the page topic itself and self-updates via its own ~handle_info~ in ~update_many~ / ~update/2~.
+
+Choose (A): simpler, single source of truth, follows Phoenix idioms. The component remains pure: parent passes the latest page, component renders it.
+
+Additional concern: when ~@current_page~ is reassigned but the component's id stays the same (~"page-header-#{@current_page.id}"~), Phoenix's diffing should already pass new assigns; but in practice with nested live_components there are reports of stale assigns when the parent doesn't trigger a re-render. The defensive ~send_update~ is correct and cheap.
+
+* Scope
+
+- IN: ~send_update(PageHeader, id: "page-header-#{page.id}", page: page)~ on ~page_updated~ events in WorkspaceLive.
+- IN: Confirm initial-mount and same-page edits still work (no regression for self-rename).
+- IN: ExUnit: two LVs on same page; LV1 renames; LV2 PageHeader h1 reflects new title.
+- IN: Same for ~set_emoji~, ~set_cover_color~ — both flow through ~page_updated~ broadcast.
+- OUT: optimistic title update on the local user — currently driven by ~save_title~ → ~rename_page~ → broadcast → assign update; round-trip is fine for now.
+
+* Existing Patterns
+
+- =lib/concept_web/live/workspace_live.ex:135-165= handler already updates ~@current_page~.
+- =lib/concept_web/components/page_header.ex= ~update/2~ — standard component update; relies on assigns flowing.
+- =lib/concept_web/live/page_editor_live.ex= same broadcast shape for blocks — already does ~send_update~ for block-level changes? Verify; mirror pattern.
+
+* Tests
+
+** ExUnit (LiveView)
+
+1. Two LVs on ~/w/<slug>/p/<id>~. LV1 ~render_hook(view, "page-header-#{page.id}", "save_title", %{"value" => "Renamed"})~. LV2 ~render(view) =~ "Renamed"~; ~has_element?(view, "h1#page-title-#{page.id}", "Renamed")~ true.
+2. Same for ~set_emoji~ → both LVs show the new icon.
+3. Same for ~set_cover_color~.
+4. Self-rename still works (single LV: title updates locally without needing second LV).
+
+* Implementation
+
+** TODO send_update on page_updated
+:PROPERTIES:
+:CUSTOM_ID: BUG-022-pageheader-stale-on-remote-rename-missin::send-update
+:END:
+
+- File: =lib/concept_web/live/workspace_live.ex= ~handle_info~ for ~page_updated~ — after assigning ~@current_page~, call:
+
+#+begin_src elixir
+if socket.assigns[:current_page] && socket.assigns.current_page.id == page.id do
+  send_update(ConceptWeb.Components.PageHeader,
+    id: "page-header-#{page.id}",
+    page: page,
+    current_user: socket.assigns.current_user)
+end
+#+end_src
+
+** TODO Tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-022-pageheader-stale-on-remote-rename-missin::tests
+:DEPENDS: BUG-022-pageheader-stale-on-remote-rename-missin::send-update
+:END:
+
+- File: =test/concept_web/live/page_header_test.exs= — extend with multi-LV scenarios using ~live_isolated~ or two ~live(conn)~ calls sharing the same broadcast topic.
+
+* Acceptance
+
+- Cross-tab rename reflects in PageHeader h1 within 1s.
+- Same for emoji and cover color.
+- Self-rename path unchanged.
+- Tests green.

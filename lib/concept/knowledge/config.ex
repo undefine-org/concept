@@ -14,6 +14,6 @@ defmodule Concept.Knowledge.Config do
   def collection_for(workspace_id) when is_binary(workspace_id),
     do: "workspace:" <> workspace_id
 
-  def llm_model, do: System.get_env("CONCEPT_LLM_MODEL", "google:gemini-2.0-flash")
+  def llm_model, do: System.get_env("CONCEPT_LLM_MODEL", "google:gemini-2.5-flash")
   def embedder_dimensions, do: 768
 end

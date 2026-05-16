@@ -1,0 +1,32 @@
+#+TITLE: Arcana.Loop mode — grounded outline drafting
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FUP-011-arcana-loop-mode-grounded-outline-drafti
+#+LAYER: retrieval
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+Select N blocks → "Outline a page about this" → LLM uses Arcana.Loop to iteratively search, expand, and propose a structured outline (h1/h2/h3 + bullets), streamed as actual blocks into a new page. Each section optionally cites source pages.
+
+* Trigger
+After FEAT-031 (Query) + FEAT-043 (Ask-this). Extends and unifies with FUP-003.
+
+* Design substrate (already in place)
+- Profile ~:outline~ declared in FEAT-034 (bound to ~google:gemini-2.5-pro~).
+- Knowledge.Query already captures search_trace; Loop's tool history fits in the same jsonb.
+
+* Implementation sketch
+- New Ash action ~Concept.Knowledge.draft_outline/3~ taking ~seed_block_ids~, ~workspace_id~, ~target_page_id~.
+- Worker invokes ~Arcana.Loop.new/2 → run/2~ with profile ~:outline~ tools (search, expand, answer, give_up).
+- Each ~answer~ tool call corresponds to one section: Worker materializes a heading + paragraph blocks under target_page_id via ~Concept.Pages.create_block/...~ live.
+- UI: button in selection toolbar → "Draft page from selection".
+- Streams blocks into the page LiveView; user sees the document compose itself.
+
+* Files (preview)
+- ~lib/concept/knowledge/workers/draft_outline.ex~
+- ~lib/concept_web/components/ora-format-toolbar.js~ (add Draft button)
+- ~lib/concept/knowledge.ex~ (define :draft_outline)

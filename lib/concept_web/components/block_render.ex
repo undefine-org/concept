@@ -91,5 +91,22 @@ defmodule ConceptWeb.BlockRender do
   defp static_block(%{type: :equation} = _block),
     do: raw("<div class=\"text-notion-text-light py-2\">Equation (KaTeX)</div>")
 
+  defp static_block(%{type: :ai_answer} = block) do
+    raw(
+      "<ora-ai-block id=\"ai-#{block.id}\" block-id=\"#{block.id}\" state=\"#{ai_state(block.content)}\"></ora-ai-block>"
+    )
+  end
+
   defp static_block(_block), do: raw("")
+
+  defp ai_state(content) when is_map(content) do
+    if Map.get(content, "message_id") do
+      "answered"
+    else
+      "empty"
+    end
+  end
+
+  defp ai_state(_), do: "empty"
 end
+

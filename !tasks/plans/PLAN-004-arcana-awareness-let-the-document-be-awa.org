@@ -1,0 +1,208 @@
+#+TITLE: Arcana awareness — let the document be aware of itself
+#+STATE: DOING
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: PLAN-004-arcana-awareness-let-the-document-be-awa
+#+LAYER: platform
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Initial Message
+
+how would you make Concept's frontend interesting w.r.t. Arcana features, fixing what's broken and going wild?
+
+* Goal
+Make Arcana a first-class document primitive in Concept, not a bolted-on chatbot. Every retrieval, answer, citation, and link is a tracked Ash resource. The document becomes self-aware: it indexes itself, references itself, asks itself questions, and surfaces those answers ambient to the act of writing.
+
+* Audit summary (PLAN-003 reality check)
+PLAN-003 declared DONE but ships scaffolding only. Runtime-fatal defects:
+- Missing Arcana migrations (mix arcana.install never ran).
+- ~Arcana.GraphRAG.*~ calls don't exist (real APIs: ~Arcana.search/2~, ~Arcana.Maintenance.*(repo, opts)~).
+- KnowledgeReindex notifier is a stub; Block resource not subscribed.
+- ~evaluate_ai_block~ change is a no-op; BlockRender dispatches ~:ai_answer~ to ~static_block/1~ which returns empty raw HTML.
+- ~Arcana.Pipeline.answer/2~ doesn't support ~stream:~; the ~Stream.map~ branch in Ask is unreachable.
+- Arcana dashboard route commented out.
+- No ChatPanel exists; CommandPalette has zero semantic enrichment.
+
+* Settled decisions
+- *Gemini 3.x family* via ReqLLM "google:..." model strings (May 2026 lineup):
+  - Embeddings: ~google:gemini-embedding-2~ (multimodal — unlocks FUP-012 image search via the same endpoint, no separate CLIP embedder needed).
+  - ~:fast~ profile: ~google:gemini-3.1-flash-lite~ (stable) — rewrite, intent classification, grounding.
+  - ~:default~ profile: ~google:gemini-3-flash~ (preview) — default chat answers.
+  - ~:thorough~ profile: ~google:gemini-3.1-pro~ (preview) — outline drafting, loop.
+  Stable fallbacks: ~gemini-2.5-flash~ / ~gemini-2.5-pro~ / ~gemini-2.5-flash-lite~ if previews unavailable. Single ~GOOGLE_API_KEY~ for v1 (per-workspace keys = FUP-004).
+- *Adopt AshAI* (~ash_ai ~> 0.6.1~) alongside ReqLLM (AshAI uses ReqLLM internally). Maps onto our design:
+  - ~mix ash_ai.gen.chat --live~ generates ~Knowledge.Conversation~ + ~Knowledge.Message~ resources with state machines, AshOban backing, and PubSub streaming → replaces the custom ~Knowledge.Query~ resource I originally proposed (FEAT-033 narrows to "extend generated Message with citations + search_trace").
+  - ~AshAi.ToolLoop.stream/2~ replaces the custom ~Concept.Knowledge.Answerers.StreamingGemini~ module entirely (uses ReqLLM streaming + Phoenix.PubSub natively).
+  - Domain-level ~tools do ... end~ Spark block exposes Knowledge.search / Knowledge.ask / Pages.create_page / Knowledge.Link.create / Pages.summarize_subtree as LLM tools → FUP-007 intent bar becomes ~AshAi.ToolLoop.run~ with no custom routing.
+  - ~AshAi.Actions.Prompt~ for prompt-backed Ash actions → AI block evaluation collapses to one action declaration.
+  - MCP server (~mix ash_ai.gen.mcp~) exposes Concept's tools to Claude Desktop / Cursor / etc. — promoted to FEAT-049.
+  - AshAI's ~on_tool_start~/~on_tool_end~ callbacks substrate the Why-this-answer panel (FEAT-044).
+- *Maximize Ash modeling*. Keep ad-hoc-promoting resources: ~Knowledge.IngestionJob~ (retrieval-side; AshAI doesn't cover ingestion), ~Knowledge.Citation~ (belongs_to AshAI Message; UI-shaped deep-link metadata), ~Knowledge.Link~ (user-authored graph edges; not LLM-mediated). AshAI provides Conversation + Message for free.
+- *Spark DSL* for ~Concept.Knowledge.Profiles~ — declarative bundle of (rewrite/search/rerank/ground) + (Gemini model) + (which tools to expose). Compile-time validation of model strings against the Gemini family regex. Introspectable. Picked per call via ~profile: :fast | :thorough | :outline | :contradict | :intent~ atom on Knowledge.ask.
+- *Reactor* drives the ingest pipeline. Step-local retry (only embed retries on 429). Compensation undoes orphan documents on failure. Future FUP-010 dirty-hash slots in as a new step with no structure change.
+- *AshOban* drives all background work: IngestionJob, weekly community rebuild, daily token aggregation.
+- *AshStateMachine* on IngestionJob + generated Message lifecycles.
+- *AshPaperTrail* on Knowledge.Link (edit history of authored edges).
+- *AshArchival* on IngestionJob + Conversation + Message (soft-delete old rows).
+- Streaming: AshAI's ~ToolLoop.stream/2~ broadcasts tokens via Phoenix.PubSub on ~conversation:<id>~ topic out of the box. Our LiveComponents subscribe.
+- Tenancy: workspace_id attribute multitenant on every Knowledge resource. System actor bypass via ~bypass actor_attribute_equals(:system?, true)~ uniformly.
+- AI block stores ~{message_id, model, ran_at}~ in content; the durable answer lives on the AshAI Message row. Unlocks Why-this-answer + lineage from a single source of truth.
+- User-authored graph edges (~Knowledge.Link~) write into ~Arcana.Graph.Relationship~ via after_action change (idempotent upsert). Provides substrate for the Workspace Graph view.
+- Wild moves filed as FUPs; substrate prepared so each fits naturally without redesign.
+
+
+* Architecture sketch
+
+#+begin_src text
+                    ┌──────────────────────────────────────────────────────┐
+                    │                  Concept.Pages                       │
+                    │              (Page tree + Block tree)                │
+                    └────────────────┬─────────────────────────────────────┘
+                                     │
+                                     │ Ash.Notifier.PubSub
+                                     ▼
+                    ┌──────────────────────────────────────────────────────┐
+                    │   Concept.Pages.Notifiers.KnowledgeReindex           │
+                    │   schedules IngestionJob with unique-args debounce   │
+                    └────────────────┬─────────────────────────────────────┘
+                                     ▼
+       ┌─────────────────────────────────────────────────────────────────────────┐
+       │                    Concept.Knowledge (Ash Domain)                       │
+       │                                                                         │
+       │  ┌──────────────┐    ┌───────────────────┐    ┌────────────────────┐    │
+       │  │ IngestionJob │    │ Profiles (Spark)  │    │       Query        │    │
+       │  │  SM/AshOban  │    │ DSL: rewrite/     │    │  SM, pub_sub,      │    │
+       │  │  pub_sub     │    │ search/rerank/    │◀───│  search_trace      │    │
+       │  └──────┬───────┘    │ answer/ground     │    │  has_many :cites   │    │
+       │         │            └───────────────────┘    └────────┬───────────┘    │
+       │         ▼                                              │                │
+       │  Reactors.Ingest  ──▶ chunker ──▶ Arcana.ingest        ▼                │
+       │     │                                            ┌──────────┐          │
+       │     └─▶ GraphBuilder ──▶ Arcana.Graph.*          │ Citation │          │
+       │                                                  └──────────┘          │
+       │                          ┌───────────────────────┐                     │
+       │                          │       Link            │ after_action ─▶     │
+       │                          │  source/target block  │ Arcana.Graph.       │
+       │                          │  user-authored edges  │ Relationship upsert │
+       │                          └───────────────────────┘                     │
+       └─────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼ pub_sub + LiveView
+       ┌─────────────────────────────────────────────────────────────────────────┐
+       │  Frontend surfaces (all reference Knowledge resources, not modules)     │
+       │                                                                         │
+       │  IndexingPill • ChatPanel • SemanticPalette • CitationCard              │
+       │  PageScrollHook • AIBlock(ora-ai-block) • AskThisInline                 │
+       │  WhyThisAnswerPanel • LiveCitationRail • WorkspaceGraphView             │
+       └─────────────────────────────────────────────────────────────────────────┘
+#+end_src
+
+* Wave manifest
+** Wave 0 — Stabilization (10 BUGs, sequential within wave on shared files)
+Fix everything PLAN-003 left broken. Pre-req for everything.
+- [[id:BUG-004-arcana-install-and-migrations-missing]] migrations + Mox embedder
+- [[id:BUG-005-arcana-graphrag-callsites-do-not-exist-s]] Arcana.search + Arcana.Maintenance
+- [[id:BUG-006-knowledge-ask-streaming-pattern-is-unrea]] strip dead Stream branch
+- [[id:BUG-007-knowledgereindex-notifier-is-a-stub-rein]] real notifier + worker
+- [[id:BUG-008-evaluate-ai-block-change-is-a-no-op]] remove dead change
+- [[id:BUG-009-arcana-dashboard-router-mount-commented]] mount /admin/arcana
+- [[id:BUG-010-blockrender-does-not-dispatch-ai-answer]] dispatch :ai_answer
+- [[id:BUG-011-block-resource-missing-knowledgereindex]] subscribe notifier on Page+Block
+- [[id:BUG-012-graphbuilder-schema-regression-test-miss]] arcana schema lock
+- [[id:BUG-013-knowledge-search-swallows-errors-and-use]] search resilience
+
+** Wave 0.5 — Review
+Verify: ~mix precommit~ green; migrations applied; ingest one fixture page → ~arcana_chunks~ rows exist with workspace_id metadata; ~Concept.Knowledge.search/3~ returns ranked hits; AI block renders empty shell (no crash); dashboard mounted; ReqLLM streaming smoke against live Gemini.
+
+** Wave 1 — Ash-modeled Knowledge domain (6 FEATs, parallel)
+Promote the domain from decoration to spine.
+- [[id:FEAT-030-knowledge-ingestionjob-ash-resource-with]] IngestionJob (SM, AshOban, pub_sub)
+- [[id:FEAT-033-knowledge-query-ash-resource-with-stream]] Query (SM, paper_trail, custom streaming answerer)
+- [[id:FEAT-032-knowledge-citation-ash-resource]] Citation (belongs_to Query)
+- [[id:FEAT-031-knowledge-link-resource-bridging-arcana]] Link (user-authored graph edges, mirrors Arcana.Graph)
+- [[id:FEAT-034-knowledge-profiles-spark-dsl-for-compile]] Profile Spark DSL
+- [[id:FEAT-035-knowledge-reactors-ingest-composable-rea]] Ingest Reactor
+
+** Wave 1.5 — Review
+Verify: AshAdmin renders all 5 resources at ~/admin~; policies enforce workspace tenancy; Profile DSL compile-time validates Gemini model strings; Reactor handles step failures by transitioning IngestionJob to ~:failed~ with error context preserved; the chain Notifier → IngestionJob → Reactor → Arcana succeeds end-to-end on a fixture workspace.
+
+** Wave 2 — Foundation UI surfaces (5 FEATs, parallel)
+Make Arcana visible. Maps PLAN-003 PR3+PR4 onto Knowledge resources.
+- [[id:FEAT-036-citation-card-component-with-live-block]] CitationCard + hover preview
+- [[id:FEAT-037-pagescroll-colocated-hook-with-block-fla]] PageScroll + flash
+- [[id:FEAT-038-indexing-status-pill-in-workspace-shell]] IndexingPill
+- [[id:FEAT-039-chatpanel-livecomponent-bound-to-knowled]] ChatPanel bound to Query
+- [[id:FEAT-040-semantic-command-palette-via-assign-asyn]] Semantic palette via assign_async
+
+** Wave 2.5 — Review
+Verify: ChatPanel toggles, submits questions, streams tokens, finalizes with citation cards; citation cards hover-preview live block render; clicking citation deep-links + scrolls + flashes target block; CommandPalette merges title + semantic results with source indicators; IndexingPill animates while jobs run.
+
+** Wave 3 — In-document AI (4 FEATs, parallel)
+Ship the AI block as a real first-class block, plus contextual ask + audit.
+- [[id:FEAT-041-ai-answer-block-end-to-end-via-knowledge]] AI block end-to-end
+- [[id:FEAT-042-ai-block-staleness-detection]] Staleness badge
+- [[id:FEAT-043-ask-this-inline-selection-action-cmd-j-o]] Ask-this selection action
+- [[id:FEAT-044-why-this-answer-disclosure-panel]] Why-this-answer
+
+** Wave 3.5 — Review
+Verify: AI block stores ~{query_id, model, ran_at}~ pointer, streams tokens during eval, renders cached answer + citations on reload; staleness badge fires when cited blocks change; selection → "Ask about this" → ChatPanel opens with subtree-scoped query; Why-this-answer reveals search_trace + rewritten prompt.
+
+** Wave 4 — Awareness magic (4 FEATs, parallel)
+The document becomes ambient. Live awareness + graph view + link authoring + telemetry + external agent access (MCP).
+- [[id:FEAT-045-live-citation-rail-ambient-cross-block-a]] Live citation rail
+- [[id:FEAT-046-link-this-block-authored-graph-edges-ui]] Link-this UI
+- [[id:FEAT-047-workspace-graph-view-with-leiden-communi]] Workspace graph view
+- [[id:FEAT-048-telemetry-expansion-per-profile-metrics]] Telemetry expansion
+- [[id:FEAT-049-mcp-server-expose-concept-tools-to-ext]]   MCP server (AshAI)
+
+
+** Wave 4.5 — Review (final)
+Full PLAN-003 §Verification smoke flow passes end-to-end. Additional:
+- Edit a block → within 5s, IngestionJob completes → semantic palette finds new content.
+- Hover over a block → live citation rail shows 3 similar blocks from other pages.
+- "Link this" on a similar-block → ~Knowledge.Link~ row exists → ~Arcana.Graph.Relationship~ upserted → workspace graph view shows new edge.
+- Workspace with 50+ pages + 1000+ blocks: graph view renders in < 3s; community color-coding visible.
+- Telemetry: /dev/dashboard shows arcana.* + concept.knowledge.* + per-profile latencies + per-workspace daily Gemini token counts.
+
+
+* Wild moves (FUPs; substrate ready in the waves above)
+- [[id:FUP-007-cmd-k-becomes-the-workspace-intent-bar]]              (W1: intent classification → tool selection)
+- [[id:FUP-008-knowledge-conversation-thread-queries-as]]            (W2: persist queries as threads)
+- [[id:FUP-009-ambient-cross-page-transclusion-suggesti]]            (W3: similarity-driven inline ghost chips)
+- [[id:FUP-013-knowledge-subscription-block-level-drift]]            (W4: NLI-based block contradiction watch)
+- [[id:FUP-012-clip-image-embeddings-cover-image-search]]            (W5: multi-modal cover image search)
+- [[id:FUP-011-arcana-loop-mode-grounded-outline-drafti]]            (extends FUP-003: grounded outline drafting)
+- [[id:FUP-010-block-level-dirty-hash-skip-re-embed-on]]             (perf: skip re-embed unchanged chunks)
+
+Existing FUPs (FUP-001..006) remain valid; FUP-004 (per-workspace LLM keys) ties into FEAT-034 Profile DSL substrate.
+
+
+* Verification (overall)
+- ~mix precommit~ green after each wave.
+- Per-wave smoke as listed in 0.5/1.5/2.5/3.5/4.5.
+- PLAN-003 §Verification 8-step smoke fully passes after Wave 4.5.
+- Tenant isolation regression test: ingest workspace A, search workspace B → zero hits.
+- Rate-limit handling: blackhole Gemini → IngestionJob transitions to ~:failed~ with retry; chat panel surfaces error bubble.
+- Schema regression: ~Arcana.Graph.Entity~ and ~Arcana.Graph.Relationship~ schemas frozen at v2.x; CI fails if Arcana minor bumps without explicit override.
+- Test count target: ~+90 scenarios across 19 FEATs + 10 BUGs.
+
+* Execution principles
+- Each item has *exact file paths* and *test files*.
+- Items within a wave touch *disjoint files* (verified pre-dispatch).
+- Items with shared files within a wave declare ~:DEPENDS:~ for in-wave serialization.
+- Every Knowledge resource gets a smoke test before its consumers are written.
+- All wild-move substrate (~parent_query_id~, ~Link.kind~ values, ~search_trace~ jsonb shape) ships in Wave 1 so FUPs need *zero* schema migration.
+
+* References
+- ~deps/arcana/README.md~ — Pipeline / Loop / Reactor patterns
+- ~deps/ash/~ — Ash core
+- ~deps/ash_state_machine/~ — SM for Query/IngestionJob
+- ~deps/ash_oban/~ — IngestionJob workers
+- ~deps/reactor/~ — Ingest reactor steps
+- ~deps/req_llm/~ — Gemini streaming
+- ~PLAN-003-arcana-integration~ — original plan, audit baseline
+
+NOTE [2026-05-16]: Plan approved by user 2026-05-16. Beginning Wave -1 (foundation installs: ash_ai, arcana, arcana.graph) then Wave 0 (stabilization BUGs).

@@ -1,0 +1,60 @@
+#+TITLE: PageEditor container phx_hook attribute orphan
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-027-pageeditor-container-phx-hook-attribute
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16). =lib/concept_web/live/workspace_live.ex:353-359= calls:
+
+#+begin_src elixir
+live_render(@socket, ConceptWeb.PageEditorLive,
+  id: "page-editor-#{@current_page.id}",
+  container: {:div, phx_hook: "PageEditor"},
+  session: %{...})
+#+end_src
+
+There is no ~PageEditor~ hook exported from =assets/js/hooks/index.js=. The HTML attribute is set; no hook attaches; no error logged. Either the attribute should be removed or the hook should be implemented.
+
+* Intention & Purpose
+
+Decide and execute. Two paths:
+- (A) Remove the ~phx_hook: "PageEditor"~ option from the ~container:~ tuple. Cheapest.
+- (B) Implement a thin ~PageEditor~ hook that owns page-level concerns the nested LV can't easily own — e.g. ~hashchange~ for ~#block-<id>~ anchors (which is part of PLAN-004 FEAT-025; out of scope here), or page-level mount/destroy telemetry.
+
+Choose (A) for this rescue plan. PLAN-004 will reintroduce a real PageEditor hook when it needs one (anchors, ambient citation rail).
+
+* Scope
+
+- IN: remove ~phx_hook: "PageEditor"~ from the container option.
+- OUT: implementing the hook (deferred to PLAN-004).
+
+* Tests
+
+- ExUnit: existing tests pass; specifically ~test/concept_web/live/workspace_live_test.exs~ still asserts WorkspaceLive renders.
+
+* Implementation
+
+** TODO Drop phx_hook from container
+:PROPERTIES:
+:CUSTOM_ID: BUG-027::drop
+:END:
+
+- File: =lib/concept_web/live/workspace_live.ex= around line 353-359 — change to:
+
+#+begin_src elixir
+live_render(@socket, ConceptWeb.PageEditorLive,
+  id: "page-editor-#{@current_page.id}",
+  session: %{...})
+#+end_src
+
+* Acceptance
+
+- HTML no longer has an orphan ~phx-hook="PageEditor"~ attribute.
+- Existing tests green.

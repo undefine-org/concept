@@ -3,6 +3,7 @@ defmodule ConceptWeb.Router do
 
   use AshAuthentication.Phoenix.Router
 
+  import ArcanaWeb.Router
   import AshAuthentication.Plug.Helpers
 
   pipeline :browser do
@@ -99,10 +100,10 @@ defmodule ConceptWeb.Router do
 
   import AshAdmin.Router
 
-    scope "/admin" do
-      pipe_through [:browser, :require_owner]
+  scope "/admin" do
+    pipe_through [:browser, :require_owner]
 
-      ash_admin "/"
-      # arcana_dashboard "/arcana"
-    end
+    ash_admin "/"
+    arcana_dashboard "/arcana"
+  end
 end

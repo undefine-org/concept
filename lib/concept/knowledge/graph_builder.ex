@@ -2,6 +2,8 @@ defmodule Concept.Knowledge.GraphBuilder do
   @moduledoc """
   Structural GraphRAG: builds entities + relationships from Concept's page/block tree.
   Writes directly to Arcana.Graph schemas (pinned to ~> 2.0).
+
+  Schema stability: see test/concept/knowledge/graph_schema_regression_test.exs
   """
 
   import Ecto.Query
@@ -25,7 +27,8 @@ defmodule Concept.Knowledge.GraphBuilder do
 
     # Upsert block entities + HAS_TYPE relationships
     Enum.each(blocks, fn block ->
-      block_name = "#{block.type}: #{String.slice(Concept.Lexical.plain_text(block.content || %{}), 0, 80)}"
+      block_name =
+        "#{block.type}: #{String.slice(Concept.Lexical.plain_text(block.content || %{}), 0, 80)}"
 
       upsert_entity(%{
         kind: "block",
@@ -46,6 +49,7 @@ defmodule Concept.Knowledge.GraphBuilder do
 
     # CONTAINS: page -> top-level blocks
     top_blocks = Enum.filter(blocks, &is_nil(&1.parent_block_id))
+
     Enum.each(top_blocks, fn block ->
       upsert_relationship(%{
         source_id: "page:#{page.id}",
@@ -57,6 +61,7 @@ defmodule Concept.Knowledge.GraphBuilder do
 
     # PARENT_OF: block -> child blocks
     child_blocks = Enum.filter(blocks, &(&1.parent_block_id != nil))
+
     Enum.each(child_blocks, fn block ->
       upsert_relationship(%{
         source_id: "block:#{block.parent_block_id}",
@@ -66,7 +71,11 @@ defmodule Concept.Knowledge.GraphBuilder do
       })
     end)
 
-    {:ok, %{entities: 1 + length(blocks), relationships: length(blocks) + length(top_blocks) + length(child_blocks)}}
+    {:ok,
+     %{
+       entities: 1 + length(blocks),
+       relationships: length(blocks) + length(top_blocks) + length(child_blocks)
+     }}
   end
 
   @doc """
@@ -94,18 +103,21 @@ defmodule Concept.Knowledge.GraphBuilder do
     actor = %SystemActor{system?: true}
     collection = Concept.Knowledge.Collections.ensure_for_workspace(workspace_id)
 
-    pages = Concept.Pages.Page
-    |> Ash.read!(actor: actor, tenant: workspace_id)
+    pages =
+      Concept.Pages.Page
+      |> Ash.read!(actor: actor, tenant: workspace_id)
 
-    blocks = Concept.Pages.Block
-    |> Ash.read!(actor: actor, tenant: workspace_id)
+    blocks =
+      Concept.Pages.Block
+      |> Ash.read!(actor: actor, tenant: workspace_id)
 
-    blocks_by_page = Enum.group_by(blocks, &(&1.page_id))
+    blocks_by_page = Enum.group_by(blocks, & &1.page_id)
 
-    results = Enum.map(pages, fn page ->
-      page_blocks = Map.get(blocks_by_page, page.id, [])
-      upsert_page_graph(page, page_blocks, collection.id, workspace_id)
-    end)
+    results =
+      Enum.map(pages, fn page ->
+        page_blocks = Map.get(blocks_by_page, page.id, [])
+        upsert_page_graph(page, page_blocks, collection.id, workspace_id)
+      end)
 
     total_entities = Enum.sum(Enum.map(results, fn {:ok, r} -> r.entities end))
     total_relationships = Enum.sum(Enum.map(results, fn {:ok, r} -> r.relationships end))
@@ -122,6 +134,7 @@ defmodule Concept.Knowledge.GraphBuilder do
         %Arcana.Graph.Entity{}
         |> Arcana.Graph.Entity.changeset(attrs)
         |> Concept.Repo.insert!()
+
       existing ->
         existing
         |> Arcana.Graph.Entity.changeset(attrs)
@@ -131,13 +144,19 @@ defmodule Concept.Knowledge.GraphBuilder do
 
   defp upsert_relationship(attrs) do
     Arcana.Graph.Relationship
-    |> where(collection_id: ^attrs.collection_id, source_id: ^attrs.source_id, target_id: ^attrs.target_id, kind: ^attrs.kind)
+    |> where(
+      collection_id: ^attrs.collection_id,
+      source_id: ^attrs.source_id,
+      target_id: ^attrs.target_id,
+      kind: ^attrs.kind
+    )
     |> Concept.Repo.one()
     |> case do
       nil ->
         %Arcana.Graph.Relationship{}
         |> Arcana.Graph.Relationship.changeset(attrs)
         |> Concept.Repo.insert!()
+
       existing ->
         existing
         |> Arcana.Graph.Relationship.changeset(attrs)

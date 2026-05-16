@@ -1,0 +1,46 @@
+#+TITLE: Knowledge.Profiles — Spark DSL for compile-time pipeline profiles
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-034-knowledge-profiles-spark-dsl-for-compile
+#+LAYER: retrieval
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Declarative pipeline profiles via Spark DSL. Compile-time validation of model strings against the allowed Gemini set. Introspectable for AshAdmin. Bound to Knowledge.Query's ~profile~ attribute.
+
+* Scope (IN)
+- Spark DSL extension ~Concept.Knowledge.ProfileDsl~ defining the ~profile :name do ... end~ syntax with fields: ~description~, ~rewrite~, ~search [mode, limit]~, ~rerank~, ~answer [model]~, ~ground~, ~tools [...]~ (atoms referencing AshAI-registered tool names), ~loop?~ (bool — when true, calls ~AshAi.ToolLoop~ with tool list; when false, single-shot).
+- Builder ~Concept.Knowledge.ProfileBuilder~ via ~use~.
+- Concrete profiles file ~Concept.Knowledge.Profiles~ declaring:
+  - ~:fast~     — no rewrite, semantic 6, no rerank, ~google:gemini-3.1-flash-lite~, no ground, tools [:search_workspace]
+  - ~:default~  — rewrite, hybrid 10, no rerank, ~google:gemini-3-flash~, no ground, tools [:search_workspace, :answer_question]
+  - ~:thorough~ — rewrite, hybrid 12, rerank, ~google:gemini-3.1-pro~, ground, tools [:search_workspace, :answer_question, :summarize_page]
+  - ~:outline~  — rewrite, hybrid 20, rerank, ~google:gemini-3.1-pro~, no ground, tools [:search_workspace, :create_page, :answer_question], loop?: true  (substrate for FUP-011)
+  - ~:contradict~ — rewrite, semantic 10, no rerank, ~google:gemini-3.1-flash-lite~, no ground (substrate for FUP-013)
+  - ~:intent~ — no rewrite, no search, no rerank, ~google:gemini-3.1-flash-lite~, tools [:search_workspace, :create_page, :link_blocks, :answer_question, :summarize_page] (substrate for FUP-007)
+- Compile-time validation rejects model strings not matching ~^google:(gemini-[\d.]+(-flash|-pro|-flash-lite)?(-preview)?|gemini-embedding-[12])(-[\w.]+)?$~ (override env var ~CONCEPT_ALLOW_ANY_LLM=1~ for dev).
+- API: ~Concept.Knowledge.Profiles.list/0~, ~Concept.Knowledge.Profiles.get!/1~, ~Profile.to_pipeline_opts/1~, ~Profile.to_ash_ai_opts/1~.
+
+
+* Files
+- ~lib/concept/knowledge/profile.ex~ (struct)
+- ~lib/concept/knowledge/profile_dsl.ex~ (Spark.Dsl.Extension)
+- ~lib/concept/knowledge/profile_builder.ex~ (~use~ entry point)
+- ~lib/concept/knowledge/profiles.ex~ (concrete profiles)
+- ~test/concept/knowledge/profiles_test.exs~
+
+* Tests (6 scenarios)
+1. ~Profiles.list/0~ returns 4 profile structs.
+2. ~Profiles.get(:fast)~ matches expected fields.
+3. ~to_pipeline_opts(:thorough)~ returns kwlist consumable by ~Arcana.Pipeline~.
+4. Compile-time error on bad model string (test fixture module that should fail to compile).
+5. Unknown profile name → ~:error~.
+6. Knowledge.Query attribute constraint accepts only profile names from ~Profiles.list/0~.
+
+* Acceptance
+- Adding a 5th profile requires only editing ~profiles.ex~; Query immediately accepts it.
+- Bad model string surfaces at compile time with a clear Spark diagnostic.

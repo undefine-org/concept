@@ -1,0 +1,31 @@
+#+TITLE: Knowledge.Subscription — block-level drift / contradiction alerts
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FUP-013-knowledge-subscription-block-level-drift
+#+LAYER: retrieval
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+Notify users when content changes anywhere in the workspace that contradicts a subscribed block. Uses ~Arcana.Pipeline.ground~ (NLI-style entailment) on the changed block vs the subscribed block.
+
+* Trigger
+After FEAT-030 (IngestionJob lifecycle) + FEAT-033 (Link infra). Profile ~:contradict~ already declared in FEAT-034.
+
+* Design substrate (already in place)
+- IngestionJob.pub_sub broadcasts ~:succeeded~ — natural fire point for downstream checks.
+- Profile ~:contradict~ defined in Spark DSL.
+
+* Implementation sketch
+- New Ash resource ~Concept.Knowledge.Subscription~: ~user_id~, ~block_id~, ~threshold~ (float, default 0.7), ~last_score~, ~last_alert_at~.
+- After each IngestionJob :succeeded, an Oban job iterates subscriptions for blocks on the affected page's neighbors (graph-near); for each, runs the ~:contradict~ profile prompt: "Does <changed_block> contradict <subscribed_block>?".
+- Below threshold → create ~Concept.Notifications.Alert~ (new) with link to both blocks.
+- UI: bell icon in workspace shell, alert list shows "Your block X may be stale — Y now says Z".
+
+* Files (preview)
+- ~lib/concept/knowledge/subscription.ex~
+- ~lib/concept/notifications/alert.ex~
+- ~lib/concept/knowledge/workers/drift_check.ex~

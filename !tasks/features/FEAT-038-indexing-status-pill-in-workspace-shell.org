@@ -1,0 +1,34 @@
+#+TITLE: Indexing status pill in workspace shell
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-038-indexing-status-pill-in-workspace-shell
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Ambient awareness of what the document is doing to itself. A tiny pill in the workspace shell shows: "Idle" / "Indexing… (3)" / "Indexed 12s ago". Subscribes to ~workspace:<id>:ingest~ PubSub from FEAT-030.
+
+* Scope (IN)
+- Function component ~ConceptWeb.Components.IndexingPill~ rendered in ~WorkspaceLive~ sidebar footer.
+- WorkspaceLive subscribes to ~workspace:<id>:ingest~ on mount, maintains a small queue count + last_succeeded_at.
+- Pill states: ~:idle~ (subtle dot), ~:indexing~ (pulsing dot + count), ~:error~ (red dot, click → details popover listing failed jobs).
+- Click → opens details popover with last 10 IngestionJob rows.
+
+* Files
+- ~lib/concept_web/components/indexing_pill.ex~ (new)
+- ~lib/concept_web/live/workspace_live.ex~ (subscribe + assign)
+- ~assets/css/app.css~ (~.ora-pill-*~ styles + pulse keyframe)
+- ~test/concept_web/components/indexing_pill_test.exs~
+
+* Tests (4 scenarios)
+1. Pill renders ~:idle~ initially.
+2. PubSub ~{:ingest_job_state, :running, count}~ → renders ~:indexing~.
+3. Failed jobs render ~:error~ + count.
+4. Click opens details popover with rows.
+
+* Acceptance
+- Edit a block → pill shows "Indexing… (1)" → "Indexed 2s ago" within 5s.

@@ -1,0 +1,13 @@
+#+TITLE: Session 14d58dbb74ddf8c5 Todos
+#+DATE: 2026-05-05
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Verification
+
+** DONE Compile, migrate, and puppeteer smoke test
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: completed
+:END:
+
+mix compile, mix ecto.migrate, then puppeteer test: Cmd-K opens, typing shows page, Enter navigates. Also psql EXPLAIN for index usage.

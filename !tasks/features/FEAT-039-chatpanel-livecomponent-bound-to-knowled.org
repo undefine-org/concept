@@ -1,0 +1,50 @@
+#+TITLE: ChatPanel LiveComponent bound to Knowledge.Query
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-039-chatpanel-livecomponent-bound-to-knowled
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Right-side panel for ad-hoc workspace Q&A. Every submitted question creates a Knowledge.Query row; streaming tokens arrive via PubSub; finalized answer renders with CitationCard children. Toggle button in sidebar (~⌘J~).
+
+* Scope (IN)
+- ~ConceptWeb.WorkspaceLive.ChatPanel~ LiveComponent. Subscribes to ~conversation:<id>~ topic (AshAI ~gen.chat~ broadcasts there). Streams ~:messages~ keyed by message_id.
+- WorkspaceLive subscribes per-conversation; forwards via ~send_update/2~ to the component (pattern: LiveComponents don't handle ~handle_info~).
+- Submit form: prompt textarea + scope dropdown (Workspace / Page / Subtree) + profile selector (defaults to ~:default~ — gemini-3-flash) + Send.
+- On submit: calls ~Concept.Knowledge.ask/3~ which:
+  1. Finds/creates a Conversation for this user + workspace.
+  2. Creates a user Message with prompt + scope + profile attrs.
+  3. Enqueues AshOban worker that runs ~AshAi.ToolLoop.stream/2~ with the profile's tool list + model.
+- On token broadcast: append to streaming Message body in the panel.
+- On ~:complete~ broadcast: render finalized message with CitationCard children (rank-sorted).
+- On ~:failed~: error bubble with retry button.
+- ⌘J toggles panel; Esc closes.
+- "New chat" archives current Conversation (AshArchival) + starts a new one.
+- History sidebar (deferred to FUP-008 promotion) reads Conversation list.
+
+
+* Files
+- ~lib/concept_web/live/workspace_live/chat_panel.ex~ (new)
+- ~lib/concept_web/live/workspace_live.ex~ (subscribe, dispatch, ⌘J binding)
+- ~assets/css/app.css~ (~.ora-chat-*~)
+- ~test/concept_web/live/workspace_chat_panel_test.exs~
+
+* Tests (10 scenarios)
+1. ⌘J toggles panel visibility.
+2. Submitting question creates Query row + optimistic message + placeholder assistant message.
+3. ~:knowledge_token~ appends to placeholder.
+4. ~:answered~ swaps placeholder with finalized message + N citations.
+5. Citations are CitationCard with correct deep-link href.
+6. New-chat resets stream; prior Query rows remain in DB.
+7. Empty submit is a no-op.
+8. ~:failed~ → error bubble with retry button.
+9. Cross-workspace user can't see queries.
+10. Esc closes panel.
+
+* Acceptance
+- Full streaming demo: ask "what's on the homepage?" → tokens stream → finalize with 3 clickable citations.

@@ -1,0 +1,38 @@
+#+TITLE: Link-this-block authored graph edges UI
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-046-link-this-block-authored-graph-edges-ui
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Surface ~Knowledge.Link~ creation as a one-click affordance from CitationCard hover popover + LiveCitationRail. Users curate the workspace knowledge graph organically.
+
+* Scope (IN)
+- "Link this" button in CitationCard hover popover and rail row.
+- Click opens a small modal:
+  - kind selector (relates_to / cites / contradicts / see_also)
+  - optional note (string)
+  - source = current focused block; target = clicked citation block.
+- Submit calls ~Knowledge.create_link/2~ (defined on the domain).
+- Visual feedback: brief "✓ Linked" pill on the source block + immediate update of Arcana.Graph.Relationship (idempotent).
+- Read action ~Knowledge.links_for_block/1~ used by FEAT-047 graph view.
+
+* Files
+- ~lib/concept_web/components/link_this_modal.ex~ (new)
+- ~lib/concept_web/components/citation_card.ex~ (add Link button)
+- ~lib/concept_web/live/workspace_live.ex~ (modal state)
+- ~test/concept_web/components/link_this_modal_test.exs~
+
+* Tests (4 scenarios)
+1. Modal renders kind options.
+2. Submit creates Knowledge.Link + mirrored Arcana.Graph.Relationship.
+3. Duplicate link → error pill.
+4. Self-link (same block) rejected at form level.
+
+* Acceptance
+- Live citation rail → "🔗 Link" → modal → relates_to → row in admin → edge in workspace graph view.

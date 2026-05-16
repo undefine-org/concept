@@ -313,6 +313,7 @@ defmodule ConceptWeb.WorkspaceLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <Layouts.app flash={@flash} current_scope={@current_scope}>
     <div
       id="workspace-root"
       class="flex h-screen"
@@ -368,6 +369,7 @@ defmodule ConceptWeb.WorkspaceLive do
       current_user={@current_user}
       show_palette={@show_palette}
     />
+    </Layouts.app>
     """
   end
 end

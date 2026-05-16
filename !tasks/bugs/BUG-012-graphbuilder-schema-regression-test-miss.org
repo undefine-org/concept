@@ -1,0 +1,31 @@
+#+TITLE: GraphBuilder schema regression test missing (Arcana version drift)
+#+STATE: DONE
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: BUG-012-graphbuilder-schema-regression-test-miss
+#+LAYER: graph
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+~Concept.Knowledge.GraphBuilder~ writes *directly* into ~Arcana.Graph.Entity~ and ~Arcana.Graph.Relationship~ schemas (foot-gun pinned ~> 2.0). PLAN-003 promised a schema regression test that never landed. Without it, any Arcana minor bump that renames a field silently breaks ingestion.
+
+* Files
+- ~test/concept/knowledge/graph_schema_regression_test.exs~ (new)
+- ~lib/concept/knowledge/graph_builder.ex~ (use struct field references explicitly so the test catches drift)
+
+* Implementation
+- Test asserts presence + types of expected fields on ~Arcana.Graph.Entity~ and ~Arcana.Graph.Relationship~ via ~module.__schema__(:fields)~ + ~__schema__(:type, field)~.
+- Frozen field set is encoded in the test as a fixed list; CI fails if it diverges.
+- Add a one-line comment in GraphBuilder pointing to the regression test.
+
+* Acceptance
+- ~mix test test/concept/knowledge/graph_schema_regression_test.exs~ green on Arcana 2.x; fails loudly if either schema gains/loses a required field.
+
+NOTE [2026-05-16]: Regression test created at test/concept/knowledge/graph_schema_regression_test.exs
+- Locks in Entity fields: id, name, type, description, embedding, metadata, chunk_id, collection_id, inserted_at, updated_at
+- Locks in Relationship fields: id, source_id, target_id, type, description, strength, metadata, inserted_at, updated_at
+- Added schema stability comment to GraphBuilder moduledoc
+- Tests passing (mix test test/concept/knowledge/graph_schema_regression_test.exs)

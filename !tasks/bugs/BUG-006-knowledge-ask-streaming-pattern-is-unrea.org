@@ -1,0 +1,25 @@
+#+TITLE: Knowledge.Ask streaming pattern is unreachable
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: BUG-006-knowledge-ask-streaming-pattern-is-unrea
+#+LAYER: retrieval
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+~Knowledge.Ask~ pattern-matches ~case ctx.answer do {:ok, stream} ->~ but ~Arcana.Pipeline.answer/2~ returns a Context whose ~:answer~ is a *string*, not ~{:ok, stream}~. Arcana 2.0 does not support a ~stream:~ option. ∴ the streaming branch is dead code; no tokens ever broadcast.
+
+* Files
+- ~lib/concept/knowledge/ask.ex~  (will be DELETED or thinned to delegate to Query resource)
+- (decision deferred to FEAT-031 where streaming becomes a custom Answerer)
+
+* Implementation (interim, before FEAT-031 lands)
+- Strip the unreachable ~Stream.map~ branch; broadcast the final ~ctx.answer~ string once on ~:knowledge_done~. Keeps existing PubSub topic shape so partial wiring (currently zero consumers) still compiles.
+- Mark module ~@deprecated "Use Concept.Knowledge.Query.ask/3 (added in FEAT-031)"~.
+
+* Acceptance
+- Compiles without warnings.
+- IEx: ~Concept.Knowledge.Ask.ask("hi", ws_id)~ → returns ~{:ok, %{answer_id, topic}}~, eventually broadcasts a single ~:knowledge_done~ with the full answer.

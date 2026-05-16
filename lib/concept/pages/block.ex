@@ -14,7 +14,7 @@ defmodule Concept.Pages.Block do
       AshStateMachine,
       AshOban
     ],
-    notifiers: [Ash.Notifier.PubSub]
+    notifiers: [Ash.Notifier.PubSub, Concept.Pages.Notifiers.KnowledgeReindex]
 
   @lock_ttl_seconds 30
 
@@ -93,6 +93,7 @@ defmodule Concept.Pages.Block do
 
     update :archive do
       accept []
+      require_atomic? false
       change set_attribute(:archived_at, DateTime.utc_now())
     end
 

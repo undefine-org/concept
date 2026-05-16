@@ -1,0 +1,129 @@
+#+TITLE: BlockList SortableJS hook unattached; drag-reorder dead
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-018-blocklist-sortablejs-hook-unattached-dra
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16). =assets/js/hooks/block_list.js= is a 52-line working SortableJS hook, exported from =assets/js/hooks/index.js=, registered with the LiveSocket in =assets/js/app.js=. But =page_editor_live.ex:49-68= renders =<ul :if={@blocks != []} class="space-y-1">= with no ~id~ and no ~phx-hook~. The hook never mounts. SortableJS never instantiates. Drag-reorder is impossible.
+
+PLAN-001 FEAT-009 claimed drag-handles + sortable as done.
+
+* Intention & Purpose
+
+Dragging the =<ora-block-handle>= (the ⋮⋮ next to each block on hover) reorders blocks. The drop persists via server event ~reorder_block~ which computes the new fractional index and updates the block. PubSub broadcasts the change to siblings, who re-stream.
+
+* Context & Narrative
+
+=block_list.js= already wires SortableJS:
+
+#+begin_src js
+Sortable.create(this.el, {
+  handle: ".ora-block-handle",
+  animation: 150,
+  onEnd: (evt) => {
+    this.pushEvent("reorder_block", {
+      block_id: evt.item.dataset.blockId,
+      new_index: evt.newIndex,
+      old_index: evt.oldIndex,
+    });
+  },
+});
+#+end_src
+
+(verified in audit; check for current event-name match before assuming).
+
+Server: no ~reorder_block~ handler exists yet in =page_editor_live.ex=. Need to add one that:
+1. Fetches sibling blocks ordered by ~position~ within scope of the same parent.
+2. Computes the new ~position~ via ~FractionalIndex.between(left, right)~ or ~after_(last)~ / ~before_(first)~ depending on drop index.
+3. Updates the dragged block's ~position~.
+4. PubSub broadcast follows existing ~block_updated~ flow.
+
+The handle's ~data-block-id~ is correctly emitted from =block_render.ex=. Drop into a parent (nested column / table cell) is out of scope.
+
+* Scope
+
+- IN: add ~id~ + ~phx-hook="BlockList"~ to the =<ul>= in =page_editor_live.ex=.
+- IN: ensure block list ~<li>~ exposes ~data-block-id={@block.id}~ (currently on the inner div; SortableJS reads from ~evt.item~ which is the ~<li>~). Move/duplicate the attribute to the ~<li>~.
+- IN: server handler ~reorder_block~ in =page_editor_live.ex=; resolves left/right neighbors, computes fractional position, persists, broadcasts.
+- IN: dedup: when broadcast echoes back to the actor that just dragged, no re-stream needed (server already filters; verify).
+- IN: vitest stub: spy on SortableJS init and onEnd dispatch.
+- IN: ExUnit: drive ~reorder_block~ event, assert new position.
+- IN: puppeteer reviewer wave: actual drag + persistence.
+- OUT: cross-parent drop (drag into a column / cell).
+- OUT: keyboard reorder (Cmd-Shift-Up/Down).
+
+* Existing Patterns
+
+- =lib/concept/pages/fractional_index.ex= ~between/2~, ~after_/1~, ~before_/1~.
+- =lib/concept/pages/block.ex= already has update_position semantics via PLAN-002's accept :position addition (BUG-002 fix).
+- =lib/concept_web/components/block_render.ex= — current handle markup is ~<ora-block-handle class="..." block-id={@block.id} />~. Confirm li/parent attr placement.
+
+* Tests
+
+** Vitest
+
+1. Mount a 3-item list with the hook, simulate Sortable.create being called with handle ".ora-block-handle".
+2. Stub Sortable.create; assert onEnd handler pushes ~reorder_block~ with correct ids.
+
+** ExUnit
+
+3. Page with 3 paragraphs. ~render_hook(view, root, "reorder_block", %{block_id: a.id, new_index: 2, old_index: 0})~. Assert ~Pages.list_for_page~ ordered by ~position~ now has A last; A's position is ~> B.position~.
+4. Reorder to middle. Assert position is strictly between left and right.
+
+** Puppeteer
+
+5. Drag block A handle to position of block C; release. Assert visual order changed and persists on reload.
+
+* Implementation
+
+** TODO Render: attach BlockList hook
+:PROPERTIES:
+:CUSTOM_ID: BUG-018-blocklist-sortablejs-hook-unattached-dra::render
+:END:
+
+- File: =lib/concept_web/live/page_editor_live.ex= line 49-68:
+
+#+begin_src heex
+<ul :if={@blocks != []} id={"block-list-#{@page_id}"} phx-hook="BlockList" class="space-y-1">
+  <li :for={b <- @blocks} data-block-id={b.id}>
+    <ConceptWeb.BlockRender.block block={b} />
+  </li>
+</ul>
+#+end_src
+
+** TODO Server reorder_block handler
+:PROPERTIES:
+:CUSTOM_ID: BUG-018-blocklist-sortablejs-hook-unattached-dra::server
+:DEPENDS: BUG-018-blocklist-sortablejs-hook-unattached-dra::render
+:END:
+
+- File: =lib/concept_web/live/page_editor_live.ex= — new ~handle_event("reorder_block", %{"block_id" => id, "new_index" => new_i}, socket)~ branch. Compute new position from current sibling list; call =Pages.update_block_position/3= (add if missing in =lib/concept/pages.ex=).
+
+** TODO Add Pages.update_block_position
+:PROPERTIES:
+:CUSTOM_ID: BUG-018-blocklist-sortablejs-hook-unattached-dra::domain-api
+:END:
+
+- File: =lib/concept/pages.ex= + =lib/concept/pages/block.ex= — expose an action ~update_position~ accepting ~:position~; existing change pipeline already permits the attribute.
+
+** TODO Tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-018-blocklist-sortablejs-hook-unattached-dra::tests
+:DEPENDS: BUG-018-blocklist-sortablejs-hook-unattached-dra::server
+:END:
+
+- Vitest: =assets/js/hooks/__tests__/block_list.test.js=.
+- ExUnit: extend =test/concept_web/live/page_editor_test.exs=.
+
+* Acceptance
+
+- Dragging a block handle reorders the list and persists.
+- Refreshing the page shows the new order.
+- Tests green.

@@ -1,0 +1,116 @@
+#+TITLE: current_scope contract not threaded through Layouts.app
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-015-current-scope-contract-not-threaded-thro
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16) flagged that =Layouts.app= advertises an optional ~current_scope~ attr (per Phoenix 1.8 / AGENTS.md mandate) but no LiveView passes one. AGENTS.md is explicit:
+
+#+begin_quote
+Always begin your LiveView templates with =<Layouts.app flash={@flash} ...>= which wraps all inner content
+...
+Anytime you run into errors with no ~current_scope~ assign: you failed to follow the Authenticated Routes guidelines
+#+end_quote
+
+Today this is latent: no compile-time crash because the attr is optional, no runtime crash because nothing inside =Layouts.app= dereferences it, but the moment any component starts using ~@current_scope~ — e.g. AshAdmin link visibility, Ash policies authorizing by scope, conditional sidebar items — we get the "no current_scope assign" error class AGENTS.md warns about. We also have the inverse failure mode (PLAN-002 BUG-003): WorkspaceLive uses bespoke assigns (=@current_user=, =@workspace=) that drift from scope.
+
+* Intention & Purpose
+
+Establish a single ~Concept.Accounts.Scope~ struct, assigned by an =on_mount= hook, threaded into every LiveView mount + every =Layouts.app= invocation. Replaces ad-hoc passing of (current_user, workspace, membership_role). Future Ash policies and live_components can rely on ~@current_scope~ existing for authenticated routes.
+
+* Context & Narrative
+
+Existing wiring:
+- =lib/concept_web/live_user_auth.ex= — on_mount hooks ~live_user_required~, ~live_user_optional~, ~live_no_user~. Each assigns ~:current_user~.
+- =lib/concept_web/components/layouts.ex= — =app/1= component receives ~flash~ + (implicitly) ~current_scope~. The slot is rendered but ~current_scope~ unreferenced.
+- =lib/concept_web/live/workspace_live.ex= mounts ~@workspace~, ~@membership~ (implicit via Pages calls), ~@current_user~ separately. PageEditorLive receives them via ~session~ map and re-fetches.
+
+Decision: ~Scope.t :: %{user: User.t, workspace: Workspace.t | nil, role: :owner | :admin | :member | nil, system?: false}~. Built from session in =live_user_required= when a workspace param is in scope; partial scope (no workspace) for ~/w~ index landing.
+
+* Scope
+
+- IN: define ~Concept.Accounts.Scope~ struct module with constructor ~for_user(user, workspace_id \\ nil)~.
+- IN: extend =live_user_required= on_mount to build the scope and assign ~:current_scope~.
+- IN: thread ~current_scope={@current_scope}~ through every =<Layouts.app>= invocation in HomeLive (optional scope or nil), WorkspaceLive, and any future LV using the layout.
+- IN: replace ad-hoc reads of ~@current_user~ in shell templates with ~@current_scope.user~ where both refer to the same thing (gradual migration; keep ~@current_user~ alias-assigned for backward compat in this PR).
+- IN: =Layouts.app= component reads ~@current_scope~ for user-menu rendering (only place we need it visible to start).
+- IN: telemetry: ~telemetry_event~ on scope build for debug visibility.
+- OUT: rewriting Ash policies to consume scope (separate FUP).
+- OUT: removing ~@current_user~ everywhere — only the layout-facing surface in this scope.
+
+* Existing Patterns
+
+- =lib/concept_web/live_user_auth.ex= already returns ~{:cont, socket}~ tuple with assigns. Just one more assign.
+- =lib/concept/accounts/= already contains User, Workspace, Membership. Scope module sits at =lib/concept/accounts/scope.ex= as a plain struct (not an Ash resource — pure DTO).
+- AshAuthentication.Phoenix.LiveSession already sets ~:current_user~ via its own on_mount. We layer on top, never replacing.
+
+* Tests
+
+- =test/concept/accounts/scope_test.exs= — ~for_user/1~ returns nil-workspace scope; ~for_user/2~ resolves membership role; raises on cross-workspace membership.
+- =test/concept_web/live/scope_assign_test.exs= — mount any authenticated LV (use WorkspaceLive), assert ~:sys.get_state(view.pid).socket.assigns.current_scope.user.id == user.id~ and ~current_scope.workspace.id == ws.id~ on the page route; assert ~current_scope.workspace == nil~ on =/w= index.
+
+* Implementation
+
+** TODO Scope struct + constructors
+:PROPERTIES:
+:CUSTOM_ID: BUG-015-current-scope-contract-not-threaded-thro::scope-struct
+:END:
+
+- File: =lib/concept/accounts/scope.ex= (new).
+
+#+begin_src elixir
+defmodule Concept.Accounts.Scope do
+  @moduledoc "Authenticated request/LV scope: user + optional workspace + role."
+  defstruct [:user, :workspace, :role, system?: false]
+  @type t :: %__MODULE__{user: Concept.Accounts.User.t(), workspace: Concept.Accounts.Workspace.t() | nil, role: :owner | :admin | :member | nil, system?: boolean()}
+
+  def for_user(user, workspace_id \\ nil)
+  def for_user(nil, _), do: nil
+  def for_user(user, nil), do: %__MODULE__{user: user}
+  def for_user(user, workspace_id) do
+    case Concept.Accounts.get_membership(user.id, workspace_id, actor: user) do
+      {:ok, %{workspace: ws, role: role}} -> %__MODULE__{user: user, workspace: ws, role: role}
+      _ -> %__MODULE__{user: user}
+    end
+  end
+end
+#+end_src
+
+** TODO on_mount assigns current_scope
+:PROPERTIES:
+:CUSTOM_ID: BUG-015-current-scope-contract-not-threaded-thro::on-mount
+:DEPENDS: BUG-015-current-scope-contract-not-threaded-thro::scope-struct
+:END:
+
+- File: =lib/concept_web/live_user_auth.ex= — extend ~live_user_required~ + ~live_user_optional~ to compute scope from params/session (params hold workspace_slug when present) and ~assign(:current_scope, Scope.for_user(user, workspace_id))~.
+
+** TODO Thread current_scope into Layouts.app calls
+:PROPERTIES:
+:CUSTOM_ID: BUG-015-current-scope-contract-not-threaded-thro::thread-layout
+:DEPENDS: BUG-015-current-scope-contract-not-threaded-thro::on-mount
+:END:
+
+- Files: =lib/concept_web/live/home_live.ex=, =lib/concept_web/live/workspace_live.ex= — every =<Layouts.app flash={@flash}>= becomes =<Layouts.app flash={@flash} current_scope={@current_scope}>=.
+- File: =lib/concept_web/components/layouts.ex= — =app/1= reads ~@current_scope~ for header/user-menu rendering; falls back gracefully when nil.
+
+** TODO Tests
+:PROPERTIES:
+:CUSTOM_ID: BUG-015-current-scope-contract-not-threaded-thro::tests
+:DEPENDS: BUG-015-current-scope-contract-not-threaded-thro::thread-layout
+:END:
+
+- Files: =test/concept/accounts/scope_test.exs= + =test/concept_web/live/scope_assign_test.exs=.
+
+* Acceptance
+
+- ~@current_scope~ available in every authenticated LV without manually wiring.
+- =<Layouts.app>= rendered with ~current_scope={@current_scope}~ in HomeLive and WorkspaceLive.
+- Tests green; ~mix precommit~ green.
+- No regression: existing ~@current_user~ reads continue working for this PR (alias-only).

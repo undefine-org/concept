@@ -1,25 +1,39 @@
 defmodule Concept.Knowledge.Community do
   @moduledoc "Community detection + LLM summarization on top of the structural graph."
 
-  alias Concept.Knowledge.Collections
+  require Logger
 
   @doc """
   Runs community detection (Leiden clustering) + LLM summarization for a workspace.
+
+  ## Returns
+  - `{:ok, %{communities_detected: N, summaries_written: M}}`
+  - `{:error, reason}`
   """
   def rebuild_communities(workspace_id) do
-    collection = Collections.ensure_for_workspace(workspace_id)
-    name = collection.name
-
-    api_key = Concept.Knowledge.Config.api_key()
+    collection_name = Concept.Knowledge.Config.collection_for(workspace_id)
     llm_model = Concept.Knowledge.Config.llm_model()
 
-    with {:ok, _} <- Arcana.GraphRAG.detect_communities(repo: Concept.Repo, collection: name),
-         {:ok, _} <- Arcana.GraphRAG.summarize_communities(
-           repo: Concept.Repo,
-           collection: name,
-           llm: {llm_model, api_key: api_key}
-         ) do
-      {:ok, %{}}
+    with {:ok, detect_result} <-
+           Arcana.Maintenance.detect_communities(Concept.Repo,
+             collection: collection_name,
+             levels: 2
+           ),
+         {:ok, summarize_result} <-
+           Arcana.Maintenance.summarize_communities(Concept.Repo,
+             collection: collection_name,
+             llm: llm_model
+           ) do
+      communities_detected = Map.get(detect_result, :communities_detected, 0)
+      summaries_written = Map.get(summarize_result, :summaries_written, 0)
+
+      Logger.info("Communities rebuilt",
+        workspace_id: workspace_id,
+        communities: communities_detected,
+        summaries: summaries_written
+      )
+
+      {:ok, %{communities_detected: communities_detected, summaries_written: summaries_written}}
     end
   end
 end

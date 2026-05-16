@@ -1,0 +1,27 @@
+#+TITLE: Arcana.GraphRAG callsites do not exist (search + communities crash)
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: BUG-005-arcana-graphrag-callsites-do-not-exist-s
+#+LAYER: retrieval
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+~lib/concept/knowledge/search.ex~ calls ~Arcana.GraphRAG.fusion_search/2~ — module does not exist. ~lib/concept/knowledge/community.ex~ calls ~Arcana.GraphRAG.detect_communities/1~ + ~summarize_communities/1~ — same. Real Arcana 2.x APIs: ~Arcana.search(q, opts)~ with ~mode: :hybrid~; ~Arcana.Maintenance.detect_communities(repo, opts)~ + ~Arcana.Maintenance.summarize_communities(repo, opts)~ (positional repo).
+
+* Files
+- ~lib/concept/knowledge/search.ex~
+- ~lib/concept/knowledge/community.ex~
+- ~test/concept/knowledge/search_test.exs~ (new)
+
+* Implementation
+- ~Search.search/3~ → ~Arcana.search(query, repo: Concept.Repo, collections: [name], mode: :hybrid, limit: ...)~; remove the catch-all ~rescue _e in FunctionClauseError~ — explicit handling only.
+- ~Community.rebuild_communities/1~ → ~Arcana.Maintenance.detect_communities(Concept.Repo, collection: name)~ then ~Arcana.Maintenance.summarize_communities(Concept.Repo, collection: name, llm: gemini)~.
+- Add unit test: ingest 2 fixture pages, search returns chunks with metadata.
+
+* Acceptance
+- Search test green.
+- Community rebuild runs without crash on a workspace with ≥3 pages.

@@ -1,0 +1,31 @@
+#+TITLE: Session 14d58dbc441df8c7 Todos
+#+DATE: 2026-05-05
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Add CSS for lock indicator
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: completed
+:END:
+
+Add [data-locked-by] styles to assets/css/app.css component layer.
+
+** DONE Extend BlockEditor hook for lock indicators
+:PROPERTIES:
+:TASK_ID: task-7
+:STATUS: completed
+:END:
+
+Handle set_locked_by / lock_denied in block_editor hook to apply data-locked-by and contenteditable=false.
+
+* Verification
+
+** DOING mix compile + puppeteer + iex smoke tests
+:PROPERTIES:
+:TASK_ID: task-8
+:STATUS: in_progress
+:END:
+
+Verify compile clean, presence tracking works, lock release trigger works, two tabs show correct presence.

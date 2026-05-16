@@ -1,6 +1,7 @@
 import { LitElement, html } from "lit";
 import { createBlockEditor } from "../lexical/registry.js";
 import { parseInitial, serialize } from "../lexical/state.js";
+import { moveCaretToStart, moveCaretToEnd } from "../lexical/commands.js";
 
 export class OraBlock extends LitElement {
   static properties = {
@@ -144,6 +145,16 @@ export class OraBlock extends LitElement {
     if (this._editor) {
       this._editor.setEditable(!bool);
     }
+  }
+
+  focusStart() {
+    moveCaretToStart(this._editor);
+    this._editor.focus();
+  }
+
+  focusEnd() {
+    moveCaretToEnd(this._editor);
+    this._editor.focus();
   }
 }
 

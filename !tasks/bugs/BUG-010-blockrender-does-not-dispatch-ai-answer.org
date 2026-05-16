@@ -1,0 +1,23 @@
+#+TITLE: BlockRender does not dispatch :ai_answer (block invisible)
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: BUG-010-blockrender-does-not-dispatch-ai-answer
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+~lib/concept_web/components/block_render.ex~ branches on ~@text_types~ then falls back to ~static_block/1~. ~:ai_answer~ is neither — currently renders empty raw HTML. ~AiAnswer.render_static/1~ is also never called (the component does its own dispatch, ignoring ~BlockType.render_static/1~).
+
+* Files
+- ~lib/concept_web/components/block_render.ex~
+- ~test/concept_web/components/block_render_test.exs~ (extend)
+
+* Implementation
+- Stabilization: add a ~static_block(%{type: :ai_answer} = block)~ clause returning a placeholder shell: ~<ora-ai-block id="ai-#{block.id}" block-id={block.id} state="empty"></ora-ai-block>~. The full Lit component lands in FEAT-041; this clause just produces the host element so layout doesn't break.
+
+* Acceptance
+- Inserting an :ai_answer block renders the ~ora-ai-block~ custom element with the right ~block-id~ attribute.

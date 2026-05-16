@@ -1,0 +1,310 @@
+#+TITLE: Concept editor and shell rescue (post-PLAN-002 audit)
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: PLAN-005-concept-editor-and-shell-rescue-post-pla
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+User said: "Concept is unusable at this stage". Then: "do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase." Then: "show me your swarm wave manifest (interlaced with reviewer waves) for all you've surfaced except Arcana (it's the purpose of PLAN-004). remember that no task/subtask or the main session must ever git stash/checkout/reset/revert."
+
+* Goal
+
+Make Concept's editor + shell actually usable. PLAN-001 ("Notion MVP pixel-perfect") and PLAN-002 ("Fix Editor UX") were both marked DONE on 2026-05-05 but a 4-agent frontend audit on 2026-05-16 found the editor broken at multiple JS↔server seams that the original tests did not exercise. This plan closes those seams under reviewer enforcement so the failure mode (server tests passing while JS integration was silently broken) does not repeat.
+
+* Audit summary
+
+A parallel review by 4 explore subagents on 2026-05-16 found:
+
+1. /Format toolbar dead/ — =<ora-format-toolbar>= rendered but its ~toggle-format~ / ~request-link~ CustomEvents have zero listeners. Bold/Italic/Underline/Strike/Code/Link buttons do nothing. → [[id:BUG-016-format-toolbar-dispatches-orphan-events]]
+2. /Slash menu unreachable/ — =<ora-slash-menu>= side-effect-imported but never instantiated in any HEEx. Typing "/" does nothing. → [[id:BUG-017-slash-menu-never-mounted-typing-slash-do]]
+3. /Arrow nav / Enter silently fail (BUG-002 regressed)/ — server pushes ~focus_block_caret~; JS calls ~el.focusStart?.()~ / ~el.focusEnd?.()~; neither method exists on =OraBlock=; optional-chain hides the failure. → [[id:BUG-014-orablock-missing-focusstart-focusend-arr]]
+4. /Drag-reorder dead/ — =BlockList= SortableJS hook works but =<ul>= has no ~phx-hook~/~id~, hook never mounts. → [[id:BUG-018-blocklist-sortablejs-hook-unattached-dra]]
+5. /BlockKeyboard orphan/ — PLAN-002 said removed; file still present, no longer imported. → [[id:BUG-024-blockkeyboard-hook-is-dead-code-plan-002]]
+6. /Auth forms = raw DaisyUI/ — =AuthOverrides= module body is comments only. → [[id:BUG-019-authoverrides-module-is-empty-sign-in-re]]
+7. /Onboarded users stranded on /, → [[id:BUG-020-onboarded-user-stranded-on-landing-no-po]]
+8. /Lock indicators never rendered/ — CSS hook exists, code path absent. → [[id:BUG-021-block-lock-indicators-not-rendered-from]]
+9. /PageHeader stale on remote rename/ — missing ~send_update~. → [[id:BUG-022-pageheader-stale-on-remote-rename-missin]]
+10. /Empty title placeholder breaks on whitespace/ — no server trim. → [[id:BUG-023-empty-title-placeholder-broken-on-whites]]
+11. /current_scope contract not threaded/ — latent failure surface; AGENTS.md mandate. → [[id:BUG-015-current-scope-contract-not-threaded-thro]]
+12. /PageEditor container ~phx_hook~ orphan/ → [[id:BUG-027-pageeditor-container-phx-hook-attribute]]
+13. /HomeLive missing Cmd-K/ → [[id:BUG-025-homelive-missing-globalkeys-hook-cmd-k-s]]
+14. /Composite blocks (table/columns) child UI deferred indefinitely/ → [[id:FEAT-050-composite-blocks-table-columns-child-cel]]
+
+Arcana frontend gaps (FEAT-024..029 in PLAN-003) are explicitly out-of-scope here — they are the subject of [[id:PLAN-004-arcana-awareness-let-the-document-be-awa]].
+
+* Scope
+
+** IN
+- 13 BUGs (BUG-014, 015, 016, 017, 018, 019, 020, 021, 022, 023, 024, 025, 027) and 1 FEAT (FEAT-050) listed above.
+- Reviewer subagent verification after every implementer wave.
+- Full E2E puppeteer smoke at the end.
+
+** OUT
+- Anything Arcana-related — covered by PLAN-004. In particular: ai_answer block render, chat panel, semantic search merge into palette, ~/admin/arcana~ mount, ~#block-<id>~ deep-link JS handler, ambient citation rail.
+- Caret column tracking across cross-block ArrowUp/Down (start/end fallback is the contract).
+- Keyboard shortcuts for formatting (Cmd-B etc.) — separate FEAT-011 subtask, not on the critical path.
+- Replacing AshAuthentication.Phoenix's LiveView surfaces with bespoke LV.
+- Composite block row insert/delete after creation; cell merging; column resize — FEAT-050 child-creation only.
+
+* Execution principles
+
+These are inviolable for every implementer, every reviewer, and the main session itself:
+
+1. *Never* run ~git stash~, ~git checkout <file>~, ~git reset~, ~git revert~, ~git clean -f~, or any other destructive history/working-tree command. If a change needs to be undone, write a forward-fix commit or use ~edit { kind: undo }~ within the current uncommitted edit window. The branch only moves forward.
+2. Each implementer task touches a *disjoint set of files* from every other task in the same wave, *or* declares ~blockers~ to serialize on the shared file.
+3. Each implementer task ends with a clean ~mix precommit~ + ~bun test~ / ~npx vitest run~ in =assets/=, with a single semantic commit. Reviewer waves never commit; they only ~report_finding~.
+4. Reviewer waves run a *different* subagent than the implementer (~reviewer~ agent type, read-only tooling). Reviewers must include at least one puppeteer interaction check that exercises the user-visible behavior — not just unit tests passing — to catch the PLAN-002 failure class.
+5. Failing reviewer → file a follow-up child task on the offending item, do not block the wave; the failed item moves to ~gate_failed~ state.
+6. ~mix precommit~ must be green at the close of every wave's reviewer phase. CI is the contract.
+
+* Architecture sketch
+
+#+begin_src text
+                ┌─────────────────────────────────────────────────────────┐
+                │                  PageEditorLive                         │
+                │   ┌──────────────────────────────────────────────────┐  │
+                │   │ <ul id="block-list-..." phx-hook="BlockList">    │  │
+                │   │   <li data-block-id=..>                          │  │
+                │   │     <ora-block-handle/>  (drag handle)           │  │
+                │   │     <ora-block phx-hook="BlockEditor">           │  │
+                │   │        Lexical editor  ─── focusStart/End ─┐     │  │
+                │   │     </ora-block>                            │     │  │
+                │   │   </li> ...                                 │     │  │
+                │   │ </ul>                                       │     │  │
+                │   │ <div phx-hook="FormatToolbar">              │     │  │
+                │   │   <ora-format-toolbar/>  ── toggle-format ──┤     │  │
+                │   │   <ora-link-editor/>     ── apply-link ─────┤     │  │
+                │   │ </div>                                      │     │  │
+                │   │ <div phx-hook="SlashMenu">                  │     │  │
+                │   │   <ora-slash-menu/>     ── select-item ─────┤     │  │
+                │   │ </div>                                      ▼     │  │
+                │   └────────── PubSub: workspace:<id>:page:<id>:* ─────┘  │
+                │                              │                          │
+                │      handle_event: nav_block / insert_block_below /     │
+                │      delete_block_merge / reorder_block /               │
+                │      focus_block (presence_meta) / blur_block /         │
+                │      save_content / save_title                          │
+                └─────────────────────────────────────────────────────────┘
+                                       ▲
+                                       │ live_render
+                                       │
+                ┌─────────────────────────────────────────────────────────┐
+                │                  WorkspaceLive                          │
+                │   <Layouts.app flash={@flash} current_scope=...>        │
+                │     <.sidebar workspace= pages= current_page= ../>       │
+                │     <.live_component PageHeader id= page= ../>           │
+                │       └── send_update from WorkspaceLive on page_updated │
+                │     {live_render PageEditorLive ...}                     │
+                │     <.live_component CommandPaletteLive ../>             │
+                │   </Layouts.app>                                         │
+                │  on_mount: live_user_required + AfterSignIn redirect    │
+                └─────────────────────────────────────────────────────────┘
+#+end_src
+
+* Wave manifest
+
+/Aggressive revision (post-decision)/: each numbered wave dispatches as a single =proxy_task= batch with intra-batch DAG via the ~blockers~ field; reviewer waves dispatch a single ~reviewer~ agent; ~quick_task~ used for strictly mechanical items (single-line edits, file deletion). Specific revisions vs the original conservative plan above:
+- BUG-024 (delete one file) /hoisted to W1/ as quick_task (no conflicts).
+- W4 and W5 /merged into a single parallel batch/ (BUG-025 quick_task + BUG-027 quick_task + FEAT-050 task) — all disjoint files.
+- Final reviewer covers cleanup sweep + 20-step E2E in one pass.
+
+Net: 5 work waves + 4 review waves (was 6+5).
+
+** Agent routing per wave
+- W1: 2 ~task~ (BUG-014, BUG-015) + 1 ~quick_task~ (BUG-024). One dispatch each batch.
+- W1.5: 1 ~reviewer~.
+- W2: 3 ~task~ in one batch with intra-batch DAG via ~blockers~ (BUG-018 → BUG-016 → BUG-017).
+- W2.5: 1 ~reviewer~.
+- W3: 5 ~task~ in one batch with intra-batch DAG (BUG-019 → BUG-021 chained on app.css; BUG-020 ∥ BUG-022 ∥ BUG-023 parallel).
+- W3.5: 1 ~reviewer~.
+- W4: 2 ~quick_task~ (BUG-025, BUG-027) + 1 ~task~ (FEAT-050), dispatched as 2 parallel batches. Disjoint files.
+- W4.5: 1 ~reviewer~ — cleanup sweep + 20-step E2E in single pass.
+
+** ITEM Wave 1 — Foundation (parallel; disjoint files)
+:PROPERTIES:
+:CUSTOM_ID: PLAN-005-concept-editor-and-shell-rescue-post-pla::wave-1
+:END:
+
+Pre-requisite contract additions that every subsequent wave depends on. Both items touch *no shared file*.
+
+- [[id:BUG-014-orablock-missing-focusstart-focusend-arr]] OraBlock ~focusStart()~ + ~focusEnd()~ + lexical caret helpers
+  - Files: =assets/js/components/ora-block.js=, =assets/js/lexical/commands.js=, =assets/js/hooks/block_editor.js=, =test/concept_web/live/page_editor_test.exs= (new), =assets/js/components/__tests__/ora-block.test.js= (new)
+
+- [[id:BUG-015-current-scope-contract-not-threaded-thro]] ~Concept.Accounts.Scope~ struct + ~current_scope~ assign in on_mount chain
+  - Files: =lib/concept/accounts/scope.ex= (new), =lib/concept_web/live_user_auth.ex=, =lib/concept_web/components/layouts.ex=, =lib/concept_web/live/home_live.ex=, =lib/concept_web/live/workspace_live.ex=, =test/concept/accounts/scope_test.exs= (new), =test/concept_web/live/scope_assign_test.exs= (new)
+
+** ITEM Wave 1.5 — Reviewer R1
+:PROPERTIES:
+:CUSTOM_ID: PLAN-005-concept-editor-and-shell-rescue-post-pla::wave-1-review
+:END:
+
+Subagent: ~reviewer~. Read-only. Checks:
+- ~mix precommit~ green; ~cd assets && npx vitest run~ green.
+- ~lsp definition~ on ~OraBlock.focusStart~ returns a real implementation (not stub).
+- ExUnit ~focus_block_caret~ round-trip assertions present + green.
+- Puppeteer: sign in, open a page, type two paragraph blocks, ArrowUp → caret visibly in first block (assert via ~document.activeElement~). Enter at end → new block, caret in new block.
+- Puppeteer: any LV renders =<Layouts.app>=; inspect socket assigns via ~:sys.get_state~ proxied through the page (or use a temporary LV test asserting ~@current_scope~ presence).
+- Reports any seam between Lit caret API and Lexical state — explicit list of selection-changing commands exercised.
+
+** ITEM Wave 2 — Editor wiring blockers (serial on page_editor_live.ex)
+:PROPERTIES:
+:CUSTOM_ID: PLAN-005-concept-editor-and-shell-rescue-post-pla::wave-2
+:END:
+
+All three add HEEx to =PageEditorLive.render/1=. Serialize via ~blockers~ to avoid edit conflicts on that template, while their hook files / lexical command files / server handlers remain disjoint.
+
+- [[id:BUG-018-blocklist-sortablejs-hook-unattached-dra]] Attach BlockList SortableJS hook + ~reorder_block~ server handler + ~Pages.update_block_position~
+  - Files: =lib/concept_web/live/page_editor_live.ex= (render attrs on existing =<ul>=), =lib/concept/pages.ex= (new ~update_block_position~), =lib/concept/pages/block.ex= (already accepts :position; verify), =assets/js/hooks/block_list.js= (verify), =assets/js/hooks/__tests__/block_list.test.js= (new), =test/concept_web/live/page_editor_test.exs= (extend).
+  - First in wave; smallest template touch.
+
+- [[id:BUG-016-format-toolbar-dispatches-orphan-events]] FormatToolbar hook + Lexical format/link wrappers + render host
+  - Blockers: BUG-018.
+  - Files: =assets/js/lexical/commands.js= (extend with toggleFormat/setLink), =assets/js/hooks/format_toolbar.js= (new), =assets/js/hooks/index.js= (register), =lib/concept_web/live/page_editor_live.ex= (add host element near top of template), =assets/js/hooks/__tests__/format_toolbar.test.js= (new), =test/concept_web/live/page_editor_test.exs= (extend).
+
+- [[id:BUG-017-slash-menu-never-mounted-typing-slash-do]] SlashMenu hook + server ~insert_block_below~ extension with type param
+  - Blockers: BUG-016.
+  - Files: =assets/js/hooks/slash_menu.js= (new), =assets/js/hooks/index.js= (register), =lib/concept_web/live/page_editor_live.ex= (handle_event extension + slash menu host), =assets/js/hooks/__tests__/slash_menu.test.js= (new), =test/concept_web/live/page_editor_test.exs= (extend with typed-insert scenarios).
+
+** ITEM Wave 2.5 — Reviewer R2
+:PROPERTIES:
+:CUSTOM_ID: PLAN-005-concept-editor-and-shell-rescue-post-pla::wave-2-review
+:END:
+
+Subagent: ~reviewer~. Checks:
+- ~mix precommit~ + vitest green.
+- Puppeteer: open a page with two blocks; drag block A's handle to block B's position; release; assert visual order changed + persists across reload.
+- Puppeteer: type "hello world" in a paragraph; select "world"; click B in format toolbar; assert =font-weight~ visually rendered; save; reload; assert =<strong>world</strong>~ in DOM.
+- Puppeteer: link round-trip — toolbar → ora-link-editor → "https://example.com" → Enter → reload → ~<a href="https://example.com">~ in DOM.
+- Puppeteer: focus a block; type "/"; assert slash menu appears at caret rect; arrow-down twice; press Enter → new block of selected type appears below; caret in it.
+- LSP: ~grep "phx-hook=" lib/concept_web/live/page_editor_live.ex~ shows BlockList, FormatToolbar, SlashMenu mounted. No orphan ~phx-hook="PageEditor"~ in this file (BUG-027 not yet — fine for this wave).
+- Reports any ~CustomEvent~ dispatched by a Lit component that has no listener in the hook layer.
+
+** ITEM Wave 3 — Shell + lifecycle (mostly parallel; one serial chain on app.css)
+:PROPERTIES:
+:CUSTOM_ID: PLAN-005-concept-editor-and-shell-rescue-post-pla::wave-3
+:END:
+
+Five items. BUG-019 + BUG-021 both touch =assets/css/app.css= → serialize. Others parallel.
+
+- [[id:BUG-019-authoverrides-module-is-empty-sign-in-re]] AuthOverrides + .ora-auth-* CSS layer
+  - Files: =lib/concept_web/auth_overrides.ex=, =assets/css/app.css= (auth section), =test/concept_web/controllers/auth_controller_test.exs= (new or extend).
+
+- [[id:BUG-021-block-lock-indicators-not-rendered-from]] Lock indicators via presence metadata
+  - Blockers: BUG-019 (app.css serialization).
+  - Files: =lib/concept_web/live/page_editor_live.ex= (focus/blur/diff handlers), =lib/concept_web/components/block_render.ex= (data-locked-by + --lock-color), =assets/css/app.css= (verify lock-bar rule), =test/concept_web/live/lock_indicator_test.exs= (new).
+
+- [[id:BUG-020-onboarded-user-stranded-on-landing-no-po]] Workspace ~primary?~ attr + AfterSignIn redirect + HomeLive signed-in branch
+  - Files: =lib/concept/accounts/workspace.ex=, =priv/repo/migrations/<ts>_add_primary_to_workspaces.exs= (new), =lib/concept/accounts/reactors/onboarding.ex=, =lib/concept/accounts.ex= (new helper), =lib/concept_web/live_user_auth.ex=, =lib/concept_web/router.ex=, =lib/concept_web/live/home_live.ex=, =test/concept_web/live/auth_flow_test.exs= (new).
+
+- [[id:BUG-022-pageheader-stale-on-remote-rename-missin]] PageHeader ~send_update~ on page_updated
+  - Files: =lib/concept_web/live/workspace_live.ex= (handle_info), =test/concept_web/live/page_header_test.exs= (extend with multi-LV scenario).
+
+- [[id:BUG-023-empty-title-placeholder-broken-on-whites]] Trim title server + client
+  - Files: =lib/concept/pages/changes/trim_title.ex= (new), =lib/concept/pages/page.ex= (wire change), =assets/js/hooks/content_editable.js= (trim), =test/concept/pages/page_title_test.exs= (new), =assets/js/hooks/__tests__/content_editable.test.js= (new).
+
+** ITEM Wave 3.5 — Reviewer R3
+:PROPERTIES:
+:CUSTOM_ID: PLAN-005-concept-editor-and-shell-rescue-post-pla::wave-3-review
+:END:
+
+Subagent: ~reviewer~. Checks:
+- ~mix precommit~ + vitest green.
+- Puppeteer: register a fresh user → confirm via test-mode magic link → assert URL is ~/w/<slug>~ + sidebar visible.
+- Puppeteer: screenshot /sign-in, /register, /reset → manually inspect parity vs ~04-workspace-shell.png~ baseline (Inter font, neutral palette, rounded inputs).
+- Puppeteer: two browser sessions on the same page; session-A focuses block X → session-B sees colored left bar on block X within ≤ 2s; session-A blurs → bar gone within ≤ 2s.
+- Puppeteer: two browser sessions; session-A renames page → session-B's <h1> updates within ≤ 2s; browser tab title also updates.
+- Puppeteer: enter " " (single space) as title → save → reload → empty + "Untitled" placeholder visible.
+- Reports any presence metadata field touched without authorization (privacy regression).
+
+** ITEM Wave 4 — Cleanup + parity (parallel; disjoint)
+:PROPERTIES:
+:CUSTOM_ID: PLAN-005-concept-editor-and-shell-rescue-post-pla::wave-4
+:END:
+
+- [[id:BUG-024-blockkeyboard-hook-is-dead-code-plan-002]] Delete dead =assets/js/hooks/block_keyboard.js=
+- [[id:BUG-025-homelive-missing-globalkeys-hook-cmd-k-s]] Mount GlobalKeys on HomeLive
+- [[id:BUG-027-pageeditor-container-phx-hook-attribute]] Drop orphan ~phx_hook: "PageEditor"~ from WorkspaceLive's =live_render= container option
+
+** ITEM Wave 4.5 — Reviewer R4
+:PROPERTIES:
+:CUSTOM_ID: PLAN-005-concept-editor-and-shell-rescue-post-pla::wave-4-review
+:END:
+
+Subagent: ~reviewer~. Checks:
+- ~mix precommit~ + vitest green.
+- ~rg -n "BlockKeyboard|block_keyboard" lib test assets~ returns zero hits.
+- ~rg -n 'phx_hook: "PageEditor"' lib~ returns zero hits.
+- Puppeteer: signed-in user on / → Cmd-K → redirect to /w (verifies BUG-025 wiring).
+- Reports any other orphan hook attributes (~rg 'phx-hook="(\w+)"' lib~ vs hook keys in =assets/js/hooks/index.js=).
+
+** ITEM Wave 5 — Deferred feature
+:PROPERTIES:
+:CUSTOM_ID: PLAN-005-concept-editor-and-shell-rescue-post-pla::wave-5
+:END:
+
+- [[id:FEAT-050-composite-blocks-table-columns-child-cel]] Composite blocks (table + columns) child cell creation flow
+
+** ITEM Wave 5.5 — Reviewer R5 (final E2E)
+:PROPERTIES:
+:CUSTOM_ID: PLAN-005-concept-editor-and-shell-rescue-post-pla::wave-5-review
+:END:
+
+Subagent: ~reviewer~. Full user journey on a fresh DB:
+
+1. Register new user → land on /w/<slug>.
+2. Sidebar empty → click "+ New page".
+3. New page renders with editable title + emoji button.
+4. Click title → type "My first page" → blur → sidebar updates.
+5. Click emoji → pick 📒 → header updates.
+6. Click cover band → pick blue → header gets blue cover.
+7. Click "+ Click to add your first block" → paragraph appears.
+8. Type "Hello world".
+9. Press Enter at end → new empty paragraph below; caret in it.
+10. Type "/h1 Title" → wait — typo: type "/h1" actually selects heading_1 → press Enter → heading_1 block appears; typed content. Type "Big title".
+11. ArrowUp → caret in "Hello world" paragraph at end.
+12. Select "world" → click B in format toolbar → bolded.
+13. Select "Hello" → click link → enter "https://elixir-lang.org" → Enter → linked.
+14. Save (auto on blur). Reload the page → 12+13 persist.
+15. Drag the handle of the heading block above the paragraph → reorder persists on reload.
+16. Cmd-K → palette opens → type page title → Enter → navigates back to the page.
+17. Open a second browser tab on same URL → presence avatar appears in PresenceBar in both tabs; renaming title from tab 1 reflects in tab 2 within 2s.
+18. In tab 1 focus block A → tab 2 shows colored left-bar on block A.
+19. Slash → Table → 2×2 picker → table appears with 4 cells; Tab from cell (1,1) focuses (1,2); type in each cell, reload, persists.
+20. Sign out → /sign-in renders with .ora-auth-root visible.
+
+All 20 steps must pass. Any failure files a child BUG and the wave reports ~gate_failed~.
+
+* Verification (overall)
+
+- ~mix precommit~ green at every wave close.
+- ~cd assets && npx vitest run~ green at every wave close.
+- Reviewer puppeteer flow passes end-to-end at W5.5.
+- Test count target: +60–80 scenarios across 13 BUGs + 1 FEAT.
+- No file in =lib/= imports a hook by name string that isn't in =assets/js/hooks/index.js= (orphan-hook regression check, runs in CI).
+- No CustomEvent dispatched by an =ora-*= component without a listener somewhere in =assets/js/hooks/= (orphan-event regression check, vitest static scan).
+
+* Execution principles (recap, normative for every subagent)
+
+1. NEVER ~git stash | checkout <file> | reset | revert | clean -f~. Forward-fix only.
+2. Each item touches the file set declared in its node. Reviewers cross-check.
+3. Each wave closes with ~mix precommit~ green + a single commit per item.
+4. Reviewer waves are read-only; they ~report_finding~ + file follow-ups, never edit.
+5. Reviewer subagent ≠ implementer subagent for the same item.
+6. Puppeteer is mandatory in every reviewer wave — server tests passing is not sufficient evidence.
+7. Items declaring ~blockers~ within a wave serialize cleanly; without ~blockers~ they run in parallel.
+8. Failing reviewer → ~gate_failed~ on the item + new child BUG; wave proceeds; next wave gated on overall green at close.
+
+* References
+
+- [[id:PLAN-001-notion-mvp-pixel-perfect]] — original Notion MVP plan (DONE; overstated)
+- [[id:PLAN-002-fix-editor-ux-edit-bars-enter-inserts-bl]] — first editor-fix plan (DONE; regressed on JS side)
+- [[id:PLAN-004-arcana-awareness-let-the-document-be-awa]] — Arcana/RAG plan; explicitly disjoint scope
+- =assets/js/hooks/SERVER_CONTRACT.md= — canonical event names/payloads; do not rename
+- AGENTS.md — Phoenix 1.8 / LiveView / HEEx mandates including ~current_scope~ and =<Layouts.app>= contract
+- Frontend audit transcript: this session, agents 0-EditorBlockUX, 1-ShellPageHeaderNav, 2-PaletteAuthHome, 3-AIArcanaFrontendGaps (2026-05-16)

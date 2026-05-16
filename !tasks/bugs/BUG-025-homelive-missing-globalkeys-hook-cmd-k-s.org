@@ -1,0 +1,70 @@
+#+TITLE: HomeLive missing GlobalKeys hook; Cmd-K silent on landing
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-025-homelive-missing-globalkeys-hook-cmd-k-s
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16). =assets/js/hooks/global_keys.js= captures Cmd-K and pushes ~open_command_palette~. The hook is mounted only on the WorkspaceLive root element. HomeLive (=lib/concept_web/live/home_live.ex=) and the auth pages do not mount it, so Cmd-K is silent on /, /sign-in, /register. PLAN-001 FEAT-014 implied global Cmd-K.
+
+* Intention & Purpose
+
+Cmd-K on the landing page (when signed in) opens a minimal palette that lets the user jump straight to their primary workspace or a recently-visited workspace. Cmd-K on /sign-in does nothing (no scope) — that's fine. Mostly a consistency fix so users don't learn to expect Cmd-K and then have it fail.
+
+* Context & Narrative
+
+After BUG-020 lands, signed-in users won't reach HomeLive at all (they get redirected to /w). So this BUG's surface narrows: only relevant for signed-out users on /, plus the brief moment before redirect.
+
+Decision: mount =GlobalKeys= on HomeLive's root with a stub server handler that, when signed-in, ~push_navigate(to: ~p"/w")~ on Cmd-K; when signed-out, no-op (or focus the sign-in button).
+
+* Scope
+
+- IN: add ~phx-hook="GlobalKeys"~ to HomeLive's root element.
+- IN: handle_event ~open_command_palette~ in HomeLive — when signed-in (redundant given BUG-020) push to /w; when signed-out, no-op.
+- OUT: actually rendering a palette modal on the landing page — too invasive for this rescue.
+
+* Existing Patterns
+
+- =assets/js/hooks/global_keys.js= — already wired; we just attach it to a different host.
+- =lib/concept_web/live/workspace_live.ex:322= — same pattern.
+
+* Tests
+
+- ExUnit: ~render_hook(view, "home-root", "open_command_palette", %{})~ when signed-in pushes navigation to /w.
+- ExUnit: same when signed-out is a no-op (no redirect).
+
+* Implementation
+
+** TODO Mount GlobalKeys on HomeLive
+:PROPERTIES:
+:CUSTOM_ID: BUG-025::mount
+:END:
+
+- File: =lib/concept_web/live/home_live.ex= — root element gets ~id="home-root" phx-hook="GlobalKeys"~.
+
+** TODO handle_event
+:PROPERTIES:
+:CUSTOM_ID: BUG-025::handle
+:DEPENDS: BUG-025::mount
+:END:
+
+- File: same — ~handle_event("open_command_palette", _, socket)~; branch on ~current_user~.
+
+** TODO Test
+:PROPERTIES:
+:CUSTOM_ID: BUG-025::test
+:DEPENDS: BUG-025::handle
+:END:
+
+- File: =test/concept_web/live/home_live_test.exs= (new or extend).
+
+* Acceptance
+
+- Cmd-K on landing (signed-in) jumps to /w; signed-out no-op.
+- Tests green.

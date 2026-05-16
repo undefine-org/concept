@@ -1,0 +1,36 @@
+#+TITLE: Telemetry expansion — per-profile metrics + Gemini token budgets
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-048-telemetry-expansion-per-profile-metrics
+#+LAYER: ops
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Make the system observable. Per-profile latency p50/p95, per-workspace daily Gemini token counts, ingestion job throughput, citation hit rates. Surface in ~/dev/dashboard~ and ~/admin/arcana~.
+
+* Scope (IN)
+- New telemetry events emitted by Reactor steps + Query worker + Knowledge.Search.
+- Periodic measurements: count of IngestionJob by state, queue depth, average chunk_count.
+- Daily aggregation worker: rollup of prompt_tokens + completion_tokens + embed_tokens per workspace per day → ~Concept.Knowledge.TokenLedger~ (lightweight Ash resource).
+- ~ConceptWeb.Telemetry~ summaries added for: ~concept.knowledge.reactor.ingest.step.*~, ~concept.knowledge.query.run.stop.duration~, ~concept.knowledge.search.stop.duration~ tagged by ~profile~.
+
+* Files
+- ~lib/concept_web/telemetry.ex~ (extend)
+- ~lib/concept/knowledge/token_ledger.ex~ (new Ash resource)
+- ~lib/concept/knowledge/workers/aggregate_tokens.ex~ (daily cron)
+- ~priv/repo/migrations/<ts>_create_knowledge_token_ledger.exs~
+- ~test/concept/knowledge/token_ledger_test.exs~
+
+* Tests (4 scenarios)
+1. TokenLedger row created per workspace per day.
+2. Aggregate worker idempotent (running twice for same day overwrites, not duplicates).
+3. Profile tag present in telemetry event metadata.
+4. Periodic measurement emits on schedule.
+
+* Acceptance
+- ~/dev/dashboard~ shows per-profile latency histograms.
+- ~/admin~ shows TokenLedger rows with daily roll-up.

@@ -1,0 +1,35 @@
+#+TITLE: Ambient cross-page transclusion suggestions
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FUP-009-ambient-cross-page-transclusion-suggesti
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+"You've already written this." While editing a block, if similarity to any other block exceeds 0.85, surface a ghost chip: ~↗ Similar to "Q3 retro paragraph 4 — Toby"~. Click → side-by-side comparison + merge or link options.
+
+* Trigger
+After FEAT-045 (Live citation rail) — extends ambient awareness with a stricter threshold + comparison UI.
+
+* Design substrate (already in place)
+- Same retrieval infra as FEAT-045.
+- ~Knowledge.Link kind: :see_also~ for one-click linking.
+
+* Implementation sketch
+- Block change event → on top-1 similarity > 0.85, push_event ~suggest_transclusion~.
+- New Lit element ~ora-transclusion-ghost~ renders inline ghost chip at block end.
+- Click opens a comparison view: two ~BlockRender.block/1~ side-by-side with a diff highlight.
+- Actions: ~Link see_also~, ~Replace with reference~ (deletes current block, inserts a transclusion block — new ~:transclude~ block type needed), or ~Dismiss~.
+
+* Files (preview)
+- ~assets/js/components/ora-transclusion-ghost.js~
+- ~lib/concept/pages/block_types/transclude.ex~ (new block type)
+- ~lib/concept_web/live/workspace_live/transclusion_compare.ex~
+
+* Notes
+- Threshold tunable per-workspace (FUP-004 ties in).
+- ANN index may be needed if workspace has 10k+ blocks; pgvector HNSW indexes Arcana already supports.

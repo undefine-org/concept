@@ -1,0 +1,126 @@
+#+TITLE: Composite blocks (table + columns) child cell creation UI
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: FEAT-050-composite-blocks-table-columns-child-cel
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+Frontend audit (2026-05-16). PLAN-001 FEAT-012 closed with the explicit caveat: "Composite block bulk-creation Reactors scaffolded as BlockType modules; UI integration deferred (table/columns appear in slash menu and persist as parent blocks; child cell creation flow is FUP)." That FUP was never filed; the deferred work surfaced in the audit as a Major gap. Filing here so it's tracked but explicitly scheduled for W5 (post-rescue) and gateable to "drop from scope" if the team decides parity isn't worth shipping in this round.
+
+* Intention & Purpose
+
+Creating a Table via the slash menu produces a fully usable n×m table: header row + body cells, each editable like a paragraph block, with Tab/Shift-Tab for cell navigation. Creating a Columns block produces n side-by-side columns, each accepting any block type via drag-into / inline slash. Both compose: a column can contain a table.
+
+* Context & Narrative
+
+Resource model (already in place via FEAT-012 BlockType modules):
+- =Concept.Pages.BlockTypes.Table= → parent block; props ~%{rows: int, cols: int}~.
+- =Concept.Pages.BlockTypes.TableCell= → child block; ~parent_block_id~ points at Table; ~position~ ordered row-major.
+- =Concept.Pages.BlockTypes.Columns= → parent block; props ~%{count: int}~.
+- =Concept.Pages.BlockTypes.Column= → child block; ~parent_block_id~ points at Columns.
+
+Missing: the creation Reactor (or composite create action) that fans out the parent + N child blocks atomically; the Lit/HEEx renderers for the parent shells that nest =BlockRender= per cell.
+
+Server: =Concept.Pages.create_table/4= (Reactor) accepting workspace_id, page_id, rows, cols → creates 1 Table parent + rows*cols TableCell children. Returns the parent. Similar for Columns.
+
+Client: 
+- ~ora-block~ already renders one block. New ~ora-table~, ~ora-columns~ Lit elements wrap them as containers and lay out children via CSS grid.
+- Or simpler: =BlockRender= recurses for parent blocks, rendering a HEEx table/grid directly without bespoke Lit elements. Cleaner; less JS.
+
+Choose HEEx recursion for the parent shell, keep ~ora-block~ as the cell editor.
+
+Slash menu (after BUG-017 lands) selecting Table → opens a small "Rows × Cols" picker before insert. Selecting Columns → "2 / 3 / 4 columns" picker.
+
+* Scope
+
+- IN: =Pages.create_table/4= reactor: creates Table parent + rows*cols TableCell children atomically; rolls back on any failure.
+- IN: =Pages.create_columns/3= reactor: Columns parent + N Column children.
+- IN: =BlockRender= recursion: when block type ∈ {Table, Columns}, render a HEEx grid that fetches children (already pre-fetched by parent LV) and iterates =BlockRender.block/1= per cell.
+- IN: ~insert_composite_below~ server handler accepting ~{type: "table", rows, cols}~ or ~{type: "columns", count}~.
+- IN: slash menu's Table / Columns items open the picker overlay (new Lit element ~ora-composite-picker~ — or reuse a small live_component).
+- IN: Tab / Shift-Tab navigation within table cells (extend BlockEditor hook with ~Tab~ keybinding when in a cell context).
+- IN: Cascading archive: archiving the parent archives all children atomically (already implied by =AshArchival= cascade in PLAN-001 §Architecture; verify).
+- IN: ExUnit: create table 2×3, assert 7 blocks (1 parent + 6 cells); Tab from cell (1,1) focuses (1,2).
+- IN: Puppeteer reviewer: visually verify grid layout.
+- OUT: column resizing.
+- OUT: row insert/delete after creation.
+- OUT: cell merging.
+- OUT: nested table in cell (allowed by schema but no UI affordance to create).
+
+* Existing Patterns
+
+- =lib/concept/pages/block_types/table.ex=, =table_cell.ex=, =columns.ex=, =column.ex= — exist as BlockType modules; verify ~props_schema~ and ~render_static~.
+- =deps/reactor/= — Reactor 1.x patterns; rollback via compensate steps.
+- =lib/concept/pages/page.ex= cascading archive via AshArchival — pattern carries to Block.
+
+* Tests
+
+** ExUnit
+
+1. ~Pages.create_table(workspace_id, page_id, 2, 3, actor: user, tenant: ws_id)~ → 1 Table + 6 TableCells; ~Pages.list_for_page~ returns parent at top level and cells at sub-level.
+2. ~Pages.create_columns(workspace_id, page_id, 3, ...)~ → 1 Columns + 3 Columns.
+3. Archiving parent cascades to children.
+4. ~render_hook(view, root, "insert_composite_below", %{type: "table", rows: 2, cols: 3, block_id: above.id})~ → renders table grid in HTML.
+5. Tab from cell (1,1) focuses (1,2); Tab from (1,3) focuses (2,1); Tab from (2,3) inserts new row of cells (out of scope? confirm — let's keep last-cell Tab a no-op for now and file row-insert as FUP).
+
+** Puppeteer
+
+6. Slash → Table → 3×3 picker → table renders; clicking a cell focuses it; typing persists; reload preserves.
+
+* Implementation
+
+** TODO Composite creation reactors
+:PROPERTIES:
+:CUSTOM_ID: FEAT-050-composite-blocks-table-columns-child-cel::reactors
+:END:
+
+- File: =lib/concept/pages/reactors/create_table.ex= + =create_columns.ex= (new).
+- Domain function exposure in =lib/concept/pages.ex=.
+
+** TODO BlockRender recursion
+:PROPERTIES:
+:CUSTOM_ID: FEAT-050-composite-blocks-table-columns-child-cel::render
+:DEPENDS: FEAT-050-composite-blocks-table-columns-child-cel::reactors
+:END:
+
+- File: =lib/concept_web/components/block_render.ex= — pattern-match on Table / Columns; render HEEx grid; iterate children.
+- =PageEditorLive= pre-fetches children when listing blocks (depth-1 ~load: [:children]~ via Ash).
+
+** TODO Composite picker UI
+:PROPERTIES:
+:CUSTOM_ID: FEAT-050-composite-blocks-table-columns-child-cel::picker
+:DEPENDS: FEAT-050-composite-blocks-table-columns-child-cel::render
+:END:
+
+- File: =lib/concept_web/components/composite_picker.ex= (new HEEx component) — invoked from SlashMenu hook when item type ∈ {table, columns}.
+- Server: ~insert_composite_below~ handler dispatching to the right reactor.
+
+** TODO Tab navigation
+:PROPERTIES:
+:CUSTOM_ID: FEAT-050-composite-blocks-table-columns-child-cel::tab-nav
+:DEPENDS: FEAT-050-composite-blocks-table-columns-child-cel::render
+:END:
+
+- File: =assets/js/hooks/block_editor.js= — when host's parent has ~data-composite-parent~, Tab pushes ~nav_block_tab~ event; server resolves next sibling in row-major order and pushes ~focus_block_caret~.
+
+** TODO Tests
+:PROPERTIES:
+:CUSTOM_ID: FEAT-050-composite-blocks-table-columns-child-cel::tests
+:DEPENDS: FEAT-050-composite-blocks-table-columns-child-cel::tab-nav
+:END:
+
+- File: =test/concept/pages/composite_blocks_test.exs=.
+- File: =test/concept_web/live/composite_blocks_test.exs=.
+
+* Acceptance
+
+- Slash → Table → picker → grid renders; cells editable; Tab navigates.
+- Slash → Columns → picker → side-by-side columns; each accepts blocks.
+- Archive cascades.
+- Tests green.

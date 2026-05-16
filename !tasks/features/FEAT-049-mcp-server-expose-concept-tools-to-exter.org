@@ -1,0 +1,35 @@
+#+TITLE: MCP server — expose Concept tools to external AI agents
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-049-mcp-server-expose-concept-tools-to-exter
+#+LAYER: ops
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+AshAI ships an MCP (Model Context Protocol) server. Expose Concept's Knowledge + Pages tools at ~/mcp~ so external agents (Claude Desktop, Cursor, IDE plugins) can search and act on a workspace's knowledge graph the same way our internal ChatPanel does. Single tool definition → both surfaces.
+
+* Scope (IN)
+- Run ~mix ash_ai.gen.mcp~. Add ~AshAi.Mcp.Dev~ plug to endpoint code-reloading block (dev mode).
+- Production MCP route mounted under ~/mcp~, authenticated via ~AshAuthentication.Strategy.ApiKey.Plug~ (new strategy: add ~api_key~ to User resource via ~mix ash_authentication.add_strategy api_key~).
+- Tool list mounted matches the domain ~tools do ... end~ block (FEAT-033) — same registry.
+- Workspace scoping: API key tied to a User → User's workspaces → tools enforce tenancy via Ash policies.
+
+* Files
+- ~lib/concept_web/endpoint.ex~ (dev plug)
+- ~lib/concept_web/router.ex~ (~/mcp~ scope + pipeline)
+- ~lib/concept/accounts/user.ex~ (api_key strategy)
+- ~test/concept_web/mcp_test.exs~
+
+* Tests (4 scenarios)
+1. MCP tool listing returns the same set as ~AshAi.exposed_tools(Concept.Knowledge)~.
+2. Calling ~search_workspace~ via MCP with a valid API key returns ranked chunks.
+3. API key tied to user A cannot search workspace B's content.
+4. Tool execution emits telemetry consumable by /dev/dashboard.
+
+* Acceptance
+- Claude Desktop with the MCP proxy can list pages and ask questions against a workspace.
+- The same tool registry powers internal ChatPanel + external MCP — single source.

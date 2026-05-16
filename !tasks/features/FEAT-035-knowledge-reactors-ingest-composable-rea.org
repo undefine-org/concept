@@ -1,0 +1,47 @@
+#+TITLE: Knowledge.Reactors.Ingest — composable Reactor pipeline
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-035-knowledge-reactors-ingest-composable-rea
+#+LAYER: ingestion
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Replace ad-hoc ingest with a Reactor. Each step emits telemetry; ~upsert_document~ retries on Gemini rate-limit; failure compensates by deleting partial state and transitioning the IngestionJob row to ~:failed~ with error context.
+
+* Scope (IN)
+- ~Concept.Knowledge.Reactors.Ingest~ steps:
+  1. ~ensure_collection~ — idempotent ~Arcana.Collection.get_or_create~.
+  2. ~resolve_actor~ — system actor.
+  3. ~fetch_page_and_blocks~ — load via Pages domain with system actor.
+  4. ~build_chunks~ — call ~Concept.Knowledge.BlockChunker.chunk/2~.
+  5. ~upsert_document~ — ~Arcana.ingest/2~ with chunker_opts (retry on rate-limit, ~max_attempts: 3~, exponential backoff).
+  6. ~upsert_graph~ — ~Concept.Knowledge.GraphBuilder.upsert_page_graph/4~.
+  7. ~mark_success~ — IngestionJob ~:finalize~ action with chunk_count + embed_tokens.
+- Compensations:
+  - ~upsert_document~ compensate: delete partial Arcana.Document by source_id.
+  - Reactor-level on_error: IngestionJob ~:fail~ action with ~error_kind~ inferred from exception module.
+- Used by IngestionJob's AshOban trigger.
+
+* Files
+- ~lib/concept/knowledge/reactors/ingest.ex~ (new)
+- ~lib/concept/knowledge/reactors/steps/*.ex~ (one per step, idiomatic Reactor)
+- ~test/concept/knowledge/reactors/ingest_test.exs~
+- ~test/concept/knowledge/reactors/ingest_integration_test.exs~
+
+* Tests (8 scenarios)
+1. Happy path: 4-block page → 4 chunks ingested + graph rows present.
+2. Rate-limit on embed: simulated 429 → 2 retries → success.
+3. Persistent rate-limit (3 retries fail) → IngestionJob ~:failed~ with ~error_kind: :rate_limit~.
+4. Compensation: forced failure mid-pipeline → no orphan chunks left for this page.
+5. Re-ingest replaces prior chunks (source_id stability).
+6. ~mark_success~ writes accurate chunk_count.
+7. Telemetry events ~[:concept, :knowledge, :reactor, :ingest, :step]~ fire per step.
+8. Empty page (0 blocks) → success with chunk_count=0.
+
+* Acceptance
+- IngestionJob row transitions ~:queued → :running → :succeeded~ for a real page.
+- /dev/dashboard shows per-step latencies.

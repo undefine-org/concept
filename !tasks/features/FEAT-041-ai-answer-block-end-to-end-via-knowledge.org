@@ -1,0 +1,51 @@
+#+TITLE: AI answer block end-to-end via Knowledge.Query lineage
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FEAT-041-ai-answer-block-end-to-end-via-knowledge
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention & Purpose
+Embed AI answers as a first-class block type. The block's content stores ~{query_id, model, ran_at}~ — a pointer to the durable Knowledge.Query. Generate button creates a Query (scope ~:subtree~ by default); tokens stream into the block live; on finalize, the block updates its pointer atomically. Refresh re-runs.
+
+* Scope (IN)
+- ~Concept.Pages.BlockTypes.AiAnswer~ already exists; this feature gives it a body.
+- Block content schema: ~%{"message_id" => uuid, "model" => string, "ran_at" => iso8601}~ — points at an AshAI Message row (the durable answer + citations live there).
+- Block props: ~%{"prompt" => string, "scope" => "subtree"|"page"|"workspace", "profile" => "fast"|"default"|"thorough"}~.
+- ~Concept.Pages.Block~ gains action ~:evaluate_ai~ — implemented via ~AshAi.Actions.Prompt~ for the synchronous one-shot path; for streaming, wraps ~AshAi.ToolLoop.stream/2~ in an AshOban worker that:
+  1. Creates an internal Conversation (or reuses a "block-conversations" one per block).
+  2. Adds a user Message with the prompt + scope context.
+  3. Streams via ToolLoop with profile-selected tools.
+  4. On completion, writes block content pointer ~{message_id, model, ran_at}~ via atomic update.
+- Lit web component ~ora-ai-block~ renders 4 modes: ~empty~ (prompt + Generate button), ~streaming~ (subscribed to ~conversation:<id>~ topic via PubSub bridge hook, shows live tokens), ~answered~ (markdown answer + collapsed CitationCard strip + Refresh), ~failed~ (error + Retry).
+- ~ConceptWeb.BlockRender~ branch for ~:ai_answer~ instantiates ~ora-ai-block~ with the right phx-hook; loads referenced Message via Ash if content has ~message_id~.
+
+
+* Files
+- ~lib/concept/pages/block.ex~ (add ~:evaluate_ai~ action)
+- ~lib/concept/pages/block/changes/evaluate_ai.ex~ (new — calls Knowledge.ask, awaits via PubSub)
+- ~lib/concept_web/components/block_render.ex~ (dispatch :ai_answer)
+- ~assets/js/components/ora-ai-block.js~ (new Lit)
+- ~assets/js/hooks/ai_block.js~ (new hook — subscribes to PubSub via phx-hook events)
+- ~assets/css/app.css~
+- ~test/concept/pages/block_evaluate_ai_test.exs~
+- ~test/concept_web/live/ai_block_render_test.exs~
+
+* Tests (10 scenarios)
+1. Inserting an :ai_answer block with empty props renders ~empty~ mode.
+2. ~evaluate_ai~ action creates Query + transitions block content to point at query_id.
+3. Streaming tokens reach the block's Lit component (LV ~push_event~ over PubSub bridge).
+4. On Query ~:answered~, block content updates atomically with new ~ran_at~.
+5. Refresh button re-runs; old Query row preserved (history).
+6. Scope ~:subtree~ resolves descendant page_ids and filters Knowledge.search.
+7. Concurrent Generate calls on same block rejected with ~{:error, :already_running}~.
+8. Block on archived page → ~{:error, :archived}~.
+9. AshPaperTrail records the content pointer change.
+10. Citation deep-links from the rendered strip work.
+
+* Acceptance
+- ⁄ai → "What are the open OKRs?" → block streams answer → 3 citations → click → page+block+flash.

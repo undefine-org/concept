@@ -15,6 +15,22 @@ defmodule ConceptWeb.CommandPaletteLive do
   ]
 
   @impl true
+  def mount(socket) do
+    # Always initialize so handlers stay safe when the palette is closed.
+    # `phx-window-keydown` is only rendered while open (see render/1), but
+    # these defaults keep palette_key/dispatch_selected total against any
+    # stale event delivered before/after a re-render.
+    socket =
+      socket
+      |> assign(:query, "")
+      |> assign(:selected_index, 0)
+      |> assign(:actions, @actions)
+      |> assign(:results, [])
+
+    {:ok, socket}
+  end
+
+  @impl true
   def update(%{show_palette: true} = assigns, socket) do
     socket =
       socket
@@ -35,56 +51,58 @@ defmodule ConceptWeb.CommandPaletteLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id="command-palette" phx-window-keydown="palette_key" phx-target={@myself}>
+    <div id="command-palette">
       <%= if @show_palette do %>
-        <div
-          class="fixed inset-0 bg-black/40 z-40"
-          phx-click="close_command_palette"
-          phx-target={@myself}
-        >
-        </div>
-        <div class="fixed inset-0 flex items-start justify-center z-50 pt-[15vh]">
-          <div class="w-full max-w-[600px] bg-white rounded-md shadow-xl overflow-hidden">
-            <div class="border-b border-gray-100 px-4 py-3">
-              <input
-                type="text"
-                placeholder="Search pages or run a command..."
-                class="w-full text-base outline-none text-notion-text placeholder:text-notion-text-light"
-                phx-keyup="palette_search"
-                phx-debounce="100"
-                phx-target={@myself}
-                phx-mounted={Phoenix.LiveView.JS.focus()}
-                value={@query}
-              />
-            </div>
-
-            <div class="max-h-[60vh] overflow-y-auto py-2">
-              <div>
-                <.action_item
-                  :for={{action, idx} <- Enum.with_index(@actions)}
-                  index={idx}
-                  selected_index={@selected_index}
-                  icon={action.icon}
-                  label={action.label}
-                  myself={@myself}
+        <div phx-window-keydown="palette_key" phx-target={@myself}>
+          <div
+            class="fixed inset-0 bg-black/40 z-40"
+            phx-click="close_command_palette"
+            phx-target={@myself}
+          >
+          </div>
+          <div class="fixed inset-0 flex items-start justify-center z-50 pt-[15vh]">
+            <div class="w-full max-w-[600px] bg-white rounded-md shadow-xl overflow-hidden">
+              <div class="border-b border-gray-100 px-4 py-3">
+                <input
+                  type="text"
+                  placeholder="Search pages or run a command..."
+                  class="w-full text-base outline-none text-notion-text placeholder:text-notion-text-light"
+                  phx-keyup="palette_search"
+                  phx-debounce="100"
+                  phx-target={@myself}
+                  phx-mounted={Phoenix.LiveView.JS.focus()}
+                  value={@query}
                 />
               </div>
 
-              <%= if @results != [] do %>
-                <div class="px-4 pt-3 pb-1 text-xs font-medium text-notion-text-light uppercase tracking-wide">
-                  Pages
-                </div>
+              <div class="max-h-[60vh] overflow-y-auto py-2">
                 <div>
-                  <.page_item
-                    :for={{page, idx} <- Enum.with_index(@results)}
-                    index={length(@actions) + idx}
+                  <.action_item
+                    :for={{action, idx} <- Enum.with_index(@actions)}
+                    index={idx}
                     selected_index={@selected_index}
-                    icon_emoji={page.icon_emoji}
-                    title={page.title}
+                    icon={action.icon}
+                    label={action.label}
                     myself={@myself}
                   />
                 </div>
-              <% end %>
+
+                <%= if @results != [] do %>
+                  <div class="px-4 pt-3 pb-1 text-xs font-medium text-notion-text-light uppercase tracking-wide">
+                    Pages
+                  </div>
+                  <div>
+                    <.page_item
+                      :for={{page, idx} <- Enum.with_index(@results)}
+                      index={length(@actions) + idx}
+                      selected_index={@selected_index}
+                      icon_emoji={page.icon_emoji}
+                      title={page.title}
+                      myself={@myself}
+                    />
+                  </div>
+                <% end %>
+              </div>
             </div>
           </div>
         </div>
@@ -148,23 +166,29 @@ defmodule ConceptWeb.CommandPaletteLive do
 
   @impl true
   def handle_event("palette_key", %{"key" => key}, socket) do
-    case key do
-      "ArrowDown" ->
-        max_idx = total_count(socket.assigns) - 1
-        {:noreply, update(socket, :selected_index, &min(&1 + 1, max(max_idx, 0)))}
+    if not Map.get(socket.assigns, :show_palette, false) do
+      # Defense in depth: phx-window-keydown is rendered conditionally, but a
+      # stale event in flight during close should never crash the LV.
+      {:noreply, socket}
+    else
+      case key do
+        "ArrowDown" ->
+          max_idx = total_count(socket.assigns) - 1
+          {:noreply, update(socket, :selected_index, &min(&1 + 1, max(max_idx, 0)))}
 
-      "ArrowUp" ->
-        {:noreply, update(socket, :selected_index, &max(&1 - 1, 0))}
+        "ArrowUp" ->
+          {:noreply, update(socket, :selected_index, &max(&1 - 1, 0))}
 
-      "Enter" ->
-        {:noreply, dispatch_selected(socket)}
+        "Enter" ->
+          {:noreply, dispatch_selected(socket)}
 
-      "Escape" ->
-        send(self(), :close_command_palette)
-        {:noreply, socket}
+        "Escape" ->
+          send(self(), :close_command_palette)
+          {:noreply, socket}
 
-      _ ->
-        {:noreply, socket}
+        _ ->
+          {:noreply, socket}
+      end
     end
   end
 
