@@ -12,7 +12,9 @@ This document lists every client → server event emitted by the hooks in this d
 
 ---
 
-## `BlockKeyboard` hook (`phx-hook="BlockKeyboard"` on `<ora-block>`)
+## `BlockEditor` hook (`phx-hook="BlockEditor"` on `<ora-block>`)
+
+Owns per-block lifecycle: focus/blur/save/lock heartbeat **plus** keyboard navigation (formerly a separate `BlockKeyboard` hook, merged in BUG-002 / removed in BUG-024).
 
 | Event | Payload | Description |
 |---|---|---|
@@ -22,11 +24,11 @@ This document lists every client → server event emitted by the hooks in this d
 
 ### Server → client events (pushed via `push_event/3`)
 
-The server can push the following events to the `BlockKeyboard` hook:
+The server can push the following events to the `BlockEditor` hook:
 
 | Event | Payload | Description |
 |---|---|---|
-| `focus_block_caret` | `%{block_id: string, position: "start" \| "end"}` | Requests the block with `block_id` to move its caret to `start` or `end`. The hook delegates to `element.focusStart()` / `element.focusEnd()` (provided by the `<ora-block>` custom element). |
+| `focus_block_caret` | `%{block_id: string, position: "start" \| "end"}` | Requests the block with `block_id` to move its caret to `start` or `end`. The hook delegates to `element.focusStart()` / `element.focusEnd()` (provided by the `<ora-block>` custom element).
 
 ---
 
