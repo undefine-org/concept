@@ -149,14 +149,33 @@ export class OraSlashMenu extends LitElement {
     }
   }
 
-  get _filteredItems() {
+    get _filteredItems() {
     const f = this._filter.toLowerCase().trim();
     if (!f) return this.items;
-    return this.items.filter(
-      (i) =>
-        i.label.toLowerCase().includes(f) ||
-        i.type.toLowerCase().includes(f)
-    );
+    return this.items.filter((i) => {
+      const labelNorm = i.label.toLowerCase();
+      const labelKey = labelNorm.replace(/\s+/g, "");
+      const typeNorm = i.type.replace(/[_-]/g, "").toLowerCase();
+      // Initials: first char of each space/underscore/hyphen segment.
+      const labelInitials = labelNorm
+        .split(/[\s\-]+/)
+        .filter(Boolean)
+        .map((w) => w[0])
+        .join("");
+      const typeInitials = i.type
+        .toLowerCase()
+        .split(/[_-]+/)
+        .filter(Boolean)
+        .map((w) => w[0])
+        .join("");
+      return (
+        labelNorm.includes(f) ||
+        typeNorm.includes(f) ||
+        labelKey.includes(f) ||
+        labelInitials.includes(f) ||
+        typeInitials.includes(f)
+      );
+    });
   }
 
   _onInput(e) {

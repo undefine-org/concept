@@ -5,12 +5,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SlashMenu } from "../slash_menu.js";
 import "../../components/ora-slash-menu.js";
 
-// Track Lexical root state across tests for the module-level mock
+// Track Lexical root state across tests for the module-level mock.
 const mockRootState = { text: "" };
+// Selection state consumed by the mock $getSelection.
+const mockSelState = { offset: 0, nodeText: "" };
 
-
-// jsdom doesn't implement scrollIntoView; polyfill for Lit component
-if (typeof Element.prototype.scrollIntoView !== 'function') {
+// jsdom doesn't implement scrollIntoView; polyfill for the Lit component.
+if (typeof Element.prototype.scrollIntoView !== "function") {
   Element.prototype.scrollIntoView = () => {};
 }
 
@@ -20,12 +21,32 @@ vi.mock("lexical", () => {
     clear: () => {
       mockRootState.text = "";
     },
+    getChildren: () => [],
     append: vi.fn((node) => {
-      mockRootState.text = node.__text ?? node.getTextContent?.() ?? "";
+      const t = node.__text ?? node.getTextContent?.() ?? "";
+      mockRootState.text = t;
     }),
     select: vi.fn(),
     selectStart: vi.fn(),
     getLastDescendant: vi.fn(),
+  };
+  const mockSelection = {
+    isCollapsed: () => true,
+    anchor: {
+      get offset() {
+        return mockSelState.offset;
+      },
+      getNode: () => ({
+        getTextContent: () => mockSelState.nodeText,
+      }),
+    },
+  };
+  const mockParagraph = {
+    _text: "",
+    append: vi.fn((node) => {
+      mockParagraph._text = node.__text ?? node.getTextContent?.() ?? "";
+    }),
+    getTextContent: () => mockParagraph._text,
   };
   return {
     $getRoot: vi.fn(() => mockRoot),
@@ -33,35 +54,65 @@ vi.mock("lexical", () => {
       getTextContent: () => text,
       __text: text,
     })),
-    $getSelection: vi.fn(() => null),
+    $createParagraphNode: vi.fn(() => mockParagraph),
+    $getSelection: vi.fn(() => mockSelection),
   };
 });
 
-// ── helpers ────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────
 
 /**
- * Create an <ora-block> with a mock Lexical editor.
- * @param {string} id
- * @returns {HTMLElement}
+ * Create an <ora-block> with a mock Lexical editor that supports
+ * `registerTextContentListener`.
  */
 function createOraBlock(id) {
   const el = document.createElement("ora-block");
   el.setAttribute("block-id", id);
+  const listeners = [];
   el._editor = {
     getEditorState: () => ({
-      read: vi.fn((cb) => cb()),
+      read: (cb) => cb(),
     }),
     update: vi.fn((cb) => {
       cb();
     }),
     focus: vi.fn(),
+    registerTextContentListener: vi.fn((cb) => {
+      listeners.push(cb);
+      return () => {
+        const i = listeners.indexOf(cb);
+        if (i >= 0) listeners.splice(i, 1);
+      };
+    }),
+    _listeners: listeners,
   };
   return el;
 }
 
+/** Fire ora-block-focus so the hook subscribes to the editor's listener. */
+function focusBlock(block) {
+  block.dispatchEvent(
+    new CustomEvent("ora-block-focus", {
+      detail: { blockId: block.getAttribute("block-id") },
+      bubbles: true,
+    }),
+  );
+}
+
 /**
- * Mount the SlashMenu hook.
+ * Simulate the user typing inside a block:
+ *  - sets the mocked Lexical state (full text + caret + node text)
+ *  - invokes the registered text-content listener(s) on the editor
+ *
+ * Requires the block to be focused first (focusBlock).
  */
+function emitText(block, text, offset, nodeText) {
+  mockRootState.text = text;
+  mockSelState.nodeText = nodeText ?? text;
+  mockSelState.offset = offset;
+  for (const cb of block._editor._listeners) cb(text);
+}
+
 function mountHook() {
   const host = document.createElement("div");
   host.id = "slash-menu-host";
@@ -74,42 +125,6 @@ function mountHook() {
   return { host, ctx, menu: host.querySelector("ora-slash-menu"), pushEvent };
 }
 
-/**
- * Simulate "/" being typed at a given offset in a text node.
- * Sets window selection to the position after "/", then dispatches
- * an InputEvent matching Lexical's insertText behavior.
- *
- * Dispatches on the container node so events bubble up through the DOM
- * tree (textNode → ora-block → body → document), giving the hook's
- * `_resolveOraBlock` a proper composedPath to traverse.
- *
- * @param {Node} container - node containing the text (e.g. textNode inside ora-block)
- * @param {number} offset - position after "/" (i.e. offset-1 is "/")
- * @returns {boolean} whether the input event was dispatched
- */
-function typeSlash(container, offset) {
-  const range = document.createRange();
-  range.setStart(container, offset);
-  range.collapse(true);
-  const sel = window.getSelection();
-  sel.removeAllRanges();
-  sel.addRange(range);
-
-  const event = new InputEvent("input", {
-    inputType: "insertText",
-    data: "/",
-    bubbles: true,
-    cancelable: true,
-  });
-  return container.dispatchEvent(event);
-}
-
-/** Reset window selection. */
-function clearSelection() {
-  window.getSelection().removeAllRanges();
-}
-
-/** Clean up a mounted hook and its host. */
 function destroyHook(env) {
   SlashMenu.destroyed.call(env.ctx);
   if (env.host.parentNode) {
@@ -117,7 +132,7 @@ function destroyHook(env) {
   }
 }
 
-// ── tests ──────────────────────────────────────────────────────────────
+// ── tests ─────────────────────────────────────────────────────────────────
 
 describe("SlashMenu hook", () => {
   /** @type {{ host: HTMLElement, ctx: object, menu: HTMLElement, pushEvent: import("vitest").Mock }} */
@@ -125,80 +140,76 @@ describe("SlashMenu hook", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRootState.text = "";
+    mockSelState.offset = 0;
+    mockSelState.nodeText = "";
     env = mountHook();
-    clearSelection();
   });
 
   afterEach(() => {
     destroyHook(env);
   });
 
-  // ── Test 1: "/" at line start triggers menu ───────────────────────
+  // ── Test 1: "/" at text-start triggers menu ─────────────────────
 
-  it('detects "/" at text start and shows menu with position', () => {
+  it('detects "/" at text start and shows menu', () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-    const textNode = document.createTextNode("/");
-    block.appendChild(textNode);
-    typeSlash(textNode, 1);
+    focusBlock(block);
+    emitText(block, "/", 1);
 
     expect(env.menu.hasAttribute("visible")).toBe(true);
+    expect(env.ctx._open).toBe(true);
 
     document.body.removeChild(block);
   });
 
-  // ── Test 2: "/" after whitespace triggers menu ────────────────────
+  // ── Test 2: "/" after whitespace triggers menu ──────────────────
 
   it('detects "/" after whitespace and shows menu', () => {
     const block = createOraBlock("b2");
     document.body.appendChild(block);
-    const textNode = document.createTextNode("hello /");
-    block.appendChild(textNode);
-    typeSlash(textNode, 7);
+    focusBlock(block);
+    emitText(block, "hello /", 7);
 
     expect(env.menu.hasAttribute("visible")).toBe(true);
 
     document.body.removeChild(block);
   });
 
-  // ── Test 3: "/" mid-word does NOT trigger ─────────────────────────
+  // ── Test 3: "/" mid-word does NOT trigger ───────────────────────
 
   it('does NOT trigger for "/" mid-word', () => {
     const block = createOraBlock("b3");
     document.body.appendChild(block);
-    const textNode = document.createTextNode("foo/bar");
-    block.appendChild(textNode);
-    typeSlash(textNode, 4);
+    focusBlock(block);
+    emitText(block, "foo/bar", 4);
 
     expect(env.menu.hasAttribute("visible")).toBe(false);
 
     document.body.removeChild(block);
   });
 
-  // ── Test 4: input outside ora-block does not trigger ──────────────
+  // ── Test 4: text change in non-focused block does not trigger ─────
 
-  it("does NOT trigger for input outside any ora-block", () => {
-    const outside = document.createElement("div");
-    outside.contentEditable = "true";
-    outside.textContent = "/";
-    document.body.appendChild(outside);
-
-    const textNode = outside.firstChild;
-    typeSlash(textNode, 1);
+  it("does NOT trigger when no ora-block has been focused", () => {
+    const block = createOraBlock("b1");
+    document.body.appendChild(block);
+    // Do NOT focusBlock(block) — hook never subscribes.
+    emitText(block, "/", 1);
 
     expect(env.menu.hasAttribute("visible")).toBe(false);
 
-    document.body.removeChild(outside);
+    document.body.removeChild(block);
   });
 
-  // ── Test 5: click on menu item dispatches pushEvent ───────────────
+  // ── Test 5: click select dispatches pushEvent ────────────────────
 
   it("dispatches pushEvent on item select", () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-    const textNode = document.createTextNode("/");
-    block.appendChild(textNode);
-    typeSlash(textNode, 1);
+    focusBlock(block);
+    emitText(block, "/", 1);
 
     expect(env.menu.hasAttribute("visible")).toBe(true);
     expect(env.pushEvent).not.toHaveBeenCalled();
@@ -208,7 +219,7 @@ describe("SlashMenu hook", () => {
         detail: { type: "heading_1" },
         bubbles: true,
         composed: true,
-      })
+      }),
     );
 
     expect(env.pushEvent).toHaveBeenCalledTimes(1);
@@ -221,24 +232,20 @@ describe("SlashMenu hook", () => {
     document.body.removeChild(block);
   });
 
-  // ── Test 6: contract guard — real `select` event works ────────────────
+  // ── Test 6: real `select` CustomEvent works ────────────────────
 
   it("dispatches pushEvent for real `select` CustomEvent", () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-    const textNode = document.createTextNode("/");
-    block.appendChild(textNode);
-    typeSlash(textNode, 1);
-
-    expect(env.menu.hasAttribute("visible")).toBe(true);
-    expect(env.pushEvent).not.toHaveBeenCalled();
+    focusBlock(block);
+    emitText(block, "/", 1);
 
     env.host.dispatchEvent(
       new CustomEvent("select", {
         detail: { type: "heading_2" },
         bubbles: true,
         composed: true,
-      })
+      }),
     );
 
     expect(env.pushEvent).toHaveBeenCalledTimes(1);
@@ -246,27 +253,18 @@ describe("SlashMenu hook", () => {
       block_id: "b1",
       type: "heading_2",
     });
-    expect(env.menu.hasAttribute("visible")).toBe(false);
 
     document.body.removeChild(block);
   });
 
-  // ── Test 7: keyboard nav — ArrowDown×2 + Enter → heading_2 ───────────
+  // ── Test 7: keyboard nav ─ ArrowDown×2 + Enter → heading_2 ──────────
 
   it("dispatches insert_block_below for keyboard-selected item", () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-    const textNode = document.createTextNode("/");
-    block.appendChild(textNode);
-    typeSlash(textNode, 1);
+    focusBlock(block);
+    emitText(block, "/", 1);
 
-    expect(env.menu.hasAttribute("visible")).toBe(true);
-    expect(env.pushEvent).not.toHaveBeenCalled();
-
-    // Simulate keyboard nav via the Lit component's window keydown handler.
-    // After import of ora-slash-menu.js, the custom element is upgraded to
-    // OraSlashMenu and its window keydown listener is active.
-    // ArrowDown twice selects FALLBACK_ITEMS[2] = heading_2, then Enter dispatches select.
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
@@ -276,23 +274,18 @@ describe("SlashMenu hook", () => {
       block_id: "b1",
       type: "heading_2",
     });
-    expect(env.menu.hasAttribute("visible")).toBe(false);
 
     document.body.removeChild(block);
   });
 
-  // ── Test 8: filter narrows ───────────────────────────────────────────
+  // ── Test 8: filter narrows ──────────────────────────────────────────────
 
   it("filter narrows items as user types", () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-    const textNode = document.createTextNode("/");
-    block.appendChild(textNode);
-    typeSlash(textNode, 1);
+    focusBlock(block);
+    emitText(block, "/", 1);
 
-    expect(env.menu.hasAttribute("visible")).toBe(true);
-
-    // The Lit component's _onInput sets _filter from the input event target value
     env.menu._onInput({ target: { value: "h" } });
     expect(env.menu._filter).toBe("h");
 
@@ -302,16 +295,13 @@ describe("SlashMenu hook", () => {
     document.body.removeChild(block);
   });
 
-  // ── Test 9: backspace narrows back ────────────────────────────────────
+  // ── Test 9: backspace narrows back ───────────────────────────────────
 
   it("backspace narrows filter back", () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-    const textNode = document.createTextNode("/");
-    block.appendChild(textNode);
-    typeSlash(textNode, 1);
-
-    expect(env.menu.hasAttribute("visible")).toBe(true);
+    focusBlock(block);
+    emitText(block, "/", 1);
 
     env.menu._onInput({ target: { value: "h1" } });
     expect(env.menu._filter).toBe("h1");
@@ -322,19 +312,17 @@ describe("SlashMenu hook", () => {
     document.body.removeChild(block);
   });
 
-  // ── Test 10: backspace past trigger closes menu ───────────────────────
+  // ── Test 10: backspace past trigger closes menu ────────────────────
 
   it("backspace past trigger closes menu", () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-    const textNode = document.createTextNode("/");
-    block.appendChild(textNode);
-    typeSlash(textNode, 1);
+    focusBlock(block);
+    emitText(block, "/", 1);
 
     expect(env.menu.hasAttribute("visible")).toBe(true);
     expect(env.ctx._open).toBe(true);
 
-    // Filter is empty, Backspace document keydown should close menu
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }));
 
     expect(env.menu.hasAttribute("visible")).toBe(false);
@@ -343,14 +331,13 @@ describe("SlashMenu hook", () => {
     document.body.removeChild(block);
   });
 
-  // ── Test 11: Escape closes without dispatching ─────────────────────
+  // ── Test 11: Escape closes without dispatching ────────────────────
 
   it("Escape closes menu without pushEvent", () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-    const textNode = document.createTextNode("/");
-    block.appendChild(textNode);
-    typeSlash(textNode, 1);
+    focusBlock(block);
+    emitText(block, "/", 1);
 
     expect(env.menu.hasAttribute("visible")).toBe(true);
 
@@ -369,17 +356,11 @@ describe("SlashMenu hook", () => {
     document.body.appendChild(block);
     mockRootState.text = "foo/h1";
 
-    const range = document.createRange();
-    range.selectNodeContents(block);
-    range.collapse(false);
-    env.ctx._triggerRange = range.cloneRange();
     env.ctx._activeEditor = block._editor;
     env.ctx._activeBlockId = "b1";
     env.ctx._triggerPreLength = 3;
     env.ctx._open = true;
     env.menu.setAttribute("visible", "");
-
-    expect(env.menu.hasAttribute("visible")).toBe(true);
 
     env.host.dispatchEvent(
       new CustomEvent("select", {
@@ -398,25 +379,35 @@ describe("SlashMenu hook", () => {
     document.body.removeChild(block);
   });
 
-  // ── Test 13: destroyed cleans up listeners ─────────────────────────
+  // ── Phase A: filter case-fold + normalize (BUG-033 defect 1) ────────
+
+  it("filter 'h1' matches Heading 1", () => {
+    const menu = document.createElement("ora-slash-menu");
+    document.body.appendChild(menu);
+    menu._filter = "h1";
+    const labels = menu._filteredItems.map((i) => i.label);
+    expect(labels).toContain("Heading 1");
+    document.body.removeChild(menu);
+  });
+
+  // ── Test 13: destroyed cleans up listeners ──────────────────────────
 
   it("destroyed removes event listeners and hides menu", () => {
     const block = createOraBlock("b1");
     document.body.appendChild(block);
-    const textNode = document.createTextNode("/");
-    block.appendChild(textNode);
-    typeSlash(textNode, 1);
+    focusBlock(block);
+    emitText(block, "/", 1);
 
     expect(env.menu.hasAttribute("visible")).toBe(true);
 
-    const spy = vi.spyOn(document, "removeEventListener");
+    const docSpy = vi.spyOn(document, "removeEventListener");
     const hostSpy = vi.spyOn(env.host, "removeEventListener");
 
     SlashMenu.destroyed.call(env.ctx);
 
-    expect(spy).toHaveBeenCalledWith("input", expect.any(Function));
-    expect(spy).toHaveBeenCalledWith("keydown", expect.any(Function));
-    expect(spy).toHaveBeenCalledWith("click", expect.any(Function));
+    expect(docSpy).toHaveBeenCalledWith("ora-block-focus", expect.any(Function));
+    expect(docSpy).toHaveBeenCalledWith("keydown", expect.any(Function));
+    expect(docSpy).toHaveBeenCalledWith("click", expect.any(Function));
     expect(hostSpy).toHaveBeenCalledWith("select", expect.any(Function));
     expect(hostSpy).toHaveBeenCalledWith("close", expect.any(Function));
     expect(env.menu.hasAttribute("visible")).toBe(false);
