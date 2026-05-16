@@ -1,5 +1,5 @@
 #+TITLE: Arcana.GraphRAG callsites do not exist (search + communities crash)
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b087d426cfb5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
 #+CUSTOM_ID: BUG-005-arcana-graphrag-callsites-do-not-exist-s
@@ -25,3 +25,5 @@ Do a critical review of Arcana's integration into Concept and how you'd make the
 * Acceptance
 - Search test green.
 - Community rebuild runs without crash on a workspace with ≥3 pages.
+
+NOTE [2026-05-16]: Fixed by rewriting Search and Community modules to use Arcana 2.0 API (Arcana.search and Arcana.Maintenance.*).

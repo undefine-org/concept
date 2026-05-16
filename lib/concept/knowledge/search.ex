@@ -35,7 +35,8 @@ defmodule Concept.Knowledge.Search do
       repo: Concept.Repo,
       collections: [collection_name],
       mode: mode,
-      limit: limit
+      limit: limit,
+      include_metadata: true
     ]
 
     case Arcana.search(query, search_opts) do
@@ -57,11 +58,12 @@ defmodule Concept.Knowledge.Search do
       {:ok, []}
   end
 
-  defp normalize_hit({chunk, rank}) do
-    metadata = Map.get(chunk, "metadata", %{})
-    text = Map.get(chunk, "text", "")
-    score = Map.get(chunk, "score", 0.0)
-    chunk_id = Map.get(chunk, "id")
+    defp normalize_hit({chunk, rank}) do
+    # Arcana returns chunks with atom keys
+    metadata = Map.get(chunk, :metadata) || Map.get(chunk, "metadata", %{})
+    text = Map.get(chunk, :text) || Map.get(chunk, "text", "")
+    score = Map.get(chunk, :score) || Map.get(chunk, "score", 0.0)
+    chunk_id = Map.get(chunk, :id) || Map.get(chunk, "id")
 
     %{
       block_id: Map.get(metadata, "block_id"),

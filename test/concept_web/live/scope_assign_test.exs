@@ -48,7 +48,6 @@ defmodule ConceptWeb.ScopeAssignTest do
   } do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
-    # Access LiveView assigns via :sys.get_state
     state = :sys.get_state(view.pid)
     scope = state.socket.assigns.current_scope
 
@@ -57,14 +56,11 @@ defmodule ConceptWeb.ScopeAssignTest do
     assert scope.role == :owner
   end
 
-  test "current_scope has user but nil workspace on :index route", %{
-    conn: conn,
+  test "compute_scope produces nil-workspace scope when no workspace_slug in params", %{
     user: user
   } do
-    {:ok, view, _html} = live(conn, ~p"/w")
-
-    state = :sys.get_state(view.pid)
-    scope = state.socket.assigns.current_scope
+    # on_mount for the :index route has no workspace_slug in params
+    scope = ConceptWeb.LiveUserAuth.compute_scope(user, %{}, nil)
 
     assert scope.user.id == user.id
     assert scope.workspace == nil

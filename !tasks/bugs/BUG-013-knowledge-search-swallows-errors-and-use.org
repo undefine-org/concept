@@ -1,5 +1,5 @@
 #+TITLE: Knowledge.Search swallows errors and uses brittle metadata access
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b087d426cfb5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
 #+CUSTOM_ID: BUG-013-knowledge-search-swallows-errors-and-use
@@ -23,3 +23,5 @@ Do a critical review of Arcana's integration into Concept and how you'd make the
 
 * Acceptance
 - Search returns ~{:ok, hits} | {:error, reason}~; consumers updated to handle both.
+
+NOTE [2026-05-16]: Fixed by removing rescue blocks and proper error handling with telemetry. Only Ecto.NoResultsError is caught (returns empty list for non-existent collection).

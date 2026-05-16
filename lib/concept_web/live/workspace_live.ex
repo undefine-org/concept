@@ -314,61 +314,61 @@ defmodule ConceptWeb.WorkspaceLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-    <div
-      id="workspace-root"
-      class="flex h-screen"
-      phx-hook="GlobalKeys"
-      phx-window-keydown="global_key"
-    >
-      <.sidebar
+      <div
+        id="workspace-root"
+        class="flex h-screen"
+        phx-hook="GlobalKeys"
+        phx-window-keydown="global_key"
+      >
+        <.sidebar
+          workspace={@workspace}
+          pages={@pages}
+          current_page={@current_page}
+          current_user={@current_user}
+        />
+
+        <main class="flex-1 overflow-y-auto bg-notion-bg">
+          <%= if @current_page == nil do %>
+            <div class="flex flex-col items-center justify-center h-full text-notion-text-light">
+              <p class="mb-4 text-lg">Pick a page or create one</p>
+              <button
+                type="button"
+                phx-click="new_page"
+                class="px-4 py-2 bg-notion-blue text-white rounded hover:opacity-90"
+              >
+                + New page
+              </button>
+            </div>
+          <% else %>
+            <div class="ora-page-canvas">
+              <.presence_bar users={@presence_users} />
+              <.live_component
+                module={ConceptWeb.Components.PageHeader}
+                id={"page-header-#{@current_page.id}"}
+                page={@current_page}
+                current_user={@current_user}
+              />
+              {live_render(@socket, ConceptWeb.PageEditorLive,
+                id: "page-editor-#{@current_page.id}",
+                container: {:div, phx_hook: "PageEditor"},
+                session: %{
+                  "workspace_id" => @workspace.id,
+                  "page_id" => @current_page.id,
+                  "user_id" => @current_user.id
+                }
+              )}
+            </div>
+          <% end %>
+        </main>
+      </div>
+
+      <.live_component
+        module={ConceptWeb.CommandPaletteLive}
+        id="command-palette"
         workspace={@workspace}
-        pages={@pages}
-        current_page={@current_page}
         current_user={@current_user}
+        show_palette={@show_palette}
       />
-
-      <main class="flex-1 overflow-y-auto bg-notion-bg">
-        <%= if @current_page == nil do %>
-          <div class="flex flex-col items-center justify-center h-full text-notion-text-light">
-            <p class="mb-4 text-lg">Pick a page or create one</p>
-            <button
-              type="button"
-              phx-click="new_page"
-              class="px-4 py-2 bg-notion-blue text-white rounded hover:opacity-90"
-            >
-              + New page
-            </button>
-          </div>
-        <% else %>
-          <div class="ora-page-canvas">
-            <.presence_bar users={@presence_users} />
-            <.live_component
-              module={ConceptWeb.Components.PageHeader}
-              id={"page-header-#{@current_page.id}"}
-              page={@current_page}
-              current_user={@current_user}
-            />
-            {live_render(@socket, ConceptWeb.PageEditorLive,
-              id: "page-editor-#{@current_page.id}",
-              container: {:div, phx_hook: "PageEditor"},
-              session: %{
-                "workspace_id" => @workspace.id,
-                "page_id" => @current_page.id,
-                "user_id" => @current_user.id
-              }
-            )}
-          </div>
-        <% end %>
-      </main>
-    </div>
-
-    <.live_component
-      module={ConceptWeb.CommandPaletteLive}
-      id="command-palette"
-      workspace={@workspace}
-      current_user={@current_user}
-      show_palette={@show_palette}
-    />
     </Layouts.app>
     """
   end

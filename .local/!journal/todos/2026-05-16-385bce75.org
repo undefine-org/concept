@@ -237,14 +237,8 @@
 :STATUS: in_progress
 :END:
 
-** DOING BUG-007+011: KnowledgeReindex notifier + subscribe Page+Block
+** DONE BUG-007+011: KnowledgeReindex notifier + subscribe Page+Block
 :PROPERTIES:
 :TASK_ID: task-2
-:STATUS: in_progress
-:END:
-
-** DONE BUG-012: GraphBuilder schema regression test
-:PROPERTIES:
-:TASK_ID: task-3
 :STATUS: completed
 :END:

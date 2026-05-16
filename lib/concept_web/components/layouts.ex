@@ -40,7 +40,8 @@ defmodule ConceptWeb.Layouts do
         <a href="/" class="flex-1 flex w-fit items-center gap-2">
           <img src={~p"/images/logo.svg"} width="36" />
           <span class="text-sm font-semibold">
-            Concept<%= if @current_scope && @current_scope.workspace, do: " / " <> to_string(@current_scope.workspace.name) %>
+            Concept{if @current_scope && @current_scope.workspace,
+              do: " / " <> to_string(@current_scope.workspace.name)}
           </span>
         </a>
       </div>
@@ -59,11 +60,16 @@ defmodule ConceptWeb.Layouts do
             <li class="dropdown dropdown-end">
               <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar placeholder">
                 <div class="bg-neutral text-neutral-content rounded-full w-8">
-                  <span><%= @current_scope.user.email |> to_string() |> String.first() |> String.upcase() %></span>
+                  <span>
+                    {@current_scope.user.email |> to_string() |> String.first() |> String.upcase()}
+                  </span>
                 </div>
               </div>
-              <ul tabindex="0" class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
-                <li class="menu-title"><%= @current_scope.user.email %></li>
+              <ul
+                tabindex="0"
+                class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow"
+              >
+                <li class="menu-title">{@current_scope.user.email}</li>
                 <li><a href={~p"/w"}>Dashboard</a></li>
                 <li><a href={~p"/sign-out"} method="delete">Sign out</a></li>
               </ul>
