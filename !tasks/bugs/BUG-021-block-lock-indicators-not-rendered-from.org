@@ -1,5 +1,5 @@
 #+TITLE: Block lock indicators not rendered from presence metadata
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-021-block-lock-indicators-not-rendered-from
@@ -107,3 +107,5 @@ Approach: when ~focus_block~ event arrives at the server, =Pages.acquire_lock= c
 - Color is stable per-user (same user always gets same bar color).
 - Self never sees its own bar.
 - Tests green.
+
+NOTE [2026-05-16]: Commit 353be05. Presence metadata update on focus/blur + handle_info presence_diff rebuilds @locked_blocks; BlockRender emits data-locked-by + --lock-color; CSS bar already in app.css. 2 lock_indicator tests green.

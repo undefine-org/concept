@@ -18,16 +18,10 @@
 :STATUS: completed
 :END:
 
-** DOING Workspace primary? attr + AfterSignIn on_mount redirect + HomeLive signed-in redirect
-:PROPERTIES:
-:TASK_ID: task-6
-:STATUS: in_progress
-:END:
-
-** DOING Block lock indicators via presence metadata + data-locked-by
+** DONE Block lock indicators via presence metadata + data-locked-by
 :PROPERTIES:
 :TASK_ID: task-7
-:STATUS: in_progress
+:STATUS: completed
 :DEPENDS: task-5
 :END:
 
@@ -35,10 +29,4 @@
 :PROPERTIES:
 :TASK_ID: task-8
 :STATUS: in_progress
-:END:
-
-** DONE Trim title server-side + client-side; empty placeholder works on whitespace input
-:PROPERTIES:
-:TASK_ID: task-9
-:STATUS: completed
 :END:

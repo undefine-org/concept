@@ -1,5 +1,5 @@
 #+TITLE: Onboarded user stranded on landing; no post-auth redirect to workspace
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-020-onboarded-user-stranded-on-landing-no-po
@@ -116,3 +116,5 @@ Alternative path: instead of an on_mount hook, override ash_authentication_phoen
 - Sign in → land on /w/<slug>.
 - Hitting / while signed in redirects to /w/<slug>.
 - Migration applied cleanly; tests green.
+
+NOTE [2026-05-16]: Code shipped in commit 587914e (absorbed by parallel office-manager commit per no-amend rule). primary? attribute + migration + Onboarding reactor + get_primary_workspace/2 helper + LiveUserAuth.AfterSignIn on_mount + HomeLive signed-in redirect. 3 auth_flow tests + 17 regression tests green. TDD red→green confirmed.

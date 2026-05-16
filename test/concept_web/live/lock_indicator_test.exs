@@ -67,13 +67,7 @@ defmodule ConceptWeb.LockIndicatorTest do
       Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user1, tenant: ws.id)
 
     {:ok,
-     conn1: conn1,
-     conn2: conn2,
-     user1: user1,
-     user2: user2,
-     ws: ws,
-     page: page,
-     block: block}
+     conn1: conn1, conn2: conn2, user1: user1, user2: user2, ws: ws, page: page, block: block}
   end
 
   test "peer sees data-locked-by when other user focuses block", %{
