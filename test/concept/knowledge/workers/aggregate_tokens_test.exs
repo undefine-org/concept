@@ -7,6 +7,12 @@ defmodule Concept.Knowledge.Workers.AggregateTokensTest do
   alias Concept.Knowledge.Workers.AggregateTokens
   alias Concept.Knowledge.SystemActor
 
+  setup do
+    # ETS table is shared across tests; clear between runs to avoid leakage.
+    :ets.delete_all_objects(:knowledge_token_accumulator)
+    :ok
+  end
+
   describe "TokenAccumulator" do
     test "handles telemetry event and updates ETS" do
       workspace_id = Ecto.UUID.generate()

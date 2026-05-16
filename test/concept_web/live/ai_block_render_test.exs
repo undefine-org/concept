@@ -80,13 +80,11 @@ defmodule ConceptWeb.AiBlockRenderTest do
         )
 
       # Create user message
-      {:ok, user_message} =
+      user_message =
         Concept.Knowledge.Chat.Message
-        |> Ash.Changeset.for_create(:create, %{
-          text: "Test question"
-        })
+        |> Ash.Changeset.for_create(:create, %{text: "Test question"}, actor: user)
         |> Ash.Changeset.set_argument(:conversation_id, conversation.id)
-        |> Ash.create(actor: user, authorize?: false)
+        |> Ash.create!(actor: user, authorize?: false)
 
       # Create completed assistant response
       system_actor = %{system?: true}
@@ -94,7 +92,7 @@ defmodule ConceptWeb.AiBlockRenderTest do
       {:ok, assistant_message} =
         Concept.Knowledge.Chat.Message
         |> Ash.Changeset.for_create(:upsert_response, %{
-          id: Ash.UUID.generate(),
+          id: Ash.UUIDv7.generate(),
           conversation_id: conversation.id,
           response_to_id: user_message.id,
           text: "This is the AI answer.",
@@ -102,18 +100,19 @@ defmodule ConceptWeb.AiBlockRenderTest do
         })
         |> Ash.create(actor: system_actor, authorize?: false)
 
-      # Update block content to point to the message
-      {:ok, _updated_block} =
-        Pages.update_content(
-          block,
+      # Update block content to point to the message (using system actor to bypass lock)
+      _updated_block =
+        block
+        |> Ash.Changeset.for_update(
+          :update_content,
           %{
-            "message_id" => assistant_message.id,
-            "model" => "default",
-            "ran_at" => DateTime.utc_now() |> DateTime.to_iso8601()
-          },
-          actor: user,
-          tenant: ws.id
-        )
+            content: %{
+              "message_id" => assistant_message.id,
+              "model" => "default",
+              "ran_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+            }
+          }, actor: %{system?: true})
+        |> Ash.update!(actor: %{system?: true}, tenant: ws.id)
 
       {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -151,13 +150,11 @@ defmodule ConceptWeb.AiBlockRenderTest do
         )
 
       # Create user message
-      {:ok, user_message} =
+      user_message =
         Concept.Knowledge.Chat.Message
-        |> Ash.Changeset.for_create(:create, %{
-          text: "Test question"
-        })
+        |> Ash.Changeset.for_create(:create, %{text: "Test question"}, actor: user)
         |> Ash.Changeset.set_argument(:conversation_id, conversation.id)
-        |> Ash.create(actor: user, authorize?: false)
+        |> Ash.create!(actor: user, authorize?: false)
 
       # Create incomplete assistant response (streaming)
       system_actor = %{system?: true}
@@ -165,7 +162,7 @@ defmodule ConceptWeb.AiBlockRenderTest do
       {:ok, streaming_message} =
         Concept.Knowledge.Chat.Message
         |> Ash.Changeset.for_create(:upsert_response, %{
-          id: Ash.UUID.generate(),
+          id: Ash.UUIDv7.generate(),
           conversation_id: conversation.id,
           response_to_id: user_message.id,
           text: "Partial answer...",
@@ -173,18 +170,19 @@ defmodule ConceptWeb.AiBlockRenderTest do
         })
         |> Ash.create(actor: system_actor, authorize?: false)
 
-      # Update block content to point to the streaming message
-      {:ok, _updated_block} =
-        Pages.update_content(
-          block,
+      # Update block content to point to the streaming message (using system actor to bypass lock)
+      _updated_block =
+        block
+        |> Ash.Changeset.for_update(
+          :update_content,
           %{
-            "message_id" => streaming_message.id,
-            "model" => "default",
-            "ran_at" => DateTime.utc_now() |> DateTime.to_iso8601()
-          },
-          actor: user,
-          tenant: ws.id
-        )
+            content: %{
+              "message_id" => streaming_message.id,
+              "model" => "default",
+              "ran_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+            }
+          }, actor: %{system?: true})
+        |> Ash.update!(actor: %{system?: true}, tenant: ws.id)
 
       {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 

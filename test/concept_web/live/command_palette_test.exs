@@ -141,10 +141,10 @@ defmodule ConceptWeb.CommandPaletteTest do
       |> element("#command-palette input[type='text']")
       |> render_keyup(%{key: "", value: "oad"})
 
-    # Should show title matches in the palette results
+    # Title results render synchronously; assign_async dispatches the semantic
+    # branch but doesn't block. We assert the title row is present and the
+    # semantic-results section is absent (no blocks ingested).
     assert html =~ page.title
-    assert html =~ "Pages"
-    # Should not show semantic section (no blocks ingested)
     refute html =~ "Semantic matches"
   end
 

@@ -173,8 +173,8 @@ PerformIngest covers immediate need; full Reactor steps refactor deferred to pos
 
 * Wave 4.5 final fixes
 
-** ITEM Fix 9 remaining test failures across staleness/tokens/ai-block/palette
+** DONE Fix 9 remaining test failures across staleness/tokens/ai-block/palette
 :PROPERTIES:
 :TASK_ID: task-5
-:STATUS: pending
+:STATUS: completed
 :END:

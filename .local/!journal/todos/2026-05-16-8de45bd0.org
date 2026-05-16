@@ -4,20 +4,22 @@
 
 * PLAN-005 W2.7.6 browser swarm
 
-** DONE Re-verify BUG-014+030+032 caret handoff end-to-end
-:PROPERTIES:
-:TASK_ID: task-2
-:STATUS: completed
-:END:
-
 ** BLOCKED Re-verify BUG-031 link editor round-trip
 :PROPERTIES:
 :TASK_ID: task-4
 :STATUS: failed
 :END:
 
-** DOING Re-verify BUG-017+028+033 full slash menu flow
+* PLAN-005 W2 final cleanup + Slice E re-run
+
+** DONE Fix Enter@end double-split + focus race via KEY_ENTER_COMMAND priority + pending-focus queue
 :PROPERTIES:
-:TASK_ID: task-5
+:TASK_ID: task-6
+:STATUS: completed
+:END:
+
+** DOING Re-run Slice E to complete link apply/persist/remove (was aborted at step 3)
+:PROPERTIES:
+:TASK_ID: task-7
 :STATUS: in_progress
 :END:

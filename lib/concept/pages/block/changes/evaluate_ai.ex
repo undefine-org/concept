@@ -95,8 +95,8 @@ defmodule Concept.Pages.Block.Changes.EvaluateAi do
 
     # Update block props with conversation_id (best-effort)
     try do
-      Concept.Pages.Block
-      |> Ash.Changeset.for_update(:update_props, block, %{
+      block
+      |> Ash.Changeset.for_update(:update_props, %{
         props: Map.put(block.props || %{}, "conversation_id", conversation.id)
       })
       |> Ash.update!(authorize?: false, tenant: block.workspace_id)
@@ -138,8 +138,8 @@ defmodule Concept.Pages.Block.Changes.EvaluateAi do
     }
 
     try do
-      Concept.Pages.Block
-      |> Ash.Changeset.for_update(:update_content, block, %{content: content})
+      block
+      |> Ash.Changeset.for_update(:update_content, %{content: content})
       |> Ash.update!(authorize?: false, tenant: tenant)
     rescue
       e ->

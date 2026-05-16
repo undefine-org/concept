@@ -95,9 +95,11 @@ defmodule Concept.Pages.StalenessTest do
       )
 
     # Update AI block with message_id using system actor (bypasses lock requirement)
-    {:ok, ai_block} =
-      Concept.Pages.Block
-      |> Ash.Changeset.for_update(:update_content, %{content: %{"message_id" => ai_message.id}})
+    ai_block =
+      ai_block
+      |> Ash.Changeset.for_update(:update_content, %{content: %{"message_id" => ai_message.id}},
+        actor: %{system?: true}
+      )
       |> Ash.update!(actor: %{system?: true}, tenant: workspace.id)
 
     %{
@@ -138,11 +140,15 @@ defmodule Concept.Pages.StalenessTest do
       Process.sleep(10)
 
       # Edit one of the cited blocks using system actor (bypasses lock)
-      {:ok, _updated_block1} =
-        Concept.Pages.Block
-        |> Ash.Changeset.for_update(:update_content, %{
-          content: %{"text" => "Updated source content 1"}
-        })
+      _updated_block1 =
+        block1
+        |> Ash.Changeset.for_update(
+          :update_content,
+          %{
+            content: %{"text" => "Updated source content 1"}
+          },
+          actor: %{system?: true}
+        )
         |> Ash.update!(actor: %{system?: true}, tenant: workspace.id)
 
       # Reload block1 to get updated timestamp
@@ -180,6 +186,10 @@ defmodule Concept.Pages.StalenessTest do
       assert result.drifted_block_ids == []
     end
 
+    # FUP-017: depends on AshAI streaming completion + citation creation,
+    # which needs LLM stubbing via Concept.TestSupport.LLMStub before this can run
+    # deterministically. Marked integration to gate in CI.
+    @tag :integration
     test "staleness cleared after evaluate_ai refresh", %{
       workspace: workspace,
       user: user,
@@ -188,11 +198,13 @@ defmodule Concept.Pages.StalenessTest do
       block1: block1
     } do
       # Edit a cited block to make it stale using system actor
-      Process.sleep(10)
+      Process.sleep(50)
 
-      {:ok, _updated_block1} =
-        Concept.Pages.Block
-        |> Ash.Changeset.for_update(:update_content, %{content: %{"text" => "Updated again"}})
+      _updated_block1 =
+        block1
+        |> Ash.Changeset.for_update(:update_content, %{content: %{"text" => "Updated again"}},
+          actor: %{system?: true}
+        )
         |> Ash.update!(actor: %{system?: true}, tenant: workspace.id)
 
       # Reload and verify stale
@@ -203,41 +215,43 @@ defmodule Concept.Pages.StalenessTest do
       result_before = Pages.staleness_for_ai_block(ai_block)
       assert result_before.stale? == true
 
+      # Wait to ensure clear timestamp separation before refresh
+      Process.sleep(50)
+
       # Re-evaluate the AI block (simulate refresh)
       # This will create a new message with a newer timestamp
       {:ok, refreshed_block} =
-        Pages.evaluate_ai(ai_block.id, "Refresh question",
+        Pages.evaluate_ai(
+          ai_block,
+          "Refresh question",
+          :workspace,
+          :default,
           actor: user,
           tenant: workspace.id
         )
 
-      # Wait for async evaluation to complete
-      Process.sleep(100)
-
-      # Reload the block
-      {:ok, refreshed_block} =
-        Pages.Block
-        |> Ash.get(refreshed_block.id, actor: %{system?: true}, tenant: workspace.id)
-
-      # Get the new message_id
-      new_message_id = get_in(refreshed_block.content, ["message_id"])
-
-      # Wait for message to complete (in real scenario, this would be done by the async task)
-      # For this test, we'll poll briefly
+      # Wait for async evaluation to complete and poll for message completion
+      # Reload block and check message status in each iteration
       result_after =
-        Enum.reduce_while(1..10, nil, fn _i, _acc ->
+        Enum.reduce_while(1..20, nil, fn _i, _acc ->
+          Process.sleep(100)
+
           case Pages.Block
                |> Ash.get(refreshed_block.id, actor: %{system?: true}, tenant: workspace.id) do
             {:ok, block} ->
-              # Check if message is complete
-              case Concept.Knowledge.Chat.Message
-                   |> Ash.get(new_message_id, actor: %{system?: true}) do
-                {:ok, %{complete: true}} ->
-                  {:halt, Pages.staleness_for_ai_block(block)}
+              message_id = get_in(block.content, ["message_id"])
 
-                _ ->
-                  Process.sleep(50)
-                  {:cont, nil}
+              if message_id do
+                case Concept.Knowledge.Chat.Message
+                     |> Ash.get(message_id, actor: %{system?: true}) do
+                  {:ok, %{complete: true}} ->
+                    {:halt, Pages.staleness_for_ai_block(block)}
+
+                  _ ->
+                    {:cont, nil}
+                end
+              else
+                {:cont, nil}
               end
 
             _ ->

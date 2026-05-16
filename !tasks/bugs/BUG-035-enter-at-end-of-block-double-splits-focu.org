@@ -1,5 +1,5 @@
 #+TITLE: Enter at end of block double-splits + focus does not transfer to new block
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-035-enter-at-end-of-block-double-splits-focu
@@ -54,3 +54,5 @@ Two issues bundled:
 * Acceptance
 - Slice A behavior 5 passes: source intact after Enter, new block created, focus inside new block.
 - One commit: `fix(editor): KEY_ENTER_COMMAND priority + pending-focus queue (BUG-035)`.
+
+NOTE [2026-05-16]: Commit a32b27b. Two surgical fixes with TDD red→green: (1) KEY_ENTER_COMMAND at COMMAND_PRIORITY_CRITICAL preventDefaults Lexical's split when at end + dispatches ora-block-enter-at-end once. (2) module-level _pendingFocus Map with TTL=5s; handleEvent stashes for foreign block-ids, mounted() consumes on hook attach. 10 tests pass.

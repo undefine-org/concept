@@ -1,0 +1,15 @@
+#+TITLE: Session 14e406ee49b3d32f Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Gate
+
+** DONE Run tests and compile
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:END:
+
+- cd assets && npx vitest run components/__tests__/ora-block-integration.test.js hooks/__tests__/block_editor.test.js
+- mix compile
+- If tests pass, commit

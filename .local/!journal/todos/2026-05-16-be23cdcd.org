@@ -4,18 +4,10 @@
 
 * Slice F verification
 
-** DONE Behavior 6-8: Esc retention, 3rd item, mid-word edge
-:PROPERTIES:
-:TASK_ID: task-4
-:STATUS: completed
-:END:
-
-Type '/' in another block, Esc → assert menu closes, '/' remains. Type '/', ArrowDown×2 Enter → 3rd item inserted. Type 'foo/heading' mid-word → menu does NOT open
-
-** DOING Finalize report and close browser
+** DONE Finalize report and close browser
 :PROPERTIES:
 :TASK_ID: task-5
-:STATUS: in_progress
+:STATUS: completed
 :END:
 
 Compile passes/fails, close browser, submit result

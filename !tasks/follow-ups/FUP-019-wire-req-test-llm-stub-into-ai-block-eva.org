@@ -1,0 +1,27 @@
+#+TITLE: Wire Req.Test LLM stub into AI block evaluation tests
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FUP-019-wire-req-test-llm-stub-into-ai-block-eva
+#+LAYER: ui
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+~test/concept/pages/staleness_test.exs::"staleness cleared after evaluate_ai refresh"~ exercises the full AI block evaluation \u2192 streaming \u2192 citation \u2192 staleness clear flow. Currently tagged ~:integration~ because the async AshAI/ReqLLM pipeline isn't stubbed in test env.
+
+* Trigger
+After Wave 4.5. ChatPanel-driven evaluation works in dev with real Gemini; tests need offline-stubbed LLM responses to deterministically exercise the full loop.
+
+* Approach
+1. Wire ~Concept.TestSupport.LLMStub~ (already at ~test/support/llm_stub.ex~) into the AshAI ToolLoop call inside ~Concept.Knowledge.Chat.Message.Changes.Respond~.
+2. The Respond change forwards opts to ~AshAi.ToolLoop.stream~; thread a ~:req_llm_opts~ override that, in test env, defaults to ~[req_http_options: [plug: {Req.Test, Concept.TestSupport.LLMStub}]]~.
+3. Mark Citation creation in the change so the staleness test can rely on at least one citation row pointing at ~block1~.
+4. Remove the ~@tag :integration~ once deterministic.
+
+* Files (preview)
+- ~lib/concept/knowledge/chat/message/changes/respond.ex~
+- ~test/concept/pages/staleness_test.exs~
+- possibly extend ~test/support/llm_stub.ex~ with a "stub with citations" helper
