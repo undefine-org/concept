@@ -11,16 +11,19 @@ defmodule Concept.Knowledge.Workers.IngestPage do
   alias Concept.Pages
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"workspace_id" => workspace_id, "page_id" => page_id, "op" => "upsert"}}) do
+  def perform(%Oban.Job{
+        args: %{"workspace_id" => workspace_id, "page_id" => page_id, "op" => "upsert"}
+      }) do
     # System actor for cross-tenant reads
     actor = %{system?: true}
 
     with {:ok, page} <- Pages.get_page(page_id, actor: actor, tenant: workspace_id),
-         {:ok, blocks} <- Pages.list_for_page(page_id: page_id, actor: actor, tenant: workspace_id) do
+         {:ok, blocks} <-
+           Pages.list_for_page(page_id: page_id, actor: actor, tenant: workspace_id) do
       collection = Config.collection_for(workspace_id)
 
       # Arcana.ingest accepts empty text; the chunker will extract content from opts
-      Arcana.ingest("", 
+      Arcana.ingest("",
         repo: Concept.Repo,
         collection: collection,
         source_id: "page:#{page_id}",
@@ -39,7 +42,9 @@ defmodule Concept.Knowledge.Workers.IngestPage do
     end
   end
 
-  def perform(%Oban.Job{args: %{"workspace_id" => _workspace_id, "page_id" => page_id, "op" => "delete"}}) do
+  def perform(%Oban.Job{
+        args: %{"workspace_id" => _workspace_id, "page_id" => page_id, "op" => "delete"}
+      }) do
     # Arcana 2.0 doesn't expose delete_by_source_id; deferring to FEAT-035 Reactor implementation
     Logger.warning("Delete for page:#{page_id} not yet implemented; skipping")
     :ok

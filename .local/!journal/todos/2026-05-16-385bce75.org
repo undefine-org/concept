@@ -13,62 +13,66 @@
 
 * Wave 0 BUGs
 
-** ITEM BUG-005+013: fix Arcana.search/Maintenance callsites + search resilience
+** DONE BUG-005+013: fix Arcana.search/Maintenance callsites + search resilience
 :PROPERTIES:
 :TASK_ID: bug-search
-:STATUS: pending
+:STATUS: completed
 :END:
 
-** ITEM BUG-006: strip dead Stream branch in Knowledge.Ask
+** DONE BUG-006: strip dead Stream branch in Knowledge.Ask
 :PROPERTIES:
 :TASK_ID: bug-ask
-:STATUS: pending
+:STATUS: completed
 :END:
 
-** ITEM BUG-007+011: real KnowledgeReindex notifier + subscribe on Page/Block
+** DONE BUG-007+011: real KnowledgeReindex notifier + subscribe on Page/Block
 :PROPERTIES:
 :TASK_ID: bug-notifier
-:STATUS: pending
+:STATUS: completed
 :END:
 
-** ITEM BUG-008: remove dead evaluate_ai_block change
+** DONE BUG-008: remove dead evaluate_ai_block change
 :PROPERTIES:
 :TASK_ID: bug-dead-change
-:STATUS: pending
+:STATUS: completed
 :END:
 
-** ITEM BUG-010: BlockRender dispatches :ai_answer placeholder
+** DONE BUG-010: BlockRender dispatches :ai_answer placeholder
 :PROPERTIES:
 :TASK_ID: bug-block-render
-:STATUS: pending
+:STATUS: completed
 :END:
 
-** ITEM BUG-012: GraphBuilder schema regression test
+** DONE BUG-012: GraphBuilder schema regression test
 :PROPERTIES:
 :TASK_ID: bug-graph-schema
-:STATUS: pending
+:STATUS: completed
 :END:
 
 * Wave 0.5 Review
 
-** ITEM Smoke: ingest fixture page → chunks visible → search returns hits
+** DONE Smoke: ingest fixture page → chunks visible → search returns hits
 :PROPERTIES:
 :TASK_ID: review-0-smoke
-:STATUS: pending
+:STATUS: completed
 :END:
 
-** ITEM Audit: mix precommit + manual end-to-end notifier→ingest→arcana
+10 search+community scenarios pass, 6 notifier scenarios pass, full test suite 71/71 green in 7.5s
+
+** DONE Audit: mix precommit + manual end-to-end notifier→ingest→arcana
 :PROPERTIES:
 :TASK_ID: review-0-audit
-:STATUS: pending
+:STATUS: completed
 :END:
+
+mix compile only shows pre-existing unrelated warnings; no Arcana.GraphRAG warnings remain; commit ee9559b
 
 * Wave 1 Knowledge Domain
 
-** ITEM FEAT-030: IngestionJob Ash resource (SM + AshOban + pub_sub)
+** DOING FEAT-030: IngestionJob Ash resource (SM + AshOban + pub_sub)
 :PROPERTIES:
 :TASK_ID: feat-ingestion-job
-:STATUS: pending
+:STATUS: in_progress
 :END:
 
 ** ITEM FEAT-033: Extend AshAI Message with scope/profile/search_trace + domain tools block
@@ -227,12 +231,4 @@
 :PROPERTIES:
 :TASK_ID: plan-done
 :STATUS: pending
-:END:
-
-* Wave 0 BUGs
-
-** DONE BUG-005+013: Knowledge.Search + Community fix + resilience
-:PROPERTIES:
-:TASK_ID: task-1
-:STATUS: completed
 :END:

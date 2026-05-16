@@ -66,7 +66,8 @@ defmodule Concept.Repo.Migrations.AddAiChat do
             name: "conversations_user_id_fkey",
             type: :uuid,
             prefix: "public"
-          ), null: false
+          ),
+          null: false
     end
   end
 

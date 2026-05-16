@@ -57,6 +57,8 @@ defmodule Concept.Pages.Block do
         scheduler_cron "*/10 * * * *"
         queue :locks
         use_tenant_from_record? true
+        worker_module_name Concept.Pages.Block.AshOban.Worker.ReleaseExpiredLocks
+        scheduler_module_name Concept.Pages.Block.AshOban.Scheduler.ReleaseExpiredLocks
       end
     end
   end
@@ -80,6 +82,7 @@ defmodule Concept.Pages.Block do
 
     update :update_props do
       accept [:props]
+      require_atomic? false
       change Concept.Pages.Block.Changes.ValidatePropsForType
     end
 

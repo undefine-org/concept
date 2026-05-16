@@ -13,7 +13,13 @@ config :ash_oban, pro?: false
 config :concept, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
-  queues: [default: 10, locks: 5, knowledge_ingest: 5, chat_responses: [limit: 10], conversations: [limit: 10]],
+  queues: [
+    default: 10,
+    locks: 5,
+    knowledge_ingest: 5,
+    chat_responses: [limit: 10],
+    conversations: [limit: 10]
+  ],
   repo: Concept.Repo,
   plugins: [{Oban.Plugins.Cron, []}]
 

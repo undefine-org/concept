@@ -57,7 +57,7 @@ defmodule Concept.Knowledge.Search do
       {:ok, []}
   end
 
-    defp normalize_hit({chunk, rank}) do
+  defp normalize_hit({chunk, rank}) do
     # Arcana returns chunks with atom keys
     metadata = Map.get(chunk, :metadata) || Map.get(chunk, "metadata", %{})
     text = Map.get(chunk, :text) || Map.get(chunk, "text", "")

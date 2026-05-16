@@ -109,4 +109,3 @@ defmodule ConceptWeb.BlockRender do
 
   defp ai_state(_), do: "empty"
 end
-

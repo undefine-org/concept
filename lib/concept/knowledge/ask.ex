@@ -64,12 +64,18 @@ defmodule Concept.Knowledge.Ask do
           Phoenix.PubSub.broadcast(
             Concept.PubSub,
             topic,
-            {:knowledge_done, answer_id, %{answer: ctx.answer, sources: sources, model: llm_model}}
+            {:knowledge_done, answer_id,
+             %{answer: ctx.answer, sources: sources, model: llm_model}}
           )
 
           {:ok, %{measurements: %{}}}
         else
-          Phoenix.PubSub.broadcast(Concept.PubSub, topic, {:knowledge_error, answer_id, "Invalid answer format"})
+          Phoenix.PubSub.broadcast(
+            Concept.PubSub,
+            topic,
+            {:knowledge_error, answer_id, "Invalid answer format"}
+          )
+
           {{:error, "Invalid answer format"}, %{}}
         end
       rescue

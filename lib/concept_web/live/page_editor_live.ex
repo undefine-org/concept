@@ -61,7 +61,12 @@ defmodule ConceptWeb.PageEditorLive do
           + Click to add your first block
         </button>
       </div>
-      <div id="format-toolbar-host" phx-hook="FormatToolbar" phx-update="ignore" class="ora-format-host">
+      <div
+        id="format-toolbar-host"
+        phx-hook="FormatToolbar"
+        phx-update="ignore"
+        class="ora-format-host"
+      >
         <ora-format-toolbar />
         <ora-link-editor />
       </div>
@@ -207,7 +212,11 @@ defmodule ConceptWeb.PageEditorLive do
   end
 
   @impl true
-  def handle_event("reorder_block", %{"block_id" => block_id, "prev_id" => prev_id, "next_id" => next_id}, socket) do
+  def handle_event(
+        "reorder_block",
+        %{"block_id" => block_id, "prev_id" => prev_id, "next_id" => next_id},
+        socket
+      ) do
     user = socket.assigns.current_user
     ws_id = socket.assigns.workspace.id
     blocks = socket.assigns.blocks

@@ -103,7 +103,7 @@ defmodule ConceptWeb.Router do
   scope "/admin" do
     pipe_through [:browser, :require_owner]
 
+    arcana_dashboard("/arcana")
     ash_admin "/"
-    arcana_dashboard "/arcana"
   end
 end

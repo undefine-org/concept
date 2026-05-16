@@ -8,7 +8,6 @@ defmodule Concept.Pages.FractionalIndex do
   @first ?a
   @last ?z
 
-
   @doc "Initial position for an empty list."
   def initial, do: <<midpoint(@first, @last + 1)>>
 

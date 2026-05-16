@@ -58,6 +58,7 @@ defmodule Concept.Pages.Page do
 
     update :reparent do
       accept [:parent_page_id, :position]
+      require_atomic? false
       change Concept.Pages.Changes.PreventCycles
     end
 

@@ -30,7 +30,8 @@ defmodule Concept.Knowledge.SearchTest do
 
   describe "search/3" do
     test "returns empty list when collection does not exist" do
-      assert {:ok, []} = Search.search("anything", "nonexistent_workspace_#{:rand.uniform(999_999)}")
+      assert {:ok, []} =
+               Search.search("anything", "nonexistent_workspace_#{:rand.uniform(999_999)}")
     end
 
     test "returns empty list for empty collection" do
@@ -94,7 +95,9 @@ defmodule Concept.Knowledge.SearchTest do
     end
 
     test "metadata uses string keys and handles missing fields gracefully" do
-      collection_name = Concept.Knowledge.Config.collection_for("ws_string_keys_#{:rand.uniform(999_999)}")
+      collection_name =
+        Concept.Knowledge.Config.collection_for("ws_string_keys_#{:rand.uniform(999_999)}")
+
       {:ok, _collection} = Arcana.Collection.get_or_create(collection_name, Concept.Repo)
 
       # Ingest document with partial metadata
@@ -128,7 +131,9 @@ defmodule Concept.Knowledge.SearchTest do
 
   describe "search modes" do
     setup do
-      collection_name = Concept.Knowledge.Config.collection_for("ws_modes_#{:rand.uniform(999_999)}")
+      collection_name =
+        Concept.Knowledge.Config.collection_for("ws_modes_#{:rand.uniform(999_999)}")
+
       {:ok, _collection} = Arcana.Collection.get_or_create(collection_name, Concept.Repo)
 
       text = "Elixir is a functional programming language"

@@ -88,22 +88,24 @@ export const FormatToolbar = {
 
     // Hide toolbar if selection is empty, collapsed, or outside an ora-block
     if (!sel || sel.isCollapsed || !sel.rangeCount) {
-      this._hideToolbar();
+      this._reset();
       return;
     }
 
     const oraBlock = this._resolveOraBlock(event);
     if (!oraBlock) {
-      this._hideToolbar();
+      this._reset();
       return;
     }
 
     const editor = this._getEditor(oraBlock);
     if (!editor) {
-      this._hideToolbar();
+      this._reset();
       return;
     }
 
+    // Set active editor before rect computation so commands still route
+    // even when the DOM isn't fully laid out (e.g., tests).
     this._activeEditor = editor;
 
     // Compute caret rect for toolbar positioning
@@ -111,12 +113,12 @@ export const FormatToolbar = {
     try {
       rect = sel.getRangeAt(0).getBoundingClientRect();
     } catch {
-      this._hideToolbar();
+      this._hideToolbarVisual();
       return;
     }
 
     if (!rect || (rect.width === 0 && rect.height === 0)) {
-      this._hideToolbar();
+      this._hideToolbarVisual();
       return;
     }
 
@@ -138,13 +140,18 @@ export const FormatToolbar = {
   },
 
   /** Hide the toolbar and dismiss link editor overlay. */
-  _hideToolbar() {
+  _hideToolbarVisual() {
     if (this._toolbar) {
       this._toolbar.removeAttribute("visible");
     }
     if (this._linkEditor) {
       this._linkEditor.removeAttribute("visible");
     }
+  },
+
+  /** Reset: hide visuals and clear active editor. */
+  _reset() {
+    this._hideToolbarVisual();
     this._activeEditor = null;
   },
 
