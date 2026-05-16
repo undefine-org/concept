@@ -126,6 +126,12 @@ defmodule ConceptWeb.WorkspaceLive do
     {:noreply, redirect(socket, to: ~p"/sign-out")}
   end
 
+  def handle_info({:palette_navigate, page_id, block_id}, socket) do
+    slug = socket.assigns.workspace.slug
+    path = ~p"/w/#{slug}/p/#{page_id}" <> "#block-#{block_id}"
+    {:noreply, push_navigate(socket, to: path)}
+  end
+
   def handle_info({:palette_navigate, page_id}, socket) do
     slug = socket.assigns.workspace.slug
     {:noreply, push_navigate(socket, to: ~p"/w/#{slug}/p/#{page_id}")}

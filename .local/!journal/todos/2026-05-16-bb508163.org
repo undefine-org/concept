@@ -1,0 +1,43 @@
+#+TITLE: Session 14e3e8e7dcf3d303 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* slice-e
+
+** DONE Test link creation flow
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
+:END:
+
+Select 'hello' (offset 0..5), click Link button in ora-format-toolbar, assert link-editor appears, type URL, press Enter, assert <a> wraps text
+
+** BLOCKED ~~Test link persistence after reload~~
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: abandoned
+:DEFERRED_TO: FUP-017-follow-up-test-link-persistence-after-re
+:END:
+
+Blur to save, reload page, screenshot, assert link persists
+
+Server down due to pre-existing compile error in ingestion_job.ex:41. Link feature also not wired up (missing LinkNode+TOGGLE_LINK_COMMAND handler registration).
+
+** BLOCKED ~~Test link edit/remove flow~~
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: abandoned
+:DEFERRED_TO: FUP-018-follow-up-test-link-edit-remove-flow-sli
+:END:
+
+Click into link text, trigger link-editor again, clear URL and press Enter, assert link removed
+
+Server down - cannot test edit/remove flow
+
+** DOING Submit report
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: in_progress
+:END:
+
+Call submit_result with passes, fails, next_action

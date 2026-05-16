@@ -17,11 +17,17 @@ config :concept, Oban,
     default: 10,
     locks: 5,
     knowledge_ingest: 5,
+    knowledge_maintenance: 5,
     chat_responses: [limit: 10],
     conversations: [limit: 10]
   ],
   repo: Concept.Repo,
-  plugins: [{Oban.Plugins.Cron, []}]
+  plugins: [
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"0 1 * * *", Concept.Knowledge.Workers.AggregateTokens}
+     ]}
+  ]
 
 config :ash,
   allow_forbidden_field_for_relationships_by_default?: true,

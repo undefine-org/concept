@@ -1,5 +1,5 @@
 #+TITLE: W2.5 specialist cleanup: dead select-item listener + missing tests + assertion tightening
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-029-w2-5-specialist-cleanup-dead-select-item
@@ -90,3 +90,5 @@ Each new test must follow red\u2192green. Implementer must paste failing snippet
 - ExUnit: 1 strengthened reorder assertion.
 - Phase-A/Phase-B output in the implementer report.
 - One commit: ~test(editor): close W2.5 specialist findings (BUG-029)~.
+
+NOTE [2026-05-16]: Commit 370baf1. Closes 5 W2.5 specialist findings.

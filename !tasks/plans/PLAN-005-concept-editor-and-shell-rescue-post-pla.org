@@ -139,7 +139,13 @@ Each W*.5 dispatch is a /parallel batch of focused ~reviewer~ agents/, not one m
 
 Dispatch shape: =proxy_task { agent: "reviewer", tasks: […6 specialist tasks…] }=. Each task has a focused ~assignment~. Aggregated outcome → ~proceed~ / ~fix…~.
 
-Browser wave (W*.6) stays a single ~task~ agent (only one needs puppeteer access; doesn't parallelise well across one user journey).
+Browser wave (W*.6) dispatches as a /parallel batch of slice tasks/, NOT a monolith — W2.6 first attempt monolith timed out at 3/20 behaviors. Pattern:
+- Main session boots the dev server once via ~proxy_bash --async 'mix phx.server'~ and seeds a shared test user.
+- Dispatch ~task~ batch with one slice per BUG / feature axis. Each slice owns its own browser session (parallel ~proxy_puppeteer~), runs 3–6 behaviors, saves screenshots to its own subdir, reports.
+- Intra-batch DAG via ~blockers~ when a slice depends on an unresolved finding from another (e.g. slice A waits on BUG-030 fix).
+- Each slice writes a structured ~submit_result~; the wave aggregates pass/fail counts across slices.
+
+W1+W2 example slice layout: A=caret-handoff (BUG-014), B=scope-visible (BUG-015), C=drag-reorder (BUG-018), D=format-toolbar (BUG-016 formatting), E=link-editor (BUG-016 link), F=slash-menu (BUG-017+BUG-028).
 
 ** Agent routing per wave
 - W1: 2 ~task~ (BUG-014, BUG-015) + 1 ~quick_task~ (BUG-024). One dispatch each batch.

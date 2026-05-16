@@ -4,6 +4,10 @@ defmodule Concept.Knowledge.IngestionJob.Changes.SetScheduledAt do
 
   @impl true
   def change(changeset, _opts, _context) do
-    Ash.Changeset.change_attribute(changeset, :scheduled_at, DateTime.add(DateTime.utc_now(), 2, :second))
+    Ash.Changeset.change_attribute(
+      changeset,
+      :scheduled_at,
+      DateTime.add(DateTime.utc_now(), 2, :second)
+    )
   end
 end

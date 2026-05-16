@@ -94,3 +94,16 @@
       border-radius: 4px;
     }
   }
+
+
+  /* Citation Card */
+  .ora-citation-card { display: block; padding: 8px; border-radius: 6px; border: 1px solid var(--color-notion-divider); background: var(--color-notion-bg); transition: background 0.15s ease; text-decoration: none; color: inherit; }
+  .ora-citation-card:hover { background: rgba(0, 0, 0, 0.025); }
+  .ora-citation-card__breadcrumb { font-size: 0.75rem; line-height: 1rem; opacity: 0.7; color: var(--color-notion-text-light); }
+  .ora-citation-card__snippet { font-size: 0.875rem; line-height: 1.25rem; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; margin-top: 2px; }
+  .ora-citation-card__sparkline { height: 4px; background: linear-gradient(90deg, var(--color-notion-blue), rgba(46, 170, 220, 0.3)); border-radius: 2px; margin-top: 4px; transition: width 0.2s ease; }
+
+  /* Citation Popover */
+  ora-citation-popover { position: relative; display: block; }
+  ora-citation-popover[open] .ora-citation-popover-content { display: block; position: fixed; max-width: 24rem; background: var(--color-notion-bg); border: 1px solid var(--color-notion-divider); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); padding: 12px; z-index: 50; }
+  .ora-citation-popover-content { display: none; }

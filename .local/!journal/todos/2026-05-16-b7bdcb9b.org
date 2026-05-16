@@ -1,0 +1,53 @@
+#+TITLE: Session 14e3e9fbb126cfdd Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Update CommandPaletteLive for hybrid search
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:END:
+
+File: lib/concept_web/live/command_palette_live.ex
+
+Changes:
+- Add assign_async for :title_results and :semantic_results
+- Convert sync fetch_results to async with assign_async/3
+- Add semantic search via Concept.Knowledge.Search.search/3
+- Update render to show 3 buckets: title hits (max 4), semantic hits (max 6, deduped by page_id), ask answer row
+- Check Code.ensure_loaded?(ConceptWeb.Components.CitationCard) for conditional rendering
+- Add semantic_item component with hero-sparkles icon
+- Add ask_answer_item component with hero-chat-bubble-left-right icon
+- Update dispatch_selected to handle title/semantic/ask answer
+- Broadcast {:palette_ask, query} on palette:#{workspace_id} topic for ask answer
+- Update total_count to account for 3 result types
+- Handle loading states for async results
+
+Acceptance: mix compile --warnings-as-errors clean
+
+Implemented hybrid search with assign_async, 3 buckets (title/semantic/ask answer), CitationCard fallback
+
+** DONE Write 8 command palette tests
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:DEPENDS: task-1
+:END:
+
+File: test/concept_web/live/command_palette_test.exs
+
+Tests:
+1. Title-only query: only title rows
+2. Query matching block content: assert semantic result placeholder, then async completion
+3. Empty query: recent pages preserved
+4. Ask answer row appears when query non-empty
+5. Selecting ask answer broadcasts {:palette_ask, query} on palette:#{ws_id}
+6. Title + semantic on same page: page appears once (dedupe)
+7. Search timeout: title rows render, semantic absent (no crash) - mock Knowledge.Search.search to return {:error, :timeout}
+8. Esc closes palette (regression)
+
+Acceptance: mix test test/concept_web/live/command_palette_test.exs green
+
+Added 8 tests covering: title-only, semantic results, empty query, ask answer row, PubSub broadcast, dedupe, timeout handling, and Escape regression

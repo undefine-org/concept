@@ -3,6 +3,7 @@ defmodule ConceptWeb.CommandPaletteLive do
   use ConceptWeb, :live_component
 
   alias Concept.Pages
+  alias Concept.Knowledge.Search
 
   @actions [
     %{id: "new_page", label: "+ New page", icon: "hero-plus-micro", event: :palette_new_page},
@@ -25,7 +26,8 @@ defmodule ConceptWeb.CommandPaletteLive do
       |> assign(:query, "")
       |> assign(:selected_index, 0)
       |> assign(:actions, @actions)
-      |> assign(:results, [])
+      |> assign_async(:title_results, fn -> {:ok, %{title_results: []}} end)
+      |> assign_async(:semantic_results, fn -> {:ok, %{semantic_results: []}} end)
 
     {:ok, socket}
   end
@@ -38,7 +40,8 @@ defmodule ConceptWeb.CommandPaletteLive do
       |> assign(:query, "")
       |> assign(:selected_index, 0)
       |> assign(:actions, @actions)
-      |> fetch_results("")
+      |> fetch_title_results("")
+      |> assign_async(:semantic_results, fn -> {:ok, %{semantic_results: []}} end)
 
     {:ok, socket}
   end
@@ -87,20 +90,61 @@ defmodule ConceptWeb.CommandPaletteLive do
                   />
                 </div>
 
-                <%= if @results != [] do %>
+                <%!-- Title results bucket --%>
+                <%= if match?(%{ok?: true, result: results} when results != [], @title_results) do %>
                   <div class="px-4 pt-3 pb-1 text-xs font-medium text-notion-text-light uppercase tracking-wide">
                     Pages
                   </div>
                   <div>
                     <.page_item
-                      :for={{page, idx} <- Enum.with_index(@results)}
+                      :for={{page, idx} <- Enum.with_index(@title_results.result |> Enum.take(4))}
                       index={length(@actions) + idx}
                       selected_index={@selected_index}
                       icon_emoji={page.icon_emoji}
                       title={page.title}
+                      page_id={page.id}
+                      icon="hero-document-text"
+                      type={:title}
                       myself={@myself}
                     />
                   </div>
+                <% end %>
+
+                <%!-- Semantic results bucket --%>
+                <%= if match?(%{ok?: true, result: results} when results != [], @semantic_results) do %>
+                  <% title_page_ids =
+                    if match?(%{ok?: true, result: _pages}, @title_results),
+                      do: Enum.map(@title_results.result, & &1.id),
+                      else: [] %>
+                  <% semantic_hits =
+                    @semantic_results.result
+                    |> Enum.uniq_by(& &1.page_id)
+                    |> Enum.reject(&(&1.page_id in title_page_ids))
+                    |> Enum.take(6) %>
+                  <%= if semantic_hits != [] do %>
+                    <div class="px-4 pt-3 pb-1 text-xs font-medium text-notion-text-light uppercase tracking-wide">
+                      Semantic matches
+                    </div>
+                    <div>
+                      <.semantic_item
+                        :for={{hit, idx} <- Enum.with_index(semantic_hits)}
+                        index={length(@actions) + title_count(@title_results) + idx}
+                        selected_index={@selected_index}
+                        hit={hit}
+                        myself={@myself}
+                      />
+                    </div>
+                  <% end %>
+                <% end %>
+
+                <%!-- Ask answer row --%>
+                <%= if @query != "" do %>
+                  <.ask_answer_item
+                    index={length(@actions) + title_count(@title_results) + semantic_count(assigns)}
+                    selected_index={@selected_index}
+                    query={@query}
+                    myself={@myself}
+                  />
                 <% end %>
               </div>
             </div>
@@ -137,6 +181,8 @@ defmodule ConceptWeb.CommandPaletteLive do
     <button
       type="button"
       id={"palette-item-#{@index}"}
+      data-type={@type}
+      data-page-id={@page_id}
       class={[
         "w-full text-left px-4 py-2 flex items-center gap-3 text-sm",
         @index == @selected_index && "bg-notion-hover"
@@ -147,8 +193,67 @@ defmodule ConceptWeb.CommandPaletteLive do
       phx-mouseenter="hover_item"
       phx-value-index={@index}
     >
-      <span class="text-base">{@icon_emoji || "📄"}</span>
+      <%= if @icon do %>
+        <.icon name={@icon} class="size-4 text-notion-text-light" />
+      <% else %>
+        <span class="text-base">{@icon_emoji || "📄"}</span>
+      <% end %>
       <span class="truncate text-notion-text">{@title || "Untitled"}</span>
+    </button>
+    """
+  end
+
+  defp semantic_item(assigns) do
+    # TODO: When CitationCard is available, use it via Code.ensure_loaded? check
+    # For now, use inline fallback to avoid compile-time dependency
+    ~H"""
+    <button
+      type="button"
+      id={"palette-item-#{@index}"}
+      data-type="semantic"
+      data-page-id={@hit.page_id}
+      data-block-id={@hit.block_id}
+      class={[
+        "w-full text-left px-4 py-2 flex items-center gap-3 text-sm",
+        @index == @selected_index && "bg-notion-hover"
+      ]}
+      phx-click="select_item"
+      phx-value-index={@index}
+      phx-target={@myself}
+      phx-mouseenter="hover_item"
+      phx-value-index={@index}
+    >
+      <.icon name="hero-sparkles" class="size-4 text-notion-text-light" />
+      <div class="flex-1 min-w-0">
+        <div class="text-notion-text truncate">
+          {@hit.breadcrumbs || "Untitled"}
+        </div>
+        <div class="text-xs text-notion-text-light truncate">
+          {@hit.snippet}
+        </div>
+      </div>
+    </button>
+    """
+  end
+
+  defp ask_answer_item(assigns) do
+    ~H"""
+    <button
+      type="button"
+      id={"palette-item-#{@index}"}
+      data-type="ask_answer"
+      class={[
+        "w-full text-left px-4 py-2 flex items-center gap-3 text-sm",
+        @index == @selected_index && "bg-notion-hover"
+      ]}
+      phx-click="select_item"
+      phx-value-index={@index}
+      phx-target={@myself}
+      phx-mouseenter="hover_item"
+      phx-value-index={@index}
+    >
+      <.icon name="hero-chat-bubble-left-right" class="size-4 text-notion-text-light" />
+      <span class="truncate text-notion-text">Ask answer for "{@query}"</span>
     </button>
     """
   end
@@ -159,7 +264,8 @@ defmodule ConceptWeb.CommandPaletteLive do
       socket
       |> assign(:query, query)
       |> assign(:selected_index, 0)
-      |> fetch_results(query)
+      |> fetch_title_results(query)
+      |> fetch_semantic_results(query)
 
     {:noreply, socket}
   end
@@ -210,42 +316,91 @@ defmodule ConceptWeb.CommandPaletteLive do
     {:noreply, socket}
   end
 
+  defp title_count(%{ok?: true, result: pages}), do: min(length(pages), 4)
+  defp title_count(_), do: 0
+
+  defp semantic_count(assigns) do
+    with %{ok?: true, result: hits} <- assigns.semantic_results,
+         %{ok?: true, result: pages} <- assigns.title_results do
+      title_page_ids = Enum.map(pages, & &1.id)
+
+      hits
+      |> Enum.uniq_by(& &1.page_id)
+      |> Enum.reject(&(&1.page_id in title_page_ids))
+      |> Enum.take(6)
+      |> length()
+    else
+      _ -> 0
+    end
+  end
+
+  defp ask_count(assigns) do
+    if assigns.query != "", do: 1, else: 0
+  end
+
   defp total_count(assigns) do
-    length(@actions) + length(assigns.results)
+    length(@actions) + title_count(assigns.title_results) + semantic_count(assigns) +
+      ask_count(assigns)
   end
 
-  defp fetch_results(socket, "") do
+  defp fetch_title_results(socket, "") do
     user = socket.assigns.current_user
     ws = socket.assigns.workspace
 
-    case Pages.recent_pages(actor: user, tenant: ws.id) do
-      {:ok, pages} -> assign(socket, :results, pages)
-      _ -> assign(socket, :results, [])
-    end
+    assign_async(socket, :title_results, fn ->
+      case Pages.recent_pages(actor: user, tenant: ws.id) do
+        {:ok, pages} -> {:ok, %{title_results: pages}}
+        _ -> {:ok, %{title_results: []}}
+      end
+    end)
   end
 
-  defp fetch_results(socket, query) do
+  defp fetch_title_results(socket, query) do
     user = socket.assigns.current_user
     ws = socket.assigns.workspace
 
-    case Pages.search_titles(query, actor: user, tenant: ws.id) do
-      {:ok, pages} -> assign(socket, :results, pages)
-      _ -> assign(socket, :results, [])
-    end
+    assign_async(socket, :title_results, fn ->
+      case Pages.search_titles(query, actor: user, tenant: ws.id) do
+        {:ok, pages} -> {:ok, %{title_results: pages}}
+        _ -> {:ok, %{title_results: []}}
+      end
+    end)
+  end
+
+  defp fetch_semantic_results(socket, "") do
+    assign_async(socket, :semantic_results, fn ->
+      {:ok, %{semantic_results: []}}
+    end)
+  end
+
+  defp fetch_semantic_results(socket, query) do
+    ws = socket.assigns.workspace
+
+    assign_async(socket, :semantic_results, fn ->
+      case Search.search(query, ws.id, limit: 6, mode: :hybrid) do
+        {:ok, hits} -> {:ok, %{semantic_results: hits}}
+        {:error, _reason} -> {:ok, %{semantic_results: []}}
+      end
+    end)
   end
 
   defp dispatch_selected(socket) do
     index = socket.assigns.selected_index
     action_count = length(@actions)
+    title_ct = title_count(socket.assigns.title_results)
+    semantic_ct = semantic_count(socket.assigns)
 
     cond do
+      # Action selected
       index < action_count ->
         action = Enum.at(@actions, index)
         send(self(), action.event)
         push_event(socket, "palette_state", %{open: false})
 
-      true ->
-        page = Enum.at(socket.assigns.results, index - action_count)
+      # Title result selected
+      index < action_count + title_ct ->
+        page_idx = index - action_count
+        page = socket.assigns.title_results.result |> Enum.take(4) |> Enum.at(page_idx)
 
         if page do
           send(self(), {:palette_navigate, page.id})
@@ -253,6 +408,37 @@ defmodule ConceptWeb.CommandPaletteLive do
         else
           socket
         end
+
+      # Semantic result selected
+      index < action_count + title_ct + semantic_ct ->
+        semantic_idx = index - action_count - title_ct
+
+        title_page_ids =
+          if match?(%{ok?: true, result: _pages}, socket.assigns.title_results),
+            do: Enum.map(socket.assigns.title_results.result, & &1.id),
+            else: []
+
+        hit =
+          socket.assigns.semantic_results.result
+          |> Enum.uniq_by(& &1.page_id)
+          |> Enum.reject(&(&1.page_id in title_page_ids))
+          |> Enum.take(6)
+          |> Enum.at(semantic_idx)
+
+        if hit do
+          send(self(), {:palette_navigate, hit.page_id, hit.block_id})
+          socket
+        else
+          socket
+        end
+
+      # Ask answer selected
+      true ->
+        query = socket.assigns.query
+        ws_id = socket.assigns.workspace.id
+        Phoenix.PubSub.broadcast(Concept.PubSub, "palette:#{ws_id}", {:palette_ask, query})
+        send(self(), :close_command_palette)
+        socket
     end
   end
 end

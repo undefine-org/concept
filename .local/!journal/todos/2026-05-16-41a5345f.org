@@ -1,0 +1,41 @@
+#+TITLE: Session 14e3e8e4b5b3d2fb Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Phase A: Red tests
+
+** DONE Extend server test for nav_block push_event
+:PROPERTIES:
+:TASK_ID: server-test
+:STATUS: completed
+:END:
+
+File: test/concept_web/live/page_editor_test.exs. Add test asserting nav_block up pushes focus_block_caret with correct block_id, position: end.
+
+** DONE Write client integration test for ArrowUp
+:PROPERTIES:
+:TASK_ID: client-test
+:STATUS: completed
+:END:
+
+File: assets/js/components/__tests__/ora-block-integration.test.js. Mount 2 OraBlocks, simulate ArrowUp at start of block 2, assert focus moves to block 1 at end.
+
+* Phase B: Green fix
+
+** DOING Fix focusEnd/focusStart ordering
+:PROPERTIES:
+:TASK_ID: fix
+:STATUS: in_progress
+:END:
+
+File: assets/js/components/ora-block.js. Reorder to focus() first then moveCaretToEnd/Start.
+
+* Phase C: Verify
+
+** ITEM Run all tests and commit
+:PROPERTIES:
+:TASK_ID: verify
+:STATUS: pending
+:END:
+
+mix test, npx vitest run, mix compile, git commit.

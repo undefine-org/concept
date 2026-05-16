@@ -26,39 +26,6 @@ defmodule Concept.Knowledge.Citation do
     end
   end
 
-  multitenancy do
-    strategy :attribute
-    attribute :workspace_id
-    global? false
-  end
-
-  attributes do
-    uuid_primary_key :id
-    attribute :workspace_id, :uuid, allow_nil?: false, public?: true
-    attribute :message_id, :uuid, allow_nil?: false, public?: true
-    attribute :block_id, :uuid, allow_nil?: false, public?: true
-    attribute :page_id, :uuid, allow_nil?: false, public?: true
-    attribute :rank, :integer, allow_nil?: false, public?: true
-    attribute :score, :float, constraints: [min: 0.0, max: 1.0], public?: true
-    attribute :snippet, :string, public?: true
-    attribute :breadcrumbs, :string, public?: true
-    create_timestamp :inserted_at
-  end
-
-  relationships do
-    belongs_to :message, Concept.Knowledge.Chat.Message,
-      source_attribute: :message_id,
-      destination_attribute: :id
-
-    belongs_to :block, Concept.Pages.Block,
-      source_attribute: :block_id,
-      destination_attribute: :id
-
-    belongs_to :page, Concept.Pages.Page,
-      source_attribute: :page_id,
-      destination_attribute: :id
-  end
-
   actions do
     defaults [:read]
 
@@ -93,5 +60,38 @@ defmodule Concept.Knowledge.Citation do
     policy action_type(:create) do
       authorize_if actor_attribute_equals(:system?, true)
     end
+  end
+
+  multitenancy do
+    strategy :attribute
+    attribute :workspace_id
+    global? false
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :workspace_id, :uuid, allow_nil?: false, public?: true
+    attribute :message_id, :uuid, allow_nil?: false, public?: true
+    attribute :block_id, :uuid, allow_nil?: false, public?: true
+    attribute :page_id, :uuid, allow_nil?: false, public?: true
+    attribute :rank, :integer, allow_nil?: false, public?: true
+    attribute :score, :float, constraints: [min: 0.0, max: 1.0], public?: true
+    attribute :snippet, :string, public?: true
+    attribute :breadcrumbs, :string, public?: true
+    create_timestamp :inserted_at
+  end
+
+  relationships do
+    belongs_to :message, Concept.Knowledge.Chat.Message,
+      source_attribute: :message_id,
+      destination_attribute: :id
+
+    belongs_to :block, Concept.Pages.Block,
+      source_attribute: :block_id,
+      destination_attribute: :id
+
+    belongs_to :page, Concept.Pages.Page,
+      source_attribute: :page_id,
+      destination_attribute: :id
   end
 end

@@ -1,0 +1,84 @@
+#+TITLE: Session 14e3e4327073d2f8 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* W1 Verification
+
+** DONE BUG-014 caret handoff (steps 1-4)
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: completed
+:END:
+
+ArrowDown, ArrowUp, Enter block creation
+
+Partially tested: step 2 passed, step 3 failed (ArrowUp not working)
+
+** BLOCKED ~~BUG-015 current_scope visible (steps 5-6)~~
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015
+:END:
+
+Header shows user + workspace; /w index works
+
+Not reached due to repeated turn aborts
+
+* W2 Verification
+
+** BLOCKED ~~BUG-018 drag-reorder (step 7)~~
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015
+:END:
+
+Drag blocks and assert persistence
+
+Not reached due to repeated turn aborts
+
+** BLOCKED ~~BUG-016 format toolbar (steps 8-12)~~
+:PROPERTIES:
+:TASK_ID: task-7
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015
+:END:
+
+Bold text via toolbar, persistence
+
+Not reached due to repeated turn aborts
+
+** BLOCKED ~~BUG-016 link editor (steps 13-15)~~
+:PROPERTIES:
+:TASK_ID: task-8
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015
+:END:
+
+Link creation and persistence
+
+Not reached due to repeated turn aborts
+
+** BLOCKED ~~BUG-017+BUG-028 slash menu (steps 16-20)~~
+:PROPERTIES:
+:TASK_ID: task-9
+:STATUS: abandoned
+:DEFERRED_TO: FUP-015
+:END:
+
+Slash menu, heading creation, stray / check, escape
+
+Not reached due to repeated turn aborts
+
+* Reporting
+
+** DONE Submit final result
+:PROPERTIES:
+:TASK_ID: task-10
+:STATUS: completed
+:END:
+
+Compile passes/fails, submit_result
+
+submit_result called with partial results

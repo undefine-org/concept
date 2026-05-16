@@ -20,14 +20,84 @@ defmodule Concept.Knowledge.Link do
     end
   end
 
+  paper_trail do
+    primary_key_type(:uuid)
+    ignore_attributes([:inserted_at, :updated_at])
+    attributes_as_attributes([:workspace_id])
+    create_version_on_destroy?(false)
+  end
+
+  actions do
+    defaults [:read]
+
+    create :create do
+      accept [:source_block_id, :target_block_id, :kind, :note]
+      argument :workspace_id, :uuid, allow_nil?: false
+
+      change set_attribute(:workspace_id, arg(:workspace_id))
+
+      change fn changeset, %{actor: actor} ->
+        user_id =
+          if actor && Map.has_key?(actor, :id),
+            do: actor.id,
+            else: "00000000-0000-0000-0000-000000000000"
+
+        Ash.Changeset.change_attribute(changeset, :created_by_user_id, user_id)
+      end
+
+      validate compare(:source_block_id, is_not_equal: :target_block_id),
+        message: "cannot link a block to itself"
+
+      validate fn changeset, _ctx ->
+        workspace_id = Ash.Changeset.get_attribute(changeset, :workspace_id)
+        source_block_id = Ash.Changeset.get_attribute(changeset, :source_block_id)
+        target_block_id = Ash.Changeset.get_attribute(changeset, :target_block_id)
+
+        # Check that both blocks exist in the same workspace
+        source = Concept.Repo.get(Concept.Pages.Block, source_block_id)
+        target = Concept.Repo.get(Concept.Pages.Block, target_block_id)
+
+        cond do
+          is_nil(source) ->
+            {:error, field: :source_block_id, message: "does not exist"}
+
+          is_nil(target) ->
+            {:error, field: :target_block_id, message: "does not exist"}
+
+          source.workspace_id != workspace_id ->
+            {:error, field: :source_block_id, message: "belongs to a different workspace"}
+
+          target.workspace_id != workspace_id ->
+            {:error, field: :target_block_id, message: "belongs to a different workspace"}
+
+          true ->
+            :ok
+        end
+      end
+
+      change Concept.Knowledge.Changes.MirrorToArcanaGraph
+    end
+
+    destroy :destroy do
+      require_atomic? false
+      change Concept.Knowledge.Changes.MirrorToArcanaGraph
+    end
+  end
+
+  policies do
+    bypass actor_attribute_equals(:system?, true) do
+      authorize_if always()
+    end
+
+    policy action_type([:read, :create, :destroy]) do
+      authorize_if Concept.Pages.Checks.WorkspaceMember
+    end
+  end
+
   multitenancy do
     strategy :attribute
     attribute :workspace_id
     global? false
-  end
-
-  paper_trail do
-    primary_key_type :uuid
   end
 
   attributes do
@@ -60,40 +130,6 @@ defmodule Concept.Knowledge.Link do
   end
 
   identities do
-      identity :unique_triple, [:workspace_id, :source_block_id, :target_block_id, :kind]
-    end
-
-  actions do
-    defaults [:read]
-
-    create :create do
-      accept [:source_block_id, :target_block_id, :kind, :note]
-      argument :workspace_id, :uuid, allow_nil?: false
-
-      change set_attribute(:workspace_id, arg(:workspace_id))
-
-      change fn changeset, %{actor: actor} ->
-        Ash.Changeset.change_attribute(changeset, :created_by_user_id, actor && actor.id)
-      end
-
-      validate compare(:source_block_id, is_not_equal: :target_block_id),
-              message: "cannot link a block to itself"
-
-      change Concept.Knowledge.Changes.MirrorToArcanaGraph
-    end
-
-    destroy :destroy do
-      change Concept.Knowledge.Changes.MirrorToArcanaGraph
-    end
-  end
-
-  policies do
-    bypass actor_attribute_equals(:system?, true) do
-      authorize_if always()
-    end
-
-    policy action_type([:read, :create, :destroy]) do
-      authorize_if Concept.Pages.Checks.WorkspaceMember
-    end
+    identity :unique_triple, [:workspace_id, :source_block_id, :target_block_id, :kind]
   end
 end

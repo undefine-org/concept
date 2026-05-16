@@ -1,0 +1,93 @@
+#+TITLE: Session 14e3e9fb60a6cfd9 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Create citation_card.ex component
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:END:
+
+File: lib/concept_web/components/citation_card.ex
+- Phoenix.Component with citation_card/1 and load_block_preview/2
+- citation_card renders inline card with icon (hero-document-text for title, hero-sparkles for semantic), breadcrumbs, snippet, score sparkline, link to deep URL
+- load_block_preview/2 helper fetches block via Ash.get! and renders via BlockRender.block/1, returns {:ok, html_string}
+- Wraps in <ora-citation-popover> with phx-hook wiring for preview request
+Acceptance: File created with both functions
+
+** DONE Create ora-citation-popover.js Lit component
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:END:
+
+File: assets/js/components/ora-citation-popover.js
+- LitElement with properties: open (boolean, reflect), previewHtml (string)
+- Mouseenter with 300ms debounce dispatches CustomEvent('citation-preview-request')
+- Renders unsafeHTML(previewHtml) in popover when open
+- Mousedown outside closes popover
+- Uses createRenderRoot() return this for Tailwind
+Acceptance: Lit component with correct event handling
+
+** DONE Register ora-citation-popover in index.js
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
+:END:
+
+File: assets/js/components/index.js
+Add import "./ora-citation-popover.js";
+Acceptance: Import line added
+
+** DONE Add citation card CSS styles
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: completed
+:END:
+
+File: assets/css/app.css
+Add to @layer components:
+- .ora-citation-card (padding, rounded, border, hover bg)
+- .ora-citation-card__breadcrumb (text-xs, opacity-70, chevron separator)
+- .ora-citation-card__snippet (line-clamp-2, text-sm)
+- .ora-citation-card__sparkline (4px height, gradient bg based on value)
+- ora-citation-popover[open] (fixed position, max-w-96, shadow, rounded, bg, z-index)
+Acceptance: All 5 style blocks added
+
+** DONE Create citation_card_test.exs
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:END:
+
+File: test/concept_web/components/citation_card_test.exs
+Tests:
+1. title-hit: breadcrumbs=nil → hero-document-text icon present
+2. semantic-hit: breadcrumbs+snippet present → hero-sparkles icon + breadcrumb text + snippet text
+3. deep-link href: verify /w/<slug>/p/<page_id>#block-<block_id> format
+4. sparkline aria-valuenow: verify round(score*100)
+5. load_block_preview/2: create fixture block with content, verify HTML contains content text
+Setup: use DataCase, create user/workspace/page/block fixtures per Pages test pattern
+Acceptance: All 5 tests pass
+
+* Verification
+
+** DOING Run mix precommit
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: in_progress
+:END:
+
+Command: mix precommit
+Acceptance: Exit 0, no warnings
+
+** ITEM Run component test suite
+:PROPERTIES:
+:TASK_ID: task-7
+:STATUS: pending
+:END:
+
+Command: mix test test/concept_web/components/citation_card_test.exs
+Acceptance: All tests green

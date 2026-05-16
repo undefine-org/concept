@@ -87,6 +87,12 @@ defmodule ConceptWeb.Telemetry do
       summary("concept.knowledge.ask.stop.duration", unit: {:native, :millisecond}),
       counter("concept.knowledge.ask.stop.count"),
       summary("concept.knowledge.embedder.gemini.stop.duration", unit: {:native, :millisecond}),
+      summary("concept.knowledge.search.stop.duration",
+        unit: {:native, :millisecond},
+        tags: [:workspace_id]
+      ),
+      last_value("concept.knowledge.ingestion_job.queue.depth"),
+      counter("concept.knowledge.token_ledger.upsert.count"),
 
       # VM Metrics
       summary("vm.memory.total", unit: {:byte, :kilobyte}),
@@ -101,6 +107,7 @@ defmodule ConceptWeb.Telemetry do
       # A module, function and arguments to be invoked periodically.
       # This function must call :telemetry.execute/3 and a metric must be added above.
       # {ConceptWeb, :count_users, []}
+      {Concept.Knowledge, :report_ingestion_queue_depth, []}
     ]
   end
 end

@@ -16,15 +16,21 @@ defmodule Concept.Knowledge do
       define :read_ingestion_jobs, action: :read
     end
 
-    # resource Concept.Knowledge.Citation do
-    #   define :create_citation, action: :create
-    #   define :citations_for_message, action: :for_message, args: [:message_id]
-    #   define :citations_for_block, action: :for_block, args: [:block_id]
-    # end
+    resource Concept.Knowledge.Citation do
+      define :create_citation, action: :create
+      define :citations_for_message, action: :for_message, args: [:message_id]
+      define :citations_for_block, action: :for_block, args: [:block_id]
+    end
 
     resource Concept.Knowledge.Link do
       define :create_link, action: :create
       define :destroy_link, action: :destroy
+    end
+
+    resource Concept.Knowledge.Link.Version
+
+    resource Concept.Knowledge.TokenLedger do
+      define :read_token_ledger, action: :read
     end
   end
 

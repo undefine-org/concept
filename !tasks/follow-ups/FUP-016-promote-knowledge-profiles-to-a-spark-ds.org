@@ -1,0 +1,35 @@
+#+TITLE: Promote Knowledge.Profiles to a Spark DSL
+#+STATE: ITEM
+#+SESSION_ID: 14e3b087d426cfb5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-09-32-240Z_14e3b087d426cfb5.jsonl]]
+#+CUSTOM_ID: FUP-016-promote-knowledge-profiles-to-a-spark-ds
+#+LAYER: retrieval
+
+* Initial Message
+
+Do a critical review of Arcana's integration into Concept and how you'd make the frontend interesting to use w.r.t those features. Go wild, go free, be thorough
+
+* Intention
+~Concept.Knowledge.Profiles~ currently ships as a plain-Elixir module with a hardcoded ~%Profile{}~ list (Wave 1 expedient). The original design called for a Spark DSL with compile-time entity validation. Promote when the macro generation issue is properly understood.
+
+* Why it stalled in Wave 1
+Two patterns attempted, both raised compile errors:
+- ~top_level?: true~ section → ~undefined function profile/2~
+- nested ~profiles do ... end~ block → ~undefined function profiles/1~
+
+Root cause (traced in ~deps/spark/lib/spark/dsl/extension.ex:504-575~): Spark generates entity macros via ~Module.create/3~ in async tasks. The consuming module imports from those generated child modules. The import only resolves correctly if the extension module's BEAM (including its async-spawned children) is fully built before the consumer compiles. Reactor works because ~Reactor.Dsl~ is referenced via ~alias~ at the top of ~Reactor~, registering a compile-time dep that Mix's parallel compiler tracks.
+
+* Approach
+1. Mirror Reactor's pattern exactly: ~alias Concept.Knowledge.ProfileDsl, as: Dsl~ at the top of Profiles, then ~use Spark.Dsl, default_extensions: [extensions: [Dsl]]~. No ProfileBuilder layer.
+2. Or: add explicit ~require Concept.Knowledge.ProfileDsl~ before ~use Spark.Dsl~ to force the compile dep.
+3. Verify with a minimal repro in ~test/spark_minimal_test.exs~ that compiles ~5 profiles + asserts ~list/0~ shape before touching the production module.
+
+* Substrate already in place
+- ~Concept.Knowledge.Profile~ struct exists.
+- API surface (~list/0~, ~get/1~, ~get!/1~, ~to_pipeline_opts/1~, ~to_ash_ai_opts/1~) is stable; users call profile names as atoms.
+- Migration is structural-only: replace the ~@profiles~ list with DSL declarations; no consumers change.
+
+* References
+- ~deps/reactor/lib/reactor.ex~ — canonical standalone Spark DSL.
+- ~deps/ash_oban/lib/ash_oban.ex~ — canonical resource-level Spark extension.
+- ~deps/spark/lib/spark/dsl/extension.ex~:504 ~prepare/1~ and :1162 ~do_build_section/5~.

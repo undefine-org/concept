@@ -2,26 +2,35 @@
 #+DATE: 2026-05-16
 #+TODO: ITEM DOING BLOCKED | DONE
 
-* PLAN-005 Wave 2 (editor wiring)
+* PLAN-005 W2 cleanup + W2.6 slice swarm
 
-** BLOCKED Attach BlockList SortableJS hook + reorder_block handler
+** DOING Fix BUG-014 ArrowUp integration regression with TDD evidence
 :PROPERTIES:
 :TASK_ID: task-1
-:STATUS: gate_failed
+:STATUS: in_progress
 :END:
 
-* PLAN-005 W1+W2 browser verification (puppeteer)
-
-** DONE Browser verification of all W1+W2 user-visible behaviors
+** ITEM Browser: BUG-014 caret handoff (both directions, Enter creates block)
 :PROPERTIES:
 :TASK_ID: task-2
+:STATUS: pending
+:DEPENDS: task-1
+:END:
+
+** DONE Browser: BUG-016 format toolbar bold/italic + save+reload persistence
+:PROPERTIES:
+:TASK_ID: task-5
 :STATUS: completed
 :END:
 
-* PLAN-005 W2 cleanup (BUG-029)
-
-** DOING Close 5 W2.5 specialist findings: select listener + 3 missing tests + reorder invariant + commands.test.js
+** DONE Browser: BUG-016 link editor round-trip + save+reload
 :PROPERTIES:
-:TASK_ID: task-3
+:TASK_ID: task-6
+:STATUS: completed
+:END:
+
+** DOING Browser: BUG-017 + BUG-028 slash menu open/filter/select/keyboard/trigger-deletion
+:PROPERTIES:
+:TASK_ID: task-7
 :STATUS: in_progress
 :END:

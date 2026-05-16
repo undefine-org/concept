@@ -78,7 +78,7 @@ defmodule Concept.TestSupport.LLMStub do
 
     Req.Test.stub(__MODULE__, fn conn ->
       case Agent.get_and_update(agent, fn s -> {s, :second} end) do
-        :first  -> Req.Test.json(conn, gemini_tool_call_body(tool_name, args))
+        :first -> Req.Test.json(conn, gemini_tool_call_body(tool_name, args))
         :second -> Req.Test.json(conn, gemini_chat_body(final_text, []))
       end
     end)

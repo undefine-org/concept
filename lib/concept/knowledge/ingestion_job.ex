@@ -45,7 +45,7 @@ defmodule Concept.Knowledge.IngestionJob do
     default_initial_state :queued
 
     transitions do
-      transition :start, from: :queued, to: :running
+      transition :run, from: :queued, to: :running
       transition :succeed, from: :running, to: :succeeded
       transition :fail, from: :running, to: :failed
     end
@@ -73,6 +73,7 @@ defmodule Concept.Knowledge.IngestionJob do
     triggers do
       trigger :process do
         action :run
+        read_action :read
         where expr(state == :queued)
         scheduler_cron "* * * * *"
         queue :knowledge_ingest
@@ -87,7 +88,7 @@ defmodule Concept.Knowledge.IngestionJob do
     module ConceptWeb.Endpoint
     prefix "workspace"
 
-    publish :start, ["*", :workspace_id, "ingest"], event: "ingest_started"
+    publish :run, ["*", :workspace_id, "ingest"], event: "ingest_started"
     publish :succeed, ["*", :workspace_id, "ingest"], event: "ingest_succeeded"
     publish :fail, ["*", :workspace_id, "ingest"], event: "ingest_failed"
   end
@@ -107,7 +108,7 @@ defmodule Concept.Knowledge.IngestionJob do
       require_atomic? false
       change transition_state(:running)
       change set_attribute(:started_at, &DateTime.utc_now/0)
-      change set_attribute(:attempt, expr(attempt + 1))
+      change Concept.Knowledge.IngestionJob.Changes.IncrementAttempt
       change Concept.Knowledge.IngestionJob.Changes.PerformIngest
     end
 
@@ -123,6 +124,12 @@ defmodule Concept.Knowledge.IngestionJob do
       require_atomic? false
       change transition_state(:failed)
       change set_attribute(:finished_at, &DateTime.utc_now/0)
+    end
+
+    update :archive do
+      accept []
+      require_atomic? false
+      change set_attribute(:archived_at, &DateTime.utc_now/0)
     end
   end
 

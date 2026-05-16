@@ -1,0 +1,72 @@
+#+TITLE: BUG-014 ArrowUp does not move caret to previous block (integration regression)
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-030-bug-014-arrowup-does-not-move-caret-to-p
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W2.6 puppeteer (agent 20-W26PuppeteerRetry, 2026-05-16): ArrowDown from "alpha" to "beta" PASSES, but ArrowUp from "beta" to "alpha" FAILS \u2014 caret does not move. BUG-014 unit tests (vitest 12/12, ExUnit 11/11) cover both directions and pass, so this is an INTEGRATION gap the unit-level mocks don't exercise.
+
+* Hypotheses (root-cause first)
+
+The browser chain on ArrowUp:
+1. User in beta presses ArrowUp.
+2. =block_editor.js= keydown listener fires.
+3. Pushes ~nav_block~ with ~%{direction: "up", block_id: beta_id}~.
+4. Server ~handle_event("nav_block", \u2026)~ in =page_editor_live.ex= resolves the previous sibling (alpha).
+5. Server pushes ~focus_block_caret~ with ~%{block_id: alpha_id, position: "end"}~.
+6. block_editor.js ~handleEvent("focus_block_caret", \u2026)~ runs on EVERY mounted block's hook instance. The ~block_id === this.el.getAttribute("block-id")~ gate routes the call to alpha's hook only.
+7. Alpha's hook calls ~this.el.focusEnd()~ \u2014 which delegates to ~moveCaretToEnd(this._editor)~ + ~this._editor.focus()~.
+
+Candidate failure points (order = likelihood):
+- /A/ Server ~nav_block~ direction="up" returns wrong prev-sibling or no-op when blocks are ordered by fractional ~position~ but the resolution code iterates a list that was rebuilt after BUG-018's reorder support \u2014 a regression introduced by 25f4b65 or fad859d.
+- /B/ ~focusEnd()~ races with the contentEditable focus model: ~moveCaretToEnd~ updates Lexical selection inside an ~editor.update(...)~ callback (async-flushed), and then ~this._editor.focus()~ runs against a stale DOM. For ArrowDown the new caret happens to land at offset 0 of beta's first text node (which is also the focus default), making the bug invisible.
+- /C/ Beta's keydown listener doesn't actually fire on ArrowUp because the focus model puts the caret at offset 0 of beta and the browser's native ArrowUp moves selection within Lexical (not bubbling) before our listener sees the key.
+
+* Reproduction (confirmed via puppeteer 2026-05-16)
+
+1. Sign in; open a workspace page.
+2. Create paragraph "alpha"; press Enter; type "beta".
+3. Caret is in "beta" at offset 4.
+4. Press ArrowUp.
+5. Expected: ~document.activeElement.closest('ora-block')~ has ~block-id == alpha.id~; caret at end of alpha.
+6. Actual: caret stays in beta (or moves to offset 0 of beta).
+
+* Intention & Purpose
+
+ArrowUp from any block focuses the previous sibling at caret position "end". Symmetric and reliable with ArrowDown. Verified by an /integration/ test that drives the real Lexical editor + the real LiveView hook in a JSDOM or headless browser environment, not the current vitest mock harness.
+
+* Scope
+
+** IN
+- Diagnose the actual failure point (A/B/C above) using live `iex` instrumentation OR by reading the server ~nav_block~ implementation and the JS keydown branch.
+- Fix the failure. Likely candidates:
+  - If /A/: adjust ~nav_block~ to read siblings via the same ordering as ~Pages.list_for_page~ uses (which is by ~position~ ascending).
+  - If /B/: ensure ~focusEnd()~ awaits the Lexical update flush before calling ~editor.focus()~, or run focus before selection move (Lexical re-applies selection on focus).
+  - If /C/: tighten the keydown listener registration target (host element vs inner contentEditable).
+- Add an integration test that catches this. Use ~Phoenix.LiveViewTest~ on the server side (already there) AND a new vitest-jsdom integration that mounts two ora-blocks with real Lexical editors and simulates ArrowUp/ArrowDown keystrokes through the BlockEditor hook \u2014 asserting the focused element changes.
+- Both directions covered; do not regress ArrowDown.
+
+** OUT
+- Caret column tracking (mid-line up/down preserves column) \u2014 still out of scope per BUG-014.
+- ArrowLeft/Right at block boundaries.
+
+* TDD evidence required
+Implementer must surface a failing integration test (Phase A) that reproduces this before the fix (Phase B).
+
+* Implementation hints
+
+- =lib/concept_web/live/page_editor_live.ex= ~handle_event("nav_block", \u2026)~: check the prev/next sibling resolution. If it uses ~Enum.find_index~ on a list that may have been re-sorted, ensure consistent ordering. The list MUST be sorted by ~position~ ascending.
+- =assets/js/components/ora-block.js= ~focusEnd~ implementation: try reversing the order \u2014 ~this._editor.focus()~ first, THEN the selection move. Lexical 0.17 sometimes reapplies the last-known selection on focus, which can override our just-set selection. Alternative: pass selection callback to ~editor.focus({ defaultSelection: "rootEnd" })~ \u2014 check whether 0.17 supports it; fall back to manual.
+- New integration test: =assets/js/components/__tests__/ora-block-integration.test.js= mounting two real OraBlocks with content and a fake BlockEditor harness that simulates the LiveView push/pull.
+
+* Acceptance
+- Integration test exercises both directions; both green.
+- Puppeteer slice A re-runs and ArrowUp passes.
+- One commit: ~fix(editor): ArrowUp focuses previous block at end (BUG-030)~.

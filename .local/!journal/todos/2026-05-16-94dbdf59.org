@@ -1,0 +1,45 @@
+#+TITLE: Session 14e3e8e8a9b3d305 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Browser Verification
+
+** DONE Register slice-f@concept.dev and create page
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:END:
+
+Open browser, register user slice-f@concept.dev / password123456, create workspace and page with paragraph block
+
+** DONE Test slash menu open + filter
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:END:
+
+Click into block, type /, assert ora-slash-menu visible, type h1, assert single result
+
+** DOING Test menu select + BUG-028 verify
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: in_progress
+:END:
+
+Press Enter to select Heading 1, assert new heading_1 block, verify source block text cleaned
+
+** ITEM Test Escape closes menu, keeps /
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: pending
+:END:
+
+Type / in another block, press Escape, assert menu closed, / remains
+
+** ITEM Test keyboard nav ArrowDown ArrowDown Enter
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: pending
+:END:
+
+Type /, press ArrowDown ArrowDown Enter, assert 3rd item type inserted

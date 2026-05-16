@@ -148,13 +148,13 @@ export class OraBlock extends LitElement {
   }
 
   focusStart() {
-    moveCaretToStart(this._editor);
     this._editor.focus();
+    moveCaretToStart(this._editor);
   }
 
   focusEnd() {
-    moveCaretToEnd(this._editor);
     this._editor.focus();
+    moveCaretToEnd(this._editor);
   }
 }
 

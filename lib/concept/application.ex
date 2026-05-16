@@ -19,6 +19,7 @@ defmodule Concept.Application do
       {Phoenix.PubSub, name: Concept.PubSub},
       Arcana.TaskSupervisor,
       {Task.Supervisor, name: Concept.TaskSupervisor},
+      Concept.Knowledge.TokenAccumulator,
       ConceptWeb.Presence,
       # Start a worker by calling: Concept.Worker.start_link(arg)
       # {Concept.Worker, arg},

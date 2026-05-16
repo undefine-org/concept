@@ -1,0 +1,13 @@
+#+TITLE: Follow-up: Test link edit/remove flow (Slice E)
+#+STATE: ITEM
+#+SESSION_ID: 14e3e8e7dcf3d303
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc/26-SliceELinkEditor.jsonl]]
+#+CUSTOM_ID: FUP-018-follow-up-test-link-edit-remove-flow-sli
+
+Deferred from task-5: Test link edit/remove flow
+
+Original details:
+Click into link text, trigger link-editor again, clear URL and press Enter, assert link removed
+
+- Server was down due to pre-existing compile error (ingestion_job.ex:41)
+- Link plugin also not wired up (missing LinkNode + TOGGLE_LINK_COMMAND registration)

@@ -19,35 +19,15 @@
 :STATUS: pending
 :END:
 
-** ITEM FEAT-033: Extend AshAI Message with scope/profile/search_trace + domain tools block
-:PROPERTIES:
-:TASK_ID: feat-message
-:STATUS: pending
-:END:
-
-** ITEM FEAT-032: Citation Ash resource
-:PROPERTIES:
-:TASK_ID: feat-citation
-:STATUS: pending
-:END:
-
-** ITEM FEAT-031: Link Ash resource + Arcana.Graph mirror
-:PROPERTIES:
-:TASK_ID: feat-link
-:STATUS: pending
-:END:
-
-** ITEM FEAT-034: Knowledge.Profiles Spark DSL
-:PROPERTIES:
-:TASK_ID: feat-profiles
-:STATUS: pending
-:END:
+Created; 9/12 tests pass; 3 edge cases (page nil, archival filter, policy NotFound vs Forbidden) in fixer
 
 ** ITEM FEAT-035: Knowledge.Reactors.Ingest
 :PROPERTIES:
 :TASK_ID: feat-reactor
 :STATUS: pending
 :END:
+
+PerformIngest covers immediate need; full Reactor steps refactor deferred to post-Wave-2 transitional
 
 * Wave 1.5 Review
 
@@ -177,10 +157,36 @@
 :STATUS: pending
 :END:
 
-* Spark research
+* Wave 2 Foundation UI
 
-** DONE Find canonical pattern for standalone Spark DSL with entities
+** DOING FEAT-036 CitationCard component
 :PROPERTIES:
 :TASK_ID: task-1
+:STATUS: in_progress
+:END:
+
+** ITEM FEAT-037 PageScroll colocated hook + flash
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: pending
+:END:
+
+** DONE FEAT-040 semantic command palette via assign_async
+:PROPERTIES:
+:TASK_ID: task-3
 :STATUS: completed
+:END:
+
+** ITEM FEAT-038 IndexingPill + FEAT-039 ChatPanel (shared WorkspaceLive)
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: pending
+:END:
+
+* Wave 4 (parallelizable backend)
+
+** DOING FEAT-048 telemetry expansion + Gemini token ledger
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: in_progress
 :END:

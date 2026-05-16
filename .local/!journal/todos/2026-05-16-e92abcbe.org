@@ -1,0 +1,41 @@
+#+TITLE: Session 14e3e8e6feb3d301 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Slice D Verification
+
+** DONE Create paragraph, select text, verify format toolbar
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:END:
+
+Create 'hello world' paragraph, select 'world', verify toolbar visible, screenshot bold
+
+** BLOCKED Verify Bold persists after reload
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: failed
+:END:
+
+Blur, reload, check DOM for <strong>world</strong>, screenshot
+
+Dev server crashed with compile error; text selection not possible via available browser tools
+
+** BLOCKED Test Italic format independently
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: failed
+:END:
+
+Select another text, click Italic, verify, reload-check
+
+Dev server crashed with compile error
+
+** DONE Report results
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:END:
+
+submit_result with passes/fails/next_action

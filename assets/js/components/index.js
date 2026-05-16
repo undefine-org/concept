@@ -6,3 +6,5 @@ import "./ora-emoji-picker.js";
 import "./ora-slash-menu.js";
 import "./ora-format-toolbar.js";
 import "./ora-link-editor.js";
+
+import "./ora-citation-popover.js";

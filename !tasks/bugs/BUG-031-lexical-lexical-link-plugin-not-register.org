@@ -1,0 +1,73 @@
+#+TITLE: Lexical @lexical/link plugin not registered; link toolbar dispatches into the void
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-031-lexical-lexical-link-plugin-not-register
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W2.6 slice E (browser verification, 2026-05-16) surfaced: the link UI works visually \u2014 toolbar Link button shows =<ora-link-editor>= correctly \u2014 but applying a URL does nothing. Root cause: =assets/js/lexical/registry.js= does not import =LinkNode= from ~@lexical/link~ and does not register a handler for ~TOGGLE_LINK_COMMAND~. The toolbar code in =assets/js/lexical/commands.js= dispatches the command, but Lexical drops it because there's no registered handler and the LinkNode constructor is unknown to the editor.
+
+BUG-016 (DONE, commits 2ce65b9 + ee9559b) wired the toolbar UI + the ~setLink~ command-dispatcher wrapper, but the underlying Lexical config was never extended. Unit tests only assert ~editor.dispatchCommand~ was called with the right args (spy-on-callee), not that the editor state actually changed (the very weakness W2.5 specialist test-depth reviewer flagged as P3 \u2014 the missing =commands.test.js= would have caught this).
+
+* Intention & Purpose
+
+Selecting text + clicking Link in the toolbar + entering a URL wraps the selection in a real ~LinkNode~ that serializes to ~<a href="\u2026">~ on both client render and server ~Concept.Lexical.to_html~. Persists across save+reload. Removal (empty URL) unwraps.
+
+* Context & Narrative
+
+@lexical/link 0.17 API:
+- Add ~LinkNode~ to the editor's ~nodes:~ array at editor creation.
+- Register a transformer via ~registerLinkPlugin~ or manually subscribe to ~TOGGLE_LINK_COMMAND~ inside the editor's ~register~ callback, calling ~$toggleLink(url)~ inside ~editor.update~.
+
+The standard pattern (mirrors how rich-text plugin is wired in our codebase):
+#+begin_src js
+import { LinkNode } from "@lexical/link";
+import { $toggleLink, TOGGLE_LINK_COMMAND } from "@lexical/link";
+
+// at editor creation:
+const editor = createEditor({ nodes: [..., LinkNode], ... });
+
+// at editor mount (inside registry registration):
+editor.registerCommand(TOGGLE_LINK_COMMAND, (url) => {
+  $toggleLink(url);  // inside editor.update
+  return true;
+}, COMMAND_PRIORITY_LOW);
+#+end_src
+
+Check =assets/package.json= \u2014 ~@lexical/link~ may not even be a declared dep. If not, ~npm install @lexical/link@<lexical-version>~ first. Confirm version alignment with the rest of the @lexical/* family already installed.
+
+Server-side serialization: ~Concept.Lexical.to_html~ must handle ~LinkNode~ JSON shape (~%{type: "link", url: \u2026, children: [\u2026]}~). Verify; if missing, add the case.
+
+* Scope
+
+- IN: declare ~@lexical/link~ dep in package.json if missing.
+- IN: import ~LinkNode~ + ~$toggleLink~ + ~TOGGLE_LINK_COMMAND~ in =assets/js/lexical/registry.js=.
+- IN: add ~LinkNode~ to the ~nodes:~ array in editor creation.
+- IN: register ~TOGGLE_LINK_COMMAND~ handler that calls ~$toggleLink(url)~ inside ~editor.update~.
+- IN: Server-side: extend =Concept.Lexical.to_html= to emit ~<a href="\u2026">~ for ~%{type: "link", \u2026}~ nodes.
+- IN: extend =assets/js/lexical/__tests__/commands.test.js= (created in BUG-029) with an end-to-end assertion: after ~setLink(editor, "https://x")~ on a selection, the editor state JSON contains a LinkNode with the URL. After ~setLink(editor, null)~, the LinkNode is unwrapped.
+- IN: ExUnit: extend =test/concept_web/live/page_editor_test.exs= asserting save+reload with link content roundtrips through ~<a href="\u2026">~ in the rendered HTML.
+
+** OUT
+- Autolink-on-paste plugin (smart URL detection).
+- Custom link styling (just default browser anchor styles for v1).
+- Link preview tooltips.
+
+* TDD evidence required
+Phase A: write the editor-state assertion BEFORE wiring the plugin; verify it fails because LinkNode isn't a known type / TOGGLE_LINK_COMMAND has no effect. Phase B: wire the plugin; verify pass.
+
+* Existing patterns
+- =assets/js/lexical/registry.js= already imports HeadingNode, QuoteNode, etc. Same pattern.
+- =assets/js/lexical/commands.js= already wraps ~editor.dispatchCommand(TOGGLE_LINK_COMMAND, ...)~ \u2014 don't touch.
+- =Concept.Lexical= module \u2014 handles paragraph/heading/quote serialization; add link case.
+
+* Acceptance
+- Slice E re-runs and the link flow passes through apply + reload + remove.
+- New tests green.
+- One commit: ~fix(editor): wire @lexical/link plugin into registry + server HTML (BUG-031)~.

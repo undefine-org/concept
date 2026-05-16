@@ -34,29 +34,43 @@ defmodule Concept.Knowledge.Changes.MirrorToArcanaGraph do
       }
     }
 
-    # No unique index on (source_id, target_id, type), so use get_by + insert_or_update
-    case Concept.Repo.get_by(Arcana.Graph.Relationship,
-           source_id: link.source_block_id,
-           target_id: link.target_block_id,
-           type: rel_type
-         ) do
-      nil ->
-        %Arcana.Graph.Relationship{}
-        |> Arcana.Graph.Relationship.changeset(attrs)
-        |> Concept.Repo.insert()
+    # Check if source and target exist in Arcana.Graph.Entity before mirroring
+    # This prevents FK constraint violations that would abort the transaction
+    source_exists? = Concept.Repo.get(Arcana.Graph.Entity, link.source_block_id) != nil
+    target_exists? = Concept.Repo.get(Arcana.Graph.Entity, link.target_block_id) != nil
 
-      existing ->
-        existing
-        |> Arcana.Graph.Relationship.changeset(attrs)
-        |> Concept.Repo.update()
-    end
-    |> case do
-      {:ok, _} ->
-        {:ok, link}
+    if source_exists? and target_exists? do
+      # Both entities exist, safe to mirror
+      case Concept.Repo.get_by(Arcana.Graph.Relationship,
+             source_id: link.source_block_id,
+             target_id: link.target_block_id,
+             type: rel_type
+           ) do
+        nil ->
+          %Arcana.Graph.Relationship{}
+          |> Arcana.Graph.Relationship.changeset(attrs)
+          |> Concept.Repo.insert()
 
-      {:error, e} ->
-        Logger.warning("Knowledge.Link mirror failed: #{inspect(e)}")
-        {:ok, link}
+        existing ->
+          existing
+          |> Arcana.Graph.Relationship.changeset(attrs)
+          |> Concept.Repo.update()
+      end
+      |> case do
+        {:ok, _} ->
+          {:ok, link}
+
+        {:error, e} ->
+          Logger.warning("Knowledge.Link mirror failed: #{inspect(e)}")
+          {:ok, link}
+      end
+    else
+      # Entities don't exist in Arcana graph yet, skip mirror
+      Logger.debug(
+        "Knowledge.Link mirror skipped: source or target block not in Arcana.Graph.Entity (source=#{source_exists?}, target=#{target_exists?})"
+      )
+
+      {:ok, link}
     end
   end
 
