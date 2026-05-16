@@ -10,16 +10,35 @@
 :STATUS: failed
 :END:
 
-* PLAN-005 W2 final cleanup + Slice E re-run
+* PLAN-005 Wave 3 implementer batch
 
-** DONE Fix Enter@end double-split + focus race via KEY_ENTER_COMMAND priority + pending-focus queue
+** DOING AuthOverrides + .ora-auth-* CSS layer + smoke tests
 :PROPERTIES:
-:TASK_ID: task-6
-:STATUS: completed
+:TASK_ID: task-5
+:STATUS: in_progress
 :END:
 
-** DOING Re-run Slice E to complete link apply/persist/remove (was aborted at step 3)
+** DOING Workspace primary? attr + AfterSignIn on_mount redirect + HomeLive signed-in redirect
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: in_progress
+:END:
+
+** ITEM Block lock indicators via presence metadata + data-locked-by
 :PROPERTIES:
 :TASK_ID: task-7
+:STATUS: pending
+:DEPENDS: task-5
+:END:
+
+** DOING send_update PageHeader on page_updated PubSub
+:PROPERTIES:
+:TASK_ID: task-8
+:STATUS: in_progress
+:END:
+
+** DOING Trim title server-side + client-side; empty placeholder works on whitespace input
+:PROPERTIES:
+:TASK_ID: task-9
 :STATUS: in_progress
 :END:

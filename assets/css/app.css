@@ -139,3 +139,39 @@
 .ora-chat-panel { @apply fixed right-0 top-16 bottom-0 w-96 bg-white border-l border-gray-300 z-40 transition-transform translate-x-full; }
 .ora-chat-panel--open { @apply translate-x-0; }
 
+
+@layer components {
+  /* Auth (sign-in / register / reset / confirm) — Notion-style */
+  .ora-auth-root { display: flex; min-height: 100vh; align-items: center; justify-content: center; background: var(--color-notion-bg); padding: 24px; }
+  .ora-auth-card { background: #FFFFFF; border-radius: 8px; padding: 32px 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px var(--color-notion-divider); max-width: 380px; width: 100%; }
+  .ora-auth-strategy { margin-top: 8px; }
+  .ora-auth-strategy:first-child { margin-top: 0; }
+  .ora-auth-title { font-size: 22px; font-weight: 600; line-height: 1.3; color: var(--color-notion-text); margin: 0 0 20px 0; }
+  .ora-auth-form { display: flex; flex-direction: column; gap: 12px; }
+  .ora-auth-field { display: flex; flex-direction: column; gap: 4px; }
+  .ora-auth-label { font-size: 12px; font-weight: 500; color: var(--color-notion-text-light); letter-spacing: 0.02em; }
+  .ora-auth-input { width: 100%; padding: 8px 12px; border: 1px solid var(--color-notion-divider); border-radius: 4px; font-size: 14px; font-family: var(--font-sans); color: var(--color-notion-text); background: #FFFFFF; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+  .ora-auth-input::placeholder { color: var(--color-notion-text-light); }
+  .ora-auth-input:focus { outline: none; border-color: var(--color-notion-blue); box-shadow: 0 0 0 2px rgba(46, 170, 220, 0.2); }
+  .ora-auth-input-error { border-color: #EB5757; }
+  .ora-auth-input-error:focus { border-color: #EB5757; box-shadow: 0 0 0 2px rgba(235, 87, 87, 0.2); }
+  .ora-auth-submit { width: 100%; padding: 10px 16px; background: var(--color-notion-text); color: #FFFFFF; border: none; border-radius: 4px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s ease; margin-top: 4px; }
+  .ora-auth-submit:hover { background: #1F1D1A; }
+  .ora-auth-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+  .ora-auth-error-ul { list-style: none; padding: 0; margin: 4px 0 0 0; color: #EB5757; font-size: 12px; font-style: italic; }
+  .ora-auth-error-li { margin: 0; padding: 0; }
+  .ora-auth-interstitial { display: flex; flex-direction: row; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 13px; }
+  .ora-auth-toggler { color: var(--color-notion-blue); background: transparent; border: none; padding: 4px 0; cursor: pointer; font-size: 13px; font-family: var(--font-sans); }
+  .ora-auth-toggler:hover { text-decoration: underline; }
+  .ora-auth-hide { display: none; }
+  .ora-auth-slot { margin: 8px 0; }
+  .ora-auth-remember-me { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 13px; }
+  .ora-auth-checkbox { width: 14px; height: 14px; accent-color: var(--color-notion-blue); }
+  .ora-auth-checkbox-label { color: var(--color-notion-text); font-size: 13px; font-weight: 400; }
+  .ora-auth-hr { display: flex; align-items: center; gap: 8px; margin: 20px 0; color: var(--color-notion-text-light); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ora-auth-hr::before, .ora-auth-hr::after { content: ""; flex: 1; height: 1px; background: var(--color-notion-divider); }
+  .ora-auth-spacer { height: 4px; }
+  .ora-auth-flash-info { position: fixed; top: 16px; right: 16px; max-width: 360px; padding: 12px 16px; background: #FFFFFF; border: 1px solid var(--color-notion-divider); border-left: 3px solid var(--color-notion-blue); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); font-size: 13px; color: var(--color-notion-text); z-index: 60; }
+  .ora-auth-flash-error { position: fixed; top: 16px; right: 16px; max-width: 360px; padding: 12px 16px; background: #FFFFFF; border: 1px solid var(--color-notion-divider); border-left: 3px solid #EB5757; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); font-size: 13px; color: var(--color-notion-text); z-index: 60; }
+}
+

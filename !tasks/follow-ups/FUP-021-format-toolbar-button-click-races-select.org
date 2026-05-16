@@ -1,0 +1,23 @@
+#+TITLE: Format toolbar button click races selectionchange and dismisses toolbar
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: FUP-021-format-toolbar-button-click-races-select
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W2.7.6 Slice E re-run (P3 UX): clicking a button inside `<ora-format-toolbar>.shadowRoot` (Bold/Italic/Link) causes `document.activeElement` to leave the contenteditable → `selectionchange` fires with empty selection → FormatToolbar hook resets `visible` to false → the click's apply-link/toggle-format path runs against a hidden toolbar that may have already cleared state. End behavior currently works because the click handler fires synchronously before the reset, but real users with slower hands or different OS focus models could lose the apply.
+
+* Fix sketch
+- In `<ora-format-toolbar>`: prevent focus loss on click via `onPointerDown` `event.preventDefault()` on buttons.
+- OR in the FormatToolbar hook: ignore `selectionchange` events for ~150ms after a button click (debounce via setTimeout flag).
+- Add vitest scenario that asserts toolbar remains `visible` through a button click.
+
+* Acceptance
+- Clicking toolbar buttons does not dismiss the toolbar.
+- One commit: `fix(editor): keep format toolbar visible across button click (FUP-018)`.

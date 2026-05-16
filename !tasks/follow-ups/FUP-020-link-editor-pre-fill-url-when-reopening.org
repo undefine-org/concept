@@ -1,0 +1,22 @@
+#+TITLE: Link editor: pre-fill URL when reopening over existing anchor
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: FUP-020-link-editor-pre-fill-url-when-reopening
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W2.7.6 Slice E re-run (P3): when caret is inside an existing `<a>` and the user clicks Link in the format toolbar, `<ora-link-editor>` opens with empty `url` instead of pre-filling the current LinkNode's URL. FEAT-011 spec line 75 calls for this. Unwrap-on-empty-URL still works (Remove path is regression-free), so this is polish.
+
+* Fix sketch
+- In `assets/js/hooks/format_toolbar.js` `_handleRequestLink`: before showing `<ora-link-editor>`, read the Lexical selection's ancestors for a `LinkNode` via `$getSelection().anchor.getNode().getParents()` filtered by `$isLinkNode`. If present, set `linkEditor.url = node.getURL()`. Else leave empty.
+- Add vitest scenario covering both cases.
+
+* Acceptance
+- Re-opening link editor over an existing link shows the URL pre-filled.
+- One commit: `feat(editor): pre-fill link editor with existing LinkNode URL (FUP-017)`.
