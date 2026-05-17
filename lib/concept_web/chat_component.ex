@@ -37,6 +37,7 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:conversation_id, fn -> nil end)
         |> assign_new(:agent_responding, fn -> false end)
         |> assign_new(:tool_data_warning_shown?, fn -> false end)
+        |> assign_new(:has_messages, fn -> false end)
         |> stream(:conversations, conversations)
         |> stream(:messages, [])
         |> assign_message_form()
@@ -77,133 +78,187 @@ defmodule ConceptWeb.ChatComponent do
 
   @impl true
   def render(assigns) do
-      ~H"""
-      <div id={@id} class="flex bg-white min-h-full max-h-full">
-        <div :if={!@hide_sidebar} class="w-72 border-r border-notion-divider bg-notion-sidebar flex flex-col overflow-y-auto">
-          <div class="py-4 px-6">
-            <div class="text-sm font-semibold text-notion-text-light mb-3">Conversations</div>
-            <button
-              phx-click="new_chat"
-              phx-target={@myself}
-              class="ora-btn ora-btn--primary w-full justify-center mb-3"
-            >
-              <.icon name="hero-plus-micro" class="size-4" /> New Chat
-            </button>
-            <ul class="flex flex-col-reverse" phx-update="stream" id={"#{@id}-conversations-list"}>
-              <%= for {id, conversation} <- @streams.conversations do %>
-                <li id={id}>
-                  <button
-                    phx-click="select_conversation"
-                    phx-target={@myself}
-                    phx-value-id={conversation.id}
-                    class={[
-                      "block py-2 px-3 transition border-l-2 pl-2 mb-1 w-full text-left text-sm",
-                      if(@conversation && @conversation.id == conversation.id,
-                        do: "border-notion-blue font-medium text-notion-text",
-                        else: "border-transparent text-notion-text-light hover:text-notion-text")
-                    ]}
-                  >
-                    {build_conversation_title_string(conversation.title)}
-                  </button>
-                </li>
-              <% end %>
-            </ul>
+    ~H"""
+    <div id={@id} class="flex bg-white min-h-full max-h-full">
+      <div
+        :if={!@hide_sidebar}
+        class="w-72 border-r border-notion-divider bg-notion-sidebar flex flex-col overflow-y-auto"
+      >
+        <div class="py-4 px-6">
+          <div class="text-sm font-semibold text-notion-text-light mb-3">Conversations</div>
+          <button
+            phx-click="new_chat"
+            phx-target={@myself}
+            class="ora-btn ora-btn--primary w-full justify-center mb-3"
+          >
+            <.icon name="hero-plus-micro" class="size-4" /> New Chat
+          </button>
+          <ul class="flex flex-col-reverse" phx-update="stream" id={"#{@id}-conversations-list"}>
+            <%= for {id, conversation} <- @streams.conversations do %>
+              <li id={id}>
+                <button
+                  phx-click="select_conversation"
+                  phx-target={@myself}
+                  phx-value-id={conversation.id}
+                  class={[
+                    "block py-2 px-3 transition border-l-2 pl-2 mb-1 w-full text-left text-sm",
+                    if(@conversation && @conversation.id == conversation.id,
+                      do: "border-notion-blue font-medium text-notion-text",
+                      else: "border-transparent text-notion-text-light hover:text-notion-text"
+                    )
+                  ]}
+                >
+                  {build_conversation_title_string(conversation.title)}
+                </button>
+              </li>
+            <% end %>
+          </ul>
+        </div>
+      </div>
+
+      <div class="flex-1 flex flex-col min-w-0">
+        <.flash kind={:info} flash={@flash} />
+        <.flash kind={:error} flash={@flash} />
+        <.flash kind={:warning} flash={@flash} />
+
+        <div class="flex items-center gap-3 px-4 py-3 border-b border-notion-divider">
+          <span class="ora-avatar" style="background: var(--color-notion-blue);">A</span>
+          <div class="flex-1 min-w-0">
+            <p :if={@conversation} class="text-sm font-medium truncate">
+              {build_conversation_title_string(@conversation.title)}
+            </p>
+            <p class="text-xs text-notion-text-light">AshAi</p>
           </div>
         </div>
 
-        <div class="flex-1 flex flex-col min-w-0">
-          <.flash kind={:info} flash={@flash} />
-          <.flash kind={:error} flash={@flash} />
-          <.flash kind={:warning} flash={@flash} />
-
-          <div class="flex items-center gap-3 px-4 py-3 border-b border-notion-divider">
-            <span class="ora-avatar" style="background: var(--color-notion-blue);">A</span>
-            <div class="flex-1 min-w-0">
-              <p :if={@conversation} class="text-sm font-medium truncate">{build_conversation_title_string(@conversation.title)}</p>
-              <p class="text-xs text-notion-text-light">AshAi</p>
-            </div>
-          </div>
-
-          <div class="ora-chat-body flex-1">
-            <div
-              id={"#{@id}-message-container"}
-              phx-update="stream"
-              class="ora-chat-messages"
+        <div class="ora-chat-body flex-1">
+          <div
+            :if={!@has_messages}
+            class="p-4 space-y-2"
+          >
+            <p class="text-xs uppercase tracking-wide text-notion-text-light">Try asking</p>
+            <button
+              type="button"
+              class="block w-full text-left p-2 rounded hover:bg-notion-sidebar-hover text-sm text-notion-text"
+              phx-click="seed_prompt"
+              phx-value-prompt="Summarize this workspace"
+              phx-target={@myself}
             >
-              <%= for {id, message} <- @streams.messages do %>
-                <div id={id} class={[
+              💡 Summarize this workspace
+            </button>
+            <button
+              type="button"
+              class="block w-full text-left p-2 rounded hover:bg-notion-sidebar-hover text-sm text-notion-text"
+              phx-click="seed_prompt"
+              phx-value-prompt="What pages mention"
+              phx-target={@myself}
+            >
+              🔍 What pages mention …?
+            </button>
+            <button
+              type="button"
+              class="block w-full text-left p-2 rounded hover:bg-notion-sidebar-hover text-sm text-notion-text"
+              phx-click="seed_prompt"
+              phx-value-prompt="Outline a roadmap based on my notes"
+              phx-target={@myself}
+            >
+              🗺 Outline a roadmap based on my notes
+            </button>
+          </div>
+          <div
+            id={"#{@id}-message-container"}
+            phx-update="stream"
+            class="ora-chat-messages"
+          >
+            <%= for {id, message} <- @streams.messages do %>
+              <div
+                id={id}
+                class={[
                   "ora-chat-message",
                   message.source == :user && "ora-chat-message--user",
                   message.source == :agent && "ora-chat-message--agent"
-                ]}>
-                  <span :if={message.source == :agent} class="ora-chat-avatar">
-                    <.icon name="hero-sparkles-micro" class="size-4 text-notion-text-light" />
-                  </span>
-                  <span :if={message.source == :user} class="ora-chat-avatar">
-                    <.icon name="hero-user-micro" class="size-4 text-notion-text-light" />
-                  </span>
-                  <div class="flex flex-col gap-1 min-w-0">
-                    <div :if={String.trim(message.text || "") != ""} class="ora-chat-bubble">
-                      {to_markdown(message.text || "")}
-                    </div>
-                    <div :if={message.source == :agent && tool_calls(message) != []} class="flex flex-wrap gap-1">
-                      <span :for={tool_call <- tool_calls(message)} class="ora-chat-toolcall">
-                        {tool_call.name}<span :if={tool_call.arguments != %{}}> ({tool_call.arguments_preview})</span>
+                ]}
+              >
+                <span :if={message.source == :agent} class="ora-chat-avatar">
+                  <.icon name="hero-sparkles-micro" class="size-4 text-notion-text-light" />
+                </span>
+                <span :if={message.source == :user} class="ora-chat-avatar">
+                  <.icon name="hero-user-micro" class="size-4 text-notion-text-light" />
+                </span>
+                <div class="flex flex-col gap-1 min-w-0">
+                  <div :if={String.trim(message.text || "") != ""} class="ora-chat-bubble">
+                    {to_markdown(message.text || "")}
+                  </div>
+                  <div
+                    :if={message.source == :agent && tool_calls(message) != []}
+                    class="flex flex-wrap gap-1"
+                  >
+                    <span :for={tool_call <- tool_calls(message)} class="ora-chat-toolcall">
+                      {tool_call.name}<span :if={tool_call.arguments != %{}}> ({tool_call.arguments_preview})</span>
+                    </span>
+                  </div>
+                  <div
+                    :if={message.source == :agent && tool_results(message) != []}
+                    class="flex flex-col gap-1"
+                  >
+                    <div
+                      :for={tool_result <- tool_results(message)}
+                      class={[
+                        "ora-chat-toolresult",
+                        tool_result.is_error && "ora-chat-toolresult--error"
+                      ]}
+                    >
+                      <span class="font-semibold">
+                        {if tool_result.is_error, do: "error", else: "result"}
                       </span>
-                    </div>
-                    <div :if={message.source == :agent && tool_results(message) != []} class="flex flex-col gap-1">
-                      <div
-                        :for={tool_result <- tool_results(message)}
-                        class={[
-                          "ora-chat-toolresult",
-                          tool_result.is_error && "ora-chat-toolresult--error"
-                        ]}
-                      >
-                        <span class="font-semibold">{if tool_result.is_error, do: "error", else: "result"}</span><span :if={tool_result.name}> ({tool_result.name})</span>: {tool_result.content_preview}
-                      </div>
-                    </div>
-                    <div :if={message.source == :agent} class="mt-1">
-                      <.why_this_answer message={message} />
+                      <span :if={tool_result.name}> ({tool_result.name})</span>: {tool_result.content_preview}
                     </div>
                   </div>
+                  <div :if={message.source == :agent} class="mt-1">
+                    <.why_this_answer message={message} />
+                  </div>
                 </div>
-              <% end %>
-            </div>
-          </div>
-
-          <div :if={@agent_responding} class="px-4 py-2 text-xs text-notion-text-light flex items-center gap-2">
-            <span class="inline-block w-2 h-2 rounded-full bg-notion-blue animate-pulse" />
-            <span>AshAi is responding…</span>
-          </div>
-
-          <div class="ora-chat-input-row">
-            <.form
-              :let={form}
-              for={@message_form}
-              phx-change="validate_message"
-              phx-target={@myself}
-              phx-debounce="blur"
-              phx-submit="send_message"
-              class="flex items-center gap-2 w-full"
-            >
-              <input
-                name={form[:text].name}
-                value={form[:text].value}
-                type="text"
-                phx-mounted={JS.focus()}
-                placeholder="Type your message…"
-                class="ora-input flex-1"
-                autocomplete="off"
-              />
-              <button type="submit" class="ora-btn ora-btn--primary">
-                <.icon name="hero-paper-airplane-micro" class="size-4" /> Send
-              </button>
-            </.form>
+              </div>
+            <% end %>
           </div>
         </div>
+
+        <div
+          :if={@agent_responding}
+          class="px-4 py-2 text-xs text-notion-text-light flex items-center gap-2"
+        >
+          <span class="inline-block w-2 h-2 rounded-full bg-notion-blue animate-pulse" />
+          <span>AshAi is responding…</span>
+        </div>
+
+        <div class="ora-chat-input-row">
+          <.form
+            :let={form}
+            for={@message_form}
+            phx-change="validate_message"
+            phx-target={@myself}
+            phx-debounce="blur"
+            phx-submit="send_message"
+            class="flex items-center gap-2 w-full"
+          >
+            <input
+              name={form[:text].name}
+              value={form[:text].value}
+              type="text"
+              phx-mounted={JS.focus()}
+              placeholder="Type your message…"
+              class="ora-input flex-1"
+              autocomplete="off"
+            />
+            <button type="submit" class="ora-btn ora-btn--primary">
+              <.icon name="hero-paper-airplane-micro" class="size-4" /> Send
+            </button>
+          </.form>
+        </div>
       </div>
-      """
-    end
+    </div>
+    """
+  end
 
   @impl true
   def handle_event("validate_message", %{"form" => params}, socket) do
@@ -221,6 +276,7 @@ defmodule ConceptWeb.ChatComponent do
           if socket.assigns.conversation do
             socket
             |> assign(:agent_responding, true)
+            |> assign(:has_messages, true)
             |> assign_message_form()
             |> stream_insert(:messages, message, at: 0)
             |> then(&{:noreply, &1})
@@ -266,6 +322,7 @@ defmodule ConceptWeb.ChatComponent do
       |> maybe_warn_tool_data(messages)
       |> assign(:conversation, conversation)
       |> assign(:agent_responding, agent_response_pending?(messages))
+      |> assign(:has_messages, messages != [])
       |> stream(:messages, messages, reset: true)
       |> assign_message_form()
     end
@@ -279,6 +336,7 @@ defmodule ConceptWeb.ChatComponent do
     socket
     |> assign(:conversation, nil)
     |> assign(:agent_responding, false)
+    |> assign(:has_messages, false)
     |> stream(:messages, [], reset: true)
     |> assign_message_form()
   end
@@ -294,6 +352,7 @@ defmodule ConceptWeb.ChatComponent do
     if socket.assigns.conversation && socket.assigns.conversation.id == conversation_id do
       socket
       |> maybe_warn_tool_data(message)
+      |> assign(:has_messages, true)
       |> stream_insert(:messages, message, at: 0)
       |> update_agent_responding(message)
     else

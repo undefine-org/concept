@@ -18,9 +18,15 @@ defmodule ConceptWeb.BlockRender do
     assigns = assign(assigns, :type, to_string(assigns.block.type))
 
     cond do
-      assigns.type == "table" -> composite_table(assigns)
-      assigns.type == "columns" -> composite_columns(assigns)
-      assigns.type in @text_types -> text_block(assigns)
+      assigns.type == "table" ->
+        composite_table(assigns)
+
+      assigns.type == "columns" ->
+        composite_columns(assigns)
+
+      assigns.type in @text_types ->
+        text_block(assigns)
+
       true ->
         ~H"""
         <div id={"block-" <> @block.id} class="block-anchor scroll-mt-20">

@@ -1,14 +1,14 @@
 defmodule ConceptWeb.CoreComponents do
   @moduledoc """
-    Provides core UI components using .ora-* Tailwind classes.
+  Provides core UI components using .ora-* Tailwind classes.
 
-    The components are styled with custom Tailwind utilities defined in
-    assets/css/app.css. No daisyUI classes are used.
+  The components are styled with custom Tailwind utilities defined in
+  assets/css/app.css. No daisyUI classes are used.
 
-    References:
-      * Heroicons – see `icon/1`.
-      * Phoenix.Component – component system used by Phoenix.
-    """
+  References:
+    * Heroicons – see `icon/1`.
+    * Phoenix.Component – component system used by Phoenix.
+  """
   use Phoenix.Component
   use Gettext, backend: ConceptWeb.Gettext
 

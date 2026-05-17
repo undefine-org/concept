@@ -40,7 +40,6 @@ defmodule ConceptWeb.Components.LiveCitationRail do
                 <.citation_card
                   citation={citation}
                   workspace_slug={@workspace_slug}
-
                 />
                 <button
                   type="button"
