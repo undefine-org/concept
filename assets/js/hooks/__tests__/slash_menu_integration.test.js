@@ -119,6 +119,55 @@ describe("SlashMenu integration with Lexical pipeline", () => {
     expect(env.ctx._open).toBe(true);
   });
 
+  // ── BUG-039: filter follows editor text once menu is open ────────────
+
+  it("updates filter from editor text after menu opens", async () => {
+    const block = createBlock("b1", "");
+    document.body.appendChild(block);
+    const editor = await ensureEditor(block);
+
+    const env = mountHook();
+    block.dispatchEvent(
+      new CustomEvent("ora-block-focus", {
+        detail: { blockId: "b1" },
+        bubbles: true,
+      })
+    );
+
+    // Step 1: type "/" to open the menu (existing trigger detection).
+    editor.update(() => {
+      const root = $getRoot();
+      let para = root.getFirstChild();
+      if (!para) {
+        const { $createParagraphNode } = require("lexical");
+        para = $createParagraphNode();
+        root.append(para);
+      }
+      para.selectEnd();
+      $getSelection().insertText("/");
+    });
+    await flush();
+
+    expect(env.menu.hasAttribute("visible")).toBe(true);
+    expect(env.ctx._open).toBe(true);
+
+    // Step 2: type "h" — filter should become "h".
+    editor.update(() => {
+      $getSelection().insertText("h");
+    });
+    await flush();
+
+    // Step 3: type "1" — filter should become "h1".
+    editor.update(() => {
+      $getSelection().insertText("1");
+    });
+    await flush();
+
+    expect(env.menu.getAttribute("filter")).toBe("h1");
+    expect(env.menu._filteredItems.length).toBe(1);
+    expect(env.menu._filteredItems[0].type).toBe("heading_1");
+  });
+
   // ── Defect 2: trigger deletion is ineffective in real browser ──────────
 
   it("removes '/' and filter from source editor on select", async () => {

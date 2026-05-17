@@ -60,7 +60,18 @@ export const SlashMenu = {
     const blockId = block.getAttribute("block-id");
 
     this._editorUnsub = editor.registerTextContentListener((text) => {
-      if (this._open) return;
+      if (this._open) {
+        // Menu is open — mirror text typed after the trigger into
+        // the menu's filter, or close if the user moved away from
+        // the trigger (caret elsewhere, or "/" itself deleted).
+        if (text[this._triggerPreLength] !== "/") {
+          this._close();
+          return;
+        }
+        const filterText = text.slice(this._triggerPreLength + 1);
+        this._updateFilter(filterText);
+        return;
+      }
 
       editor.getEditorState().read(() => {
         const sel = $getSelection();
@@ -124,6 +135,29 @@ export const SlashMenu = {
       const input = menu.renderRoot && menu.renderRoot.querySelector("input");
       if (input) input.focus();
     });
+  },
+
+  /**
+   * Mirror the text typed after the slash trigger into the menu's
+   * filter state. Updates both the reflected `filter` attribute
+   * (so external observers — e.g. tests — can read it) and the
+   * Lit component's internal `_filter` reactive state.
+   * Resets selection to the first item so Enter picks the top hit.
+   * @param {string} filter
+   */
+  _updateFilter(filter) {
+    const menu = this.host.querySelector("ora-slash-menu");
+    if (!menu) return;
+    menu._filter = filter;
+    menu._selectedIndex = 0;
+    if (filter) {
+      menu.setAttribute("filter", filter);
+    } else {
+      menu.removeAttribute("filter");
+    }
+    if (typeof menu.requestUpdate === "function") {
+      menu.requestUpdate();
+    }
   },
 
   /**
@@ -320,6 +354,10 @@ export const SlashMenu = {
     const menu = this.host.querySelector("ora-slash-menu");
     if (menu) {
       menu.removeAttribute("visible");
+      menu.removeAttribute("filter");
+      if (typeof menu._filter !== "undefined") {
+        menu._filter = "";
+      }
     }
     this._triggerPreLength = 0;
     this._activeBlockId = null;
