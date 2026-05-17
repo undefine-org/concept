@@ -52,6 +52,16 @@ defmodule ConceptWeb.AuthFlowTest do
     {conn, user, ws}
   end
 
+  # Variant of authed_conn/2 that strips the auto-created workspace +
+  # membership left behind by the RunOnboarding after-action change.
+  # Lets us simulate the "no primary workspace" recovery path that the
+  # post-auth redirects need to handle gracefully (BUG-037 scenario 1).
+  defp authed_conn_no_ws(conn, prefix) do
+    {conn, user, ws} = authed_conn(conn, prefix)
+    Ash.destroy!(ws, authorize?: false)
+    {conn, user}
+  end
+
   describe "post-auth landing" do
     test "fresh registration → confirmed user → push_navigate to /w/<slug>", %{conn: conn} do
       {conn, _user, ws} = authed_conn(conn, "register")
@@ -72,6 +82,45 @@ defmodule ConceptWeb.AuthFlowTest do
 
       assert {:error, {:live_redirect, %{to: target}}} = live(conn, ~p"/")
       assert target == "/w/#{ws.slug}"
+    end
+
+    # BUG-037 scenario 1: signed-in user with NO workspace.
+    #
+    # We bypass Onboarding by destroying the auto-created workspace, then
+    # walk the post-auth surfaces a real user would hit:
+    #
+    #   /        — HomeLive must NOT redirect to /w/<slug> (none exists)
+    #             and is free to stay on the public landing.
+    #   /sign-in — :after_sign_in hook must NOT redirect (no primary).
+    #   /w       — WorkspaceLive :index has no slug to forward to;
+    #             it must surface the failure (flash + bounce back to /)
+    #             instead of crashing or looping. Final landing is /, not
+    #             /w/<slug>.
+    #
+    # If the recovery contract regresses (e.g. HomeLive raises on nil
+    # workspace, or :after_sign_in tries to navigate to /w/), this test
+    # is what catches it.
+    test "user with NO workspace lands on / (not /w/<slug>) on every post-auth surface",
+         %{conn: conn} do
+      {conn, user} = authed_conn_no_ws(conn, "nows")
+
+      # Sanity: the user really has zero workspaces.
+      assert {:ok, []} = Accounts.Workspace.for_user(user.id, actor: user)
+
+      # HomeLive must stay on / for a signed-in user with no workspace.
+      assert {:ok, _view, html} = live(conn, ~p"/")
+      assert html =~ "Enter your workspace"
+
+      # :after_sign_in must NOT force-redirect a no-workspace user.
+      assert {:ok, _view, _html} = live(conn, ~p"/sign-in")
+
+      # /w (index) has nothing to forward to → bounce back to / with a
+      # flash, *not* a crash and *not* a slug-less /w/.
+      assert {:error, {:live_redirect, %{to: "/", flash: flash}}} = live(conn, ~p"/w")
+      assert flash["error"] == "No workspace found"
+
+      # And the bounce truly did not silently create a workspace.
+      assert {:ok, []} = Accounts.Workspace.for_user(user.id, actor: user)
     end
   end
 end
