@@ -19,7 +19,7 @@ defmodule ConceptWeb.Components.Sidebar do
       <button
         type="button"
         phx-click="open_command_palette"
-        class="ora-sidebar-row mx-2 mb-1 text-notion-text-light"
+        class="ora-sidebar-row mb-1 text-notion-text-light"
       >
         <.icon name="hero-magnifying-glass-micro" class="size-4" />
         <span>Search... (⌘K)</span>
@@ -28,13 +28,13 @@ defmodule ConceptWeb.Components.Sidebar do
       <button
         type="button"
         phx-click="new_page"
-        class="ora-sidebar-row mx-2 mb-2 text-notion-text font-medium"
+        class="ora-sidebar-row mb-2 text-notion-text font-medium"
       >
         <.icon name="hero-plus-micro" class="size-4" />
         <span>+ New page</span>
       </button>
 
-      <div class="flex-1 overflow-y-auto px-2">
+      <div class="flex-1 overflow-y-auto">
         <.live_component
           module={ConceptWeb.Components.PageTree}
           id="page-tree"
@@ -44,7 +44,7 @@ defmodule ConceptWeb.Components.Sidebar do
         />
       </div>
 
-      <div class="mt-auto border-t border-notion-divider pt-2 px-2 pb-2">
+      <div class="mt-auto border-t border-notion-divider pt-2 pb-2">
         <button
           type="button"
           phx-click="toggle_live_rail"

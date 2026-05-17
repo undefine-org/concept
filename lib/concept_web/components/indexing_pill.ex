@@ -11,6 +11,7 @@ defmodule ConceptWeb.Components.IndexingPill do
   Click → opens popover with last 10 IngestionJob rows.
   """
   use Phoenix.Component
+  import ConceptWeb.CoreComponents, only: [icon: 1]
 
   attr :state, :atom, default: :idle, doc: ":idle | :indexing | :error"
   attr :count, :integer, default: 0
@@ -51,36 +52,35 @@ defmodule ConceptWeb.Components.IndexingPill do
 
       <div
         :if={@show_details}
-        class="absolute bottom-full mb-2 right-0 w-96 bg-base-100 border border-base-300 rounded-lg shadow-lg p-4 z-50"
+        class="absolute bottom-full mb-2 right-0 w-96 bg-white border border-notion-divider rounded-lg shadow-lg p-4 z-50"
       >
         <div class="flex items-center justify-between mb-3">
-          <h3 class="font-semibold text-sm">Indexing Jobs</h3>
+          <h3 class="font-semibold text-sm text-notion-text">Indexing Jobs</h3>
           <button
             type="button"
             phx-click="hide_indexing_details"
-            class="btn btn-ghost btn-xs"
+            class="ora-btn ora-btn--ghost ora-btn--sm ora-btn--icon"
+            aria-label="Close"
           >
-            ✕
+            <.icon name="hero-x-mark-micro" class="size-4" />
           </button>
         </div>
 
         <%= if @jobs == [] do %>
-          <p class="text-xs text-base-content/60">No recent jobs</p>
+          <p class="text-xs text-notion-text-light">No recent jobs</p>
         <% else %>
           <ul class="space-y-2">
             <%= for job <- @jobs do %>
-              <li
-                class="text-xs border-l-2 pl-2 py-1"
-                class={[
-                  job.state == :succeeded && "border-success",
-                  job.state == :running && "border-warning",
-                  job.state == :failed && "border-error",
-                  job.state == :queued && "border-base-300"
-                ]}
-              >
+              <li class={[
+                "text-xs border-l-2 pl-2 py-1",
+                job.state == :succeeded && "border-emerald-500",
+                job.state == :running && "border-amber-500",
+                job.state == :failed && "border-rose-500",
+                job.state == :queued && "border-zinc-300"
+              ]}>
                 <div class="flex items-center justify-between">
                   <span class="font-medium">{format_state(job.state)}</span>
-                  <span class="text-base-content/50">
+                  <span class="text-notion-text-light">
                     <%= if job.finished_at do %>
                       {time_ago(job.finished_at)}
                     <% else %>
@@ -89,12 +89,12 @@ defmodule ConceptWeb.Components.IndexingPill do
                   </span>
                 </div>
                 <%= if job.chunk_count do %>
-                  <div class="text-base-content/60">
+                  <div class="text-notion-text-light">
                     {job.chunk_count} chunks, {job.embed_tokens || 0} tokens
                   </div>
                 <% end %>
                 <%= if job.error_message do %>
-                  <div class="text-error/80 truncate">{job.error_message}</div>
+                  <div class="text-rose-600 truncate">{job.error_message}</div>
                 <% end %>
               </li>
             <% end %>

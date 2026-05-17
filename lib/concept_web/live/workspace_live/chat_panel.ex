@@ -11,6 +11,7 @@ defmodule ConceptWeb.WorkspaceLive.ChatPanel do
   included in message creation.
   """
   use ConceptWeb, :live_component
+  import ConceptWeb.CoreComponents
 
   alias Concept.Knowledge.Profiles
 
@@ -45,31 +46,25 @@ defmodule ConceptWeb.WorkspaceLive.ChatPanel do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class={[
-      "ora-chat-panel",
-      @open && "ora-chat-panel--open"
-    ]}>
+    <div class={["ora-chat-panel", @open && "ora-chat-panel--open"]}>
       <div class="flex flex-col h-full">
-        <!-- Header with close button -->
-        <div class="flex items-center justify-between p-4 border-b border-base-300">
-          <h2 class="text-lg font-semibold">Chat</h2>
+        <div class="ora-chat-header">
+          <h2>Chat</h2>
           <button
             type="button"
             phx-click="close"
             phx-target={@myself}
-            class="btn btn-ghost btn-sm btn-circle"
+            class="ora-btn ora-btn--ghost ora-btn--icon"
+            aria-label="Close chat"
           >
-            ✕
+            <.icon name="hero-x-mark-micro" class="size-4" />
           </button>
         </div>
-        
-    <!-- Scope + Profile selectors -->
-        <div class="p-4 border-b border-base-300 space-y-3">
+
+        <div class="ora-chat-controls">
           <div>
-            <label class="label">
-              <span class="label-text text-xs font-medium">Scope</span>
-            </label>
-            <div class="flex gap-2">
+            <div class="ora-label mb-1">Scope</div>
+            <div class="ora-segmented">
               <%= for scope <- [:workspace, :page, :subtree] do %>
                 <button
                   type="button"
@@ -77,9 +72,8 @@ defmodule ConceptWeb.WorkspaceLive.ChatPanel do
                   phx-value-scope={scope}
                   phx-target={@myself}
                   class={[
-                    "btn btn-xs",
-                    @message_scope == scope && "btn-primary",
-                    @message_scope != scope && "btn-outline"
+                    "ora-segmented-btn",
+                    @message_scope == scope && "ora-segmented-btn--active"
                   ]}
                 >
                   {scope}
@@ -89,14 +83,12 @@ defmodule ConceptWeb.WorkspaceLive.ChatPanel do
           </div>
 
           <div>
-            <label class="label">
-              <span class="label-text text-xs font-medium">Profile</span>
-            </label>
+            <div class="ora-label mb-1">Profile</div>
             <select
               phx-change="set_profile"
               phx-target={@myself}
               name="profile"
-              class="select select-bordered select-sm w-full"
+              class="ora-select"
             >
               <%= for profile <- Profiles.list() do %>
                 <option value={profile.name} selected={@message_profile == profile.name}>
@@ -106,9 +98,8 @@ defmodule ConceptWeb.WorkspaceLive.ChatPanel do
             </select>
           </div>
         </div>
-        
-    <!-- Chat messages (ChatComponent) -->
-        <div class="flex-1 overflow-hidden">
+
+        <div class="ora-chat-body flex-1 overflow-hidden">
           <.live_component
             module={ConceptWeb.ChatComponent}
             id={"chat-component-#{@workspace.id}"}

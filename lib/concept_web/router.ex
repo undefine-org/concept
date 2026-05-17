@@ -72,28 +72,26 @@ defmodule ConceptWeb.Router do
                     {ConceptWeb.LiveUserAuth, :live_no_user}
                   ],
                   overrides: [
-                    ConceptWeb.AuthOverrides,
-                    Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI
+                    ConceptWeb.AuthOverrides
                   ]
 
     # Remove this if you do not want to use the reset password feature
     reset_route auth_routes_prefix: "/auth",
                 overrides: [
-                  ConceptWeb.AuthOverrides,
-                  Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI
+                  ConceptWeb.AuthOverrides
                 ]
 
     # Remove this if you do not use the confirmation strategy
     confirm_route Concept.Accounts.User, :confirm_new_user,
       auth_routes_prefix: "/auth",
       on_mount: [{ConceptWeb.LiveUserAuth, :after_sign_in}],
-      overrides: [ConceptWeb.AuthOverrides, Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI]
+      overrides: [ConceptWeb.AuthOverrides]
 
     # Remove this if you do not use the magic link strategy.
     magic_sign_in_route(Concept.Accounts.User, :magic_link,
       auth_routes_prefix: "/auth",
       on_mount: [{ConceptWeb.LiveUserAuth, :after_sign_in}],
-      overrides: [ConceptWeb.AuthOverrides, Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI]
+      overrides: [ConceptWeb.AuthOverrides]
     )
   end
 

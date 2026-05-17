@@ -12,7 +12,7 @@ defmodule ConceptWeb.Components.CoverBand do
         <button type="button" class="ora-cover-add">+ Add cover</button>
       </div>
     <% else %>
-      <div class={["ora-cover", "ora-cover-#{@color}"]}></div>
+      <div class={["ora-cover", "ora-cover-#{@color}"]} {@rest}></div>
     <% end %>
     """
   end

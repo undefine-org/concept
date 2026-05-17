@@ -171,7 +171,6 @@ defmodule ConceptWeb.CommandPaletteLive do
       phx-value-index={@index}
       phx-target={@myself}
       phx-mouseenter="hover_item"
-      phx-value-index={@index}
     >
       <.icon name={@icon} class="size-4 text-notion-text-light" />
       <span class="truncate text-notion-text">{@label}</span>
@@ -194,7 +193,6 @@ defmodule ConceptWeb.CommandPaletteLive do
       phx-value-index={@index}
       phx-target={@myself}
       phx-mouseenter="hover_item"
-      phx-value-index={@index}
     >
       <%= if @icon do %>
         <.icon name={@icon} class="size-4 text-notion-text-light" />
@@ -224,7 +222,6 @@ defmodule ConceptWeb.CommandPaletteLive do
       phx-value-index={@index}
       phx-target={@myself}
       phx-mouseenter="hover_item"
-      phx-value-index={@index}
     >
       <.icon name="hero-sparkles" class="size-4 text-notion-text-light" />
       <div class="flex-1 min-w-0">
@@ -253,7 +250,6 @@ defmodule ConceptWeb.CommandPaletteLive do
       phx-value-index={@index}
       phx-target={@myself}
       phx-mouseenter="hover_item"
-      phx-value-index={@index}
     >
       <.icon name="hero-chat-bubble-left-right" class="size-4 text-notion-text-light" />
       <span class="truncate text-notion-text">Ask answer for "{@query}"</span>

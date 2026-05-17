@@ -77,165 +77,133 @@ defmodule ConceptWeb.ChatComponent do
 
   @impl true
   def render(assigns) do
-    ~H"""
-    <div id={@id} class="flex bg-base-200 min-h-full max-h-full">
-      <div :if={!@hide_sidebar} class="w-72 border-r bg-base-300 flex flex-col overflow-y-auto">
-        <div class="py-4 px-6">
-          <div class="text-lg mb-4">
-            Conversations
-          </div>
-          <div class="mb-4">
-            <button phx-click="new_chat" phx-target={@myself} class="btn btn-primary btn-lg mb-2">
-              <div class="rounded-full bg-primary-content text-primary w-6 h-6 flex items-center justify-center">
-                <.icon name="hero-plus" />
-              </div>
-              <span>New Chat</span>
+      ~H"""
+      <div id={@id} class="flex bg-white min-h-full max-h-full">
+        <div :if={!@hide_sidebar} class="w-72 border-r border-notion-divider bg-notion-sidebar flex flex-col overflow-y-auto">
+          <div class="py-4 px-6">
+            <div class="text-sm font-semibold text-notion-text-light mb-3">Conversations</div>
+            <button
+              phx-click="new_chat"
+              phx-target={@myself}
+              class="ora-btn ora-btn--primary w-full justify-center mb-3"
+            >
+              <.icon name="hero-plus-micro" class="size-4" /> New Chat
             </button>
-          </div>
-          <ul class="flex flex-col-reverse" phx-update="stream" id={"#{@id}-conversations-list"}>
-            <%= for {id, conversation} <- @streams.conversations do %>
-              <li id={id}>
-                <button
-                  phx-click="select_conversation"
-                  phx-target={@myself}
-                  phx-value-id={conversation.id}
-                  class={"block py-2 px-3 transition border-l-4 pl-2 mb-2 w-full text-left #{if @conversation && @conversation.id == conversation.id, do: "border-primary font-medium", else: "border-transparent"}"}
-                >
-                  {build_conversation_title_string(conversation.title)}
-                </button>
-              </li>
-            <% end %>
-          </ul>
-        </div>
-      </div>
-
-      <div class="flex-1 flex flex-col">
-        <.flash kind={:info} flash={@flash} />
-        <.flash kind={:error} flash={@flash} />
-        <div
-          :if={Phoenix.Flash.get(@flash, :warning)}
-          class="alert alert-warning m-4 mb-0 text-sm"
-        >
-          {Phoenix.Flash.get(@flash, :warning)}
-        </div>
-        <div class="navbar bg-base-300 w-full">
-          <img
-            src="https://github.com/ash-project/ash_ai/blob/main/logos/ash_ai.png?raw=true"
-            alt="Logo"
-            class="h-12"
-            height="48"
-          />
-          <div class="mx-2 flex-1 px-2">
-            <p :if={@conversation}>{build_conversation_title_string(@conversation.title)}</p>
-            <p class="text-xs">AshAi</p>
+            <ul class="flex flex-col-reverse" phx-update="stream" id={"#{@id}-conversations-list"}>
+              <%= for {id, conversation} <- @streams.conversations do %>
+                <li id={id}>
+                  <button
+                    phx-click="select_conversation"
+                    phx-target={@myself}
+                    phx-value-id={conversation.id}
+                    class={[
+                      "block py-2 px-3 transition border-l-2 pl-2 mb-1 w-full text-left text-sm",
+                      if(@conversation && @conversation.id == conversation.id,
+                        do: "border-notion-blue font-medium text-notion-text",
+                        else: "border-transparent text-notion-text-light hover:text-notion-text")
+                    ]}
+                  >
+                    {build_conversation_title_string(conversation.title)}
+                  </button>
+                </li>
+              <% end %>
+            </ul>
           </div>
         </div>
 
-        <div class="flex-1 flex flex-col overflow-y-scroll bg-base-200">
-          <div
-            id={"#{@id}-message-container"}
-            phx-update="stream"
-            class="flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 flex flex-col-reverse"
-          >
-            <%= for {id, message} <- @streams.messages do %>
-              <div
-                id={id}
-                class={[
-                  "chat",
-                  message.source == :user && "chat-end",
-                  message.source == :agent && "chat-start"
-                ]}
-              >
-                <div :if={message.source == :agent} class="chat-image avatar">
-                  <div class="w-10 rounded-full bg-base-300 p-1">
-                    <img
-                      src="https://github.com/ash-project/ash_ai/blob/main/logos/ash_ai.png?raw=true"
-                      alt="Logo"
-                    />
-                  </div>
-                </div>
-                <div :if={message.source == :user} class="chat-image avatar avatar-placeholder">
-                  <div class="w-10 rounded-full bg-base-300">
-                    <.icon name="hero-user-solid" class="block" />
-                  </div>
-                </div>
-                <div
-                  :if={message.source == :agent && tool_calls(message) != []}
-                  class="mt-2 flex w-full max-w-[36rem] min-w-0 flex-wrap gap-1 text-[11px] opacity-80"
-                >
-                  <%= for tool_call <- tool_calls(message) do %>
-                    <span class="badge badge-outline badge-info max-w-full min-w-0 justify-start overflow-hidden text-ellipsis whitespace-nowrap">
-                      tool: {tool_call.name}
-                      <span :if={tool_call.arguments != %{}}>
-                        ({tool_call.arguments_preview})
-                      </span>
-                    </span>
-                  <% end %>
-                </div>
-                <div
-                  :if={message.source == :agent && tool_results(message) != []}
-                  class="chat-footer mt-1 flex w-full max-w-[36rem] min-w-0 flex-col gap-1"
-                >
-                  <%= for tool_result <- tool_results(message) do %>
-                    <div class={[
-                      "rounded max-w-full overflow-hidden px-2 py-1 text-xs leading-relaxed break-words",
-                      tool_result.is_error && "bg-error/20",
-                      !tool_result.is_error && "bg-base-300"
-                    ]}>
-                      <span class="font-semibold">
-                        {if tool_result.is_error, do: "tool_error", else: "tool_result"}
-                      </span>
-                      <span :if={tool_result.name}> ({tool_result.name})</span>
-                      <span class="break-all">
-                        : {tool_result.content_preview}
+        <div class="flex-1 flex flex-col min-w-0">
+          <.flash kind={:info} flash={@flash} />
+          <.flash kind={:error} flash={@flash} />
+          <.flash kind={:warning} flash={@flash} />
+
+          <div class="flex items-center gap-3 px-4 py-3 border-b border-notion-divider">
+            <span class="ora-avatar" style="background: var(--color-notion-blue);">A</span>
+            <div class="flex-1 min-w-0">
+              <p :if={@conversation} class="text-sm font-medium truncate">{build_conversation_title_string(@conversation.title)}</p>
+              <p class="text-xs text-notion-text-light">AshAi</p>
+            </div>
+          </div>
+
+          <div class="ora-chat-body flex-1">
+            <div
+              id={"#{@id}-message-container"}
+              phx-update="stream"
+              class="ora-chat-messages"
+            >
+              <%= for {id, message} <- @streams.messages do %>
+                <div id={id} class={[
+                  "ora-chat-message",
+                  message.source == :user && "ora-chat-message--user",
+                  message.source == :agent && "ora-chat-message--agent"
+                ]}>
+                  <span :if={message.source == :agent} class="ora-chat-avatar">
+                    <.icon name="hero-sparkles-micro" class="size-4 text-notion-text-light" />
+                  </span>
+                  <span :if={message.source == :user} class="ora-chat-avatar">
+                    <.icon name="hero-user-micro" class="size-4 text-notion-text-light" />
+                  </span>
+                  <div class="flex flex-col gap-1 min-w-0">
+                    <div :if={String.trim(message.text || "") != ""} class="ora-chat-bubble">
+                      {to_markdown(message.text || "")}
+                    </div>
+                    <div :if={message.source == :agent && tool_calls(message) != []} class="flex flex-wrap gap-1">
+                      <span :for={tool_call <- tool_calls(message)} class="ora-chat-toolcall">
+                        {tool_call.name}<span :if={tool_call.arguments != %{}}> ({tool_call.arguments_preview})</span>
                       </span>
                     </div>
-                  <% end %>
+                    <div :if={message.source == :agent && tool_results(message) != []} class="flex flex-col gap-1">
+                      <div
+                        :for={tool_result <- tool_results(message)}
+                        class={[
+                          "ora-chat-toolresult",
+                          tool_result.is_error && "ora-chat-toolresult--error"
+                        ]}
+                      >
+                        <span class="font-semibold">{if tool_result.is_error, do: "error", else: "result"}</span><span :if={tool_result.name}> ({tool_result.name})</span>: {tool_result.content_preview}
+                      </div>
+                    </div>
+                    <div :if={message.source == :agent} class="mt-1">
+                      <.why_this_answer message={message} />
+                    </div>
+                  </div>
                 </div>
-                <div :if={String.trim(message.text || "") != ""} class="chat-bubble">
-                  {to_markdown(message.text || "")}
-                </div>
-                <div :if={message.source == :agent} class="mt-2">
-                  <.why_this_answer message={message} />
-                </div>
-              </div>
-            <% end %>
+              <% end %>
+            </div>
           </div>
-        </div>
-        <div :if={@agent_responding} class="px-4 py-2 text-xs opacity-80 flex items-center gap-2">
-          <span class="loading loading-dots loading-sm" />
-          <span>AshAi is responding...</span>
-        </div>
-        <div class="p-4 border-t">
-          <.form
-            :let={form}
-            for={@message_form}
-            phx-change="validate_message"
-            phx-target={@myself}
-            phx-debounce="blur"
-            phx-submit="send_message"
-            class="flex items-center gap-4"
-          >
-            <div class="flex-1">
+
+          <div :if={@agent_responding} class="px-4 py-2 text-xs text-notion-text-light flex items-center gap-2">
+            <span class="inline-block w-2 h-2 rounded-full bg-notion-blue animate-pulse" />
+            <span>AshAi is responding…</span>
+          </div>
+
+          <div class="ora-chat-input-row">
+            <.form
+              :let={form}
+              for={@message_form}
+              phx-change="validate_message"
+              phx-target={@myself}
+              phx-debounce="blur"
+              phx-submit="send_message"
+              class="flex items-center gap-2 w-full"
+            >
               <input
                 name={form[:text].name}
                 value={form[:text].value}
                 type="text"
                 phx-mounted={JS.focus()}
-                placeholder="Type your message..."
-                class="input input-primary w-full mb-0"
+                placeholder="Type your message…"
+                class="ora-input flex-1"
                 autocomplete="off"
               />
-            </div>
-            <button type="submit" class="btn btn-primary rounded-full">
-              <.icon name="hero-paper-airplane" /> Send
-            </button>
-          </.form>
+              <button type="submit" class="ora-btn ora-btn--primary">
+                <.icon name="hero-paper-airplane-micro" class="size-4" /> Send
+              </button>
+            </.form>
+          </div>
         </div>
       </div>
-    </div>
-    """
-  end
+      """
+    end
 
   @impl true
   def handle_event("validate_message", %{"form" => params}, socket) do

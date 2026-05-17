@@ -40,13 +40,13 @@ defmodule ConceptWeb.Components.LiveCitationRail do
                 <.citation_card
                   citation={citation}
                   workspace_slug={@workspace_slug}
-                  class="px-3 py-2 hover:bg-notion-hover rounded transition-colors"
+
                 />
                 <button
                   type="button"
                   phx-click="open_link_modal"
                   phx-value-target-block-id={citation.block_id}
-                  class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 text-xs bg-notion-blue text-white rounded hover:opacity-90"
+                  class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity ora-btn ora-btn--blue ora-btn--sm"
                   title="Link this block"
                 >
                   🔗 Link this

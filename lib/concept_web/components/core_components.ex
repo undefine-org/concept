@@ -1,31 +1,14 @@
 defmodule ConceptWeb.CoreComponents do
   @moduledoc """
-  Provides core UI components.
+    Provides core UI components using .ora-* Tailwind classes.
 
-  At first glance, this module may seem daunting, but its goal is to provide
-  core building blocks for your application, such as tables, forms, and
-  inputs. The components consist mostly of markup and are well-documented
-  with doc strings and declarative assigns. You may customize and style
-  them in any way you want, based on your application growth and needs.
+    The components are styled with custom Tailwind utilities defined in
+    assets/css/app.css. No daisyUI classes are used.
 
-  The foundation for styling is Tailwind CSS, a utility-first CSS framework,
-  augmented with daisyUI, a Tailwind CSS plugin that provides UI components
-  and themes. Here are useful references:
-
-    * [daisyUI](https://daisyui.com/docs/intro/) - a good place to get
-      started and see the available components.
-
-    * [Tailwind CSS](https://tailwindcss.com) - the foundational framework
-      we build on. You will use it for layout, sizing, flexbox, grid, and
-      spacing.
-
-    * [Heroicons](https://heroicons.com) - see `icon/1` for usage.
-
-    * [Phoenix.Component](https://hexdocs.pm/phoenix_live_view/Phoenix.Component.html) -
-      the component system used by Phoenix. Some components, such as `<.link>`
-      and `<.form>`, are defined there.
-
-  """
+    References:
+      * Heroicons – see `icon/1`.
+      * Phoenix.Component – component system used by Phoenix.
+    """
   use Phoenix.Component
   use Gettext, backend: ConceptWeb.Gettext
 
@@ -94,11 +77,11 @@ defmodule ConceptWeb.CoreComponents do
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
-    variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
+    variants = %{"primary" => "ora-btn ora-btn--primary", nil => "ora-btn ora-btn--outline"}
 
     assigns =
       assign_new(assigns, :class, fn ->
-        ["btn", Map.fetch!(variants, assigns[:variant])]
+        ["ora-btn", Map.fetch!(variants, assigns[:variant])]
       end)
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
@@ -205,8 +188,8 @@ defmodule ConceptWeb.CoreComponents do
       end)
 
     ~H"""
-    <div class="fieldset mb-2">
-      <label for={@id}>
+    <div class="ora-fieldset">
+      <label for={@id} class="ora-checkbox-row">
         <input
           type="hidden"
           name={@name}
@@ -221,7 +204,7 @@ defmodule ConceptWeb.CoreComponents do
             name={@name}
             value="true"
             checked={@checked}
-            class={@class || "checkbox checkbox-sm"}
+            class={@class || "ora-checkbox"}
             {@rest}
           />{@label}
         </span>
@@ -233,13 +216,13 @@ defmodule ConceptWeb.CoreComponents do
 
   def input(%{type: "select"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="ora-fieldset">
       <label for={@id}>
         <span :if={@label} class="label mb-1">{@label}</span>
         <select
           id={@id}
           name={@name}
-          class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
+          class={[@class || "ora-select", @errors != [] && (@error_class || "ora-select--error")]}
           multiple={@multiple}
           {@rest}
         >
@@ -254,16 +237,13 @@ defmodule ConceptWeb.CoreComponents do
 
   def input(%{type: "textarea"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="ora-fieldset">
       <label for={@id}>
         <span :if={@label} class="label mb-1">{@label}</span>
         <textarea
           id={@id}
           name={@name}
-          class={[
-            @class || "w-full textarea",
-            @errors != [] && (@error_class || "textarea-error")
-          ]}
+          class={[@class || "ora-textarea", @errors != [] && (@error_class || "ora-textarea--error")]}
           {@rest}
         >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
       </label>
@@ -275,7 +255,7 @@ defmodule ConceptWeb.CoreComponents do
   # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="ora-fieldset">
       <label for={@id}>
         <span :if={@label} class="label mb-1">{@label}</span>
         <input
@@ -283,10 +263,7 @@ defmodule ConceptWeb.CoreComponents do
           name={@name}
           id={@id}
           value={Phoenix.HTML.Form.normalize_value(@type, @value)}
-          class={[
-            @class || "w-full input",
-            @errors != [] && (@error_class || "input-error")
-          ]}
+          class={[@class || "ora-input", @errors != [] && (@error_class || "ora-input--error")]}
           {@rest}
         />
       </label>
@@ -298,7 +275,7 @@ defmodule ConceptWeb.CoreComponents do
   # Helper used by inputs to generate form errors
   defp error(assigns) do
     ~H"""
-    <p class="mt-1.5 flex gap-2 items-center text-sm text-error">
+    <p class="ora-error-text">
       <.icon name="hero-exclamation-circle" class="size-5" />
       {render_slot(@inner_block)}
     </p>
@@ -314,12 +291,12 @@ defmodule ConceptWeb.CoreComponents do
 
   def header(assigns) do
     ~H"""
-    <header class={[@actions != [] && "flex items-center justify-between gap-6", "pb-4"]}>
+    <header class="ora-header">
       <div>
-        <h1 class="text-lg font-semibold leading-8">
+        <h1 class="ora-header__title">
           {render_slot(@inner_block)}
         </h1>
-        <p :if={@subtitle != []} class="text-sm text-base-content/70">
+        <p :if={@subtitle != []} class="ora-header__subtitle">
           {render_slot(@subtitle)}
         </p>
       </div>
@@ -360,7 +337,7 @@ defmodule ConceptWeb.CoreComponents do
       end
 
     ~H"""
-    <table class="table table-zebra">
+    <table class="ora-table">
       <thead>
         <tr>
           <th :for={col <- @col}>{col[:label]}</th>
@@ -378,7 +355,7 @@ defmodule ConceptWeb.CoreComponents do
           >
             {render_slot(col, @row_item.(row))}
           </td>
-          <td :if={@action != []} class="w-0 font-semibold">
+          <td :if={@action != []} class="ora-table__actions">
             <div class="flex gap-4">
               <%= for action <- @action do %>
                 {render_slot(action, @row_item.(row))}
@@ -407,10 +384,10 @@ defmodule ConceptWeb.CoreComponents do
 
   def list(assigns) do
     ~H"""
-    <ul class="list">
-      <li :for={item <- @item} class="list-row">
-        <div class="list-col-grow">
-          <div class="font-bold">{item.title}</div>
+    <ul class="ora-data-list">
+      <li :for={item <- @item} class="ora-data-list__item">
+        <div>
+          <div class="ora-data-list__title">{item.title}</div>
           <div>{render_slot(item)}</div>
         </div>
       </li>
