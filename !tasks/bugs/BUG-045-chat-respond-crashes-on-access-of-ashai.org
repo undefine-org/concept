@@ -1,0 +1,110 @@
+#+TITLE: Chat respond crashes on Access of AshAi.ToolLoop.Result struct
+#+STATE: ITEM
+#+SESSION_ID: 14e50336394d3514
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-17T16-49-15-493Z_14e50336394d3514.jsonl]]
+#+CUSTOM_ID: BUG-045-chat-respond-crashes-on-access-of-ashai
+
+* Initial Message
+
+When I use the chat it gives me this:
+
+
+SELECT b0."id", b0."position", b0."type", b0."state", b0."content", b0."inserted_at", b0."workspace_id", b0."page_id", b0."parent_block_id", b0."props", b0."updated_at", b0."archived_at", b0."lock_acquired_at", b0."lock_expires_at", b0."lock_holder_id", b0."lock_state" FROM "blocks" AS b0 WHERE (b0."workspace_id"::uuid = $1::uuid) AND (b0."id"::uuid = ANY($2::uuid[])) ["c1aeec0d-f47c-4852-bd25-0a8411a994b6", ["4c516188-e333-4b00-99b0-c581197e4e5f", "b679f9f7-ce16-4ec3-89c5-c399c8b862cf"]]
+↳ anonymous fn/3 in AshPostgres.DataLayer.run_query/2, at: lib/data_layer.ex:860
+[debug] QUERY OK source="messages" db=11.6ms queue=0.7ms idle=624.0ms
+INSERT INTO "messages" AS m0 ("complete","id","profile","scope","text","source","tool_calls","conversation_id","inserted_at","updated_at","response_to_id","search_trace","tool_results") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT ("id") DO UPDATE SET "tool_results" = m0."tool_results"::jsonb[], "tool_calls" = m0."tool_calls"::jsonb[], "text" = (m0."text" || $14), "complete" = EXCLUDED."complete", "updated_at" = $15 RETURNING "response_to_id","conversation_id","grounding_score","latency_ms","completion_tokens","prompt_tokens","search_trace","rewritten_prompt","profile","scope_target_id","scope","complete","source","tool_results","tool_calls","text","id","updated_at","inserted_at" [false, "019e36d6-8a8b-74e1-a635-e7468dbd3889", :default, :workspace, "I can do", :agent, nil, "019e36d6-8a45-7dfd-85a1-d33ebf6af5f6", ~U[2026-05-17 16:48:12.183076Z], ~U[2026-05-17 16:48:12.183076Z], "019e36d6-8a44-76df-9c8b-edfdc0086e15", [], nil, "I can do", ~U[2026-05-17 16:48:12.183745Z]]
+↳ AshPostgres.DataLayer.bulk_create/3, at: lib/data_layer.ex:2310
+[debug] QUERY OK source="messages" db=1.7ms queue=0.6ms idle=635.4ms
+INSERT INTO "messages" AS m0 ("complete","id","profile","scope","text","source","tool_calls","conversation_id","inserted_at","updated_at","response_to_id","search_trace","tool_results") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT ("id") DO UPDATE SET "tool_results" = m0."tool_results"::jsonb[], "tool_calls" = m0."tool_calls"::jsonb[], "text" = (m0."text" || $14), "complete" = EXCLUDED."complete", "updated_at" = $15 RETURNING "response_to_id","conversation_id","grounding_score","latency_ms","completion_tokens","prompt_tokens","search_trace","rewritten_prompt","profile","scope_target_id","scope","complete","source","tool_results","tool_calls","text","id","updated_at","inserted_at" [false, "019e36d6-8a8b-74e1-a635-e7468dbd3889", :default, :workspace, " that, but I need the workspace ID. Can you please provide it?", :agent, nil, "019e36d6-8a45-7dfd-85a1-d33ebf6af5f6", ~U[2026-05-17 16:48:12.197692Z], ~U[2026-05-17 16:48:12.197692Z], "019e36d6-8a44-76df-9c8b-edfdc0086e15", [], nil, " that, but I need the workspace ID. Can you please provide it?", ~U[2026-05-17 16:48:12.198459Z]]
+↳ AshPostgres.DataLayer.bulk_create/3, at: lib/data_layer.ex:2310
+[error] Error occurred for Concept.Knowledge.Chat.Message: %{"id" => "019e36d6-8a44-76df-9c8b-edfdc0086e15"}!
+
+Error occurred on action: respond.
+
+** (Ash.Error.Unknown)
+Bread Crumbs:
+  > Exception raised in: Concept.Knowledge.Chat.Message.respond
+
+Unknown Error
+
+* ** (UndefinedFunctionError) function AshAi.ToolLoop.Result.fetch/2 is undefined (AshAi.ToolLoop.Result does not implement the Access behaviour
+
+You can use the "struct.field" syntax to access struct fields. You can also use Access.key!/1 to access struct fields dynamically inside get_in/put_in/update_in)
+  (ash_ai 0.6.1) AshAi.ToolLoop.Result.fetch(%AshAi.ToolLoop.Result{messages: [#Message<:system text>, #Message<:user text>, #Message<:assistant text>], final_text: "I can do that, but I need the workspace ID. Can you please provide it?", iterations: 1, tool_calls_made: []}, :usage)
+  (elixir 1.19.5) lib/access.ex:326: Access.get/3
+  (elixir 1.19.5) lib/kernel.ex:2925: Kernel.get_in/2
+  (concept 0.1.0) lib/concept/knowledge/chat/message/changes/respond.ex:193: Concept.Knowledge.Chat.Message.Changes.Respond.extract_usage_metadata/1
+  (concept 0.1.0) lib/concept/knowledge/chat/message/changes/respond.ex:93: anonymous fn/4 in Concept.Knowledge.Chat.Message.Changes.Respond.change/3
+  (elixir 1.19.5) lib/enum.ex:4570: anonymous fn/3 in Enum.reduce/3
+  (elixir 1.19.5) lib/enum.ex:5023: Enumerable.List.reduce/3
+  (elixir 1.19.5) lib/stream.ex:1616: Stream.do_list_resource/6
+  (elixir 1.19.5) lib/enum.ex:4570: Enum.reduce/3
+  (concept 0.1.0) lib/concept/knowledge/chat/message/changes/respond.ex:58: anonymous fn/2 in Concept.Knowledge.Chat.Message.Changes.Respond.change/3
+  (ash 3.24.6) lib/ash/actions/update/update.ex:277: Ash.Actions.Update.run/4
+  (ash 3.24.6) lib/ash.ex:3695: Ash.update/3
+  (concept 0.1.0) deps/ash_oban/lib/transformers/define_schedulers.ex:1275: Concept.Knowledge.Chat.Message.Workers.Respond.perform/1
+    (ash_ai 0.6.1) AshAi.ToolLoop.Result.fetch(%AshAi.ToolLoop.Result{messages: [#Message<:system text>, #Message<:user text>, #Message<:assistant text>], final_text: "I can do that, but I need the workspace ID. Can you please provide it?", iterations: 1, tool_calls_made: []}, :usage)
+    (elixir 1.19.5) lib/access.ex:326: Access.get/3
+    (elixir 1.19.5) lib/kernel.ex:2925: Kernel.get_in/2
+    (concept 0.1.0) lib/concept/knowledge/chat/message/changes/respond.ex:193: Concept.Knowledge.Chat.Message.Changes.Respond.extract_usage_metadata/1
+    (concept 0.1.0) lib/concept/knowledge/chat/message/changes/respond.ex:93: anonymous fn/4 in Concept.Knowledge.Chat.Message.Changes.Respond.change/3
+    (elixir 1.19.5) lib/enum.ex:4570: anonymous fn/3 in Enum.reduce/3
+    (elixir 1.19.5) lib/enum.ex:5023: Enumerable.List.reduce/3
+    (elixir 1.19.5) lib/stream.ex:1616: Stream.do_list_resource/6
+    (elixir 1.19.5) lib/enum.ex:4570: Enum.reduce/3
+    (concept 0.1.0) lib/concept/knowledge/chat/message/changes/respond.ex:58: anonymous fn/2 in Concept.Knowledge.Chat.Message.Changes.Respond.change/3
+    (ash 3.24.6) lib/ash/actions/update/update.ex:277: Ash.Actions.Update.run/4
+    (ash 3.24.6) lib/ash.ex:3695: Ash.update/3
+    (concept 0.1.0) deps/ash_oban/lib/transformers/define_schedulers.ex:1275: Concept.Knowledge.Chat.Message.Workers.Respond.perform/1
+
+
+[debug] QUERY OK source="knowledge_ingestion_jobs" db=0.9ms idle=1380.5ms
+
+
+
+
+WHY???? Root cause analysis + BUG filing proposal please
+
+* Summary
+Every streaming chat response crashes the Oban worker with =UndefinedFunctionError= on
+=AshAi.ToolLoop.Result.fetch/2=. Result: partial response text appears in DB with
+=complete: false=, then the action errors; user sees a stuck/incomplete message.
+
+* Reproduction
+1. Send any chat prompt in the workspace chat panel.
+2. Oban worker invokes =Concept.Knowledge.Chat.Message.respond/1=.
+3. Crash on first =\{:done, _\}= event.
+
+* Stack
+#+begin_example
+function AshAi.ToolLoop.Result.fetch/2 is undefined
+(AshAi.ToolLoop.Result does not implement the Access behaviour)
+  (ash_ai 0.6.1) AshAi.ToolLoop.Result.fetch(%Result{…}, :usage)
+  (elixir) Access.get/3
+  (elixir) Kernel.get_in/2
+  lib/concept/knowledge/chat/message/changes/respond.ex:193
+#+end_example
+
+* Root cause
+=respond.ex:193= calls =get_in(metadata, [:usage, :prompt_tokens])= on the
+=\{:done, metadata\}= stream event. As of =ash_ai 0.6.1=, =AshAi.ToolLoop.stream/2= emits
+=\{:done, %AshAi.ToolLoop.Result\{\}\}= — a struct that doesn't =@derive Access=. The
+guard =is_map/1= admits structs, so we fall into the map clause and crash.
+
+* Fix
+1. Add explicit =%AshAi.ToolLoop.Result\{\}= clause that returns =%\{\}= (no usage data).
+2. Tighten map clause with =is_map(m) and not is_struct(m)=.
+3. Keep catch-all returning =%\{\}=.
+
+* Tests
+- Unit: =extract_usage_metadata/1= on =%AshAi.ToolLoop.Result\{\}= → =%\{\}=, no raise.
+- Unit: =extract_usage_metadata/1= on plain map → expected shape.
+
+* Acceptance
+- =mix test= passes new regression test.
+- Manual: chat in dev, message marked =complete: true=, no UndefinedFunctionError in logs.
+
+* Related
+- See [[id:BUG-FUP-respond-idempotency]] for partial-message retry handling.
+- See [[id:BUG-usage-tokens-never-recorded]] for the latent issue of usage data
+  never being populated even when the crash is fixed.

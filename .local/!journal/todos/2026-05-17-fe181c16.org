@@ -1,0 +1,61 @@
+#+TITLE: Session 14e50336394d3514 Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Contract
+
+** DOING Add pid-consistency contract test for ReqLLMTap
+:PROPERTIES:
+:TASK_ID: ct1
+:STATUS: in_progress
+:END:
+
+Prove AshAi.ToolLoop consumes stream in caller pid; expose stream_text_pid/0 from MockReqLLM
+
+* Grounding
+
+** ITEM Extend ReqLLMTap to capture :meta chunks' provider_meta
+:PROPERTIES:
+:TASK_ID: g-tap
+:STATUS: pending
+:END:
+
+Stream.transform wraps stream; push_meta accumulates metadata
+
+** ITEM Add collected_grounding_score/0 averaging Google confidenceScores
+:PROPERTIES:
+:TASK_ID: g-score
+:STATUS: pending
+:DEPENDS: g-tap
+:END:
+
+** ITEM Wire grounding into Respond.do_stream merge
+:PROPERTIES:
+:TASK_ID: g-wire
+:STATUS: pending
+:DEPENDS: g-score
+:END:
+
+** ITEM Extend MockReqLLM to emit grounding-bearing meta
+:PROPERTIES:
+:TASK_ID: g-mock
+:STATUS: pending
+:DEPENDS: g-tap
+:END:
+
+** ITEM Tests for grounding capture + persistence
+:PROPERTIES:
+:TASK_ID: g-test
+:STATUS: pending
+:DEPENDS: g-wire g-mock
+:END:
+
+* Verify
+
+** ITEM mix test respond suite + mix precommit
+:PROPERTIES:
+:TASK_ID: v
+:STATUS: pending
+:GATE_CMD: mix precommit
+:DEPENDS: ct1 g-test
+:END:

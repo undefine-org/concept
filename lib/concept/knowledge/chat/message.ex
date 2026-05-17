@@ -128,7 +128,22 @@ defmodule Concept.Knowledge.Chat.Message do
       change set_attribute(:tool_calls, arg(:tool_calls))
 
       # on update, only set complete to its new value
-      upsert_fields [:complete]
+      # `:complete` is set via the action's `set_attribute` change. Audit
+      # columns (`prompt_tokens`, `completion_tokens`, `latency_ms`,
+      # `grounding_score`, `search_trace`, `rewritten_prompt`) are
+      # force-changed by `Concept.Knowledge.Chat.Message.Changes.Respond` on
+      # finalize; listing them here propagates their values through the
+      # `ON CONFLICT DO UPDATE` clause so they overwrite the partial row
+      # that was upserted during streaming.
+      upsert_fields [
+        :complete,
+        :prompt_tokens,
+        :completion_tokens,
+        :latency_ms,
+        :grounding_score,
+        :search_trace,
+        :rewritten_prompt
+      ]
     end
   end
 

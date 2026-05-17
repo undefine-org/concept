@@ -1,52 +1,76 @@
-import { LitElement, html } from "lit";
 import { forceSimulation, forceLink, forceManyBody, forceCenter } from "d3-force";
 import { select } from "d3-selection";
 import { zoom } from "d3-zoom";
 
-export class OraWorkspaceGraph extends LitElement {
-  static properties = {
-    data: { type: String },
-    workspaceSlug: { type: String, attribute: "workspace-slug" },
-  };
+/**
+ * Plain custom element (no Lit) — light-DOM, manages its own SVG.
+ * Lit's incremental render was silently no-op'ing in this codebase's
+ * bundle; manual DOM management is simpler and bulletproof for a single
+ * full-canvas D3 visualization.
+ */
+export class OraWorkspaceGraph extends HTMLElement {
+  static get observedAttributes() {
+    return ["data"];
+  }
 
   constructor() {
     super();
-    this.data = "{}";
-    this.workspaceSlug = "";
     this._graphData = { nodes: [], edges: [], communities: [] };
     this._simulation = null;
   }
 
-  createRenderRoot() {
-    return this;
-  }
-
-  willUpdate(changed) {
-    if (changed.has("data")) {
-      try {
-        const parsed = JSON.parse(this.data || "{}");
-        this._graphData = {
-          nodes: parsed.nodes || [],
-          edges: parsed.edges || [],
-          communities: parsed.communities || [],
-        };
-      } catch {
-        this._graphData = { nodes: [], edges: [], communities: [] };
-      }
-    }
-  }
-
-  updated() {
-    if (!this._graphData.nodes.length) return;
-    this._drawGraph();
+  connectedCallback() {
+    if (!this._dom) this._ensureDom();
+    this._parseAndDraw();
   }
 
   disconnectedCallback() {
-    super.disconnectedCallback();
     if (this._simulation) {
       this._simulation.stop();
       this._simulation = null;
     }
+  }
+
+  attributeChangedCallback(name, oldVal, newVal) {
+    if (name === "data" && oldVal !== newVal) {
+      if (!this._dom) this._ensureDom();
+      this._parseAndDraw();
+    }
+  }
+
+  _ensureDom() {
+    while (this.firstChild) this.removeChild(this.firstChild);
+    const wrap = document.createElement("div");
+    wrap.className = "relative w-full h-full overflow-hidden";
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "w-full h-full block");
+    wrap.appendChild(svg);
+    this.appendChild(wrap);
+    this._emptyState = document.createElement("div");
+    this._emptyState.className =
+      "absolute inset-0 flex items-center justify-center text-notion-text-light pointer-events-none";
+    this._emptyState.textContent = "";
+    wrap.appendChild(this._emptyState);
+    this._dom = true;
+  }
+
+  _parseAndDraw() {
+    try {
+      const parsed = JSON.parse(this.getAttribute("data") || "{}");
+      this._graphData = {
+        nodes: parsed.nodes || [],
+        edges: parsed.edges || [],
+        communities: parsed.communities || [],
+      };
+    } catch {
+      this._graphData = { nodes: [], edges: [], communities: [] };
+    }
+    if (this._graphData.nodes.length === 0) {
+      if (this._emptyState) this._emptyState.textContent = "Add pages to see the graph";
+      return;
+    }
+    if (this._emptyState) this._emptyState.textContent = "";
+    this._drawGraph();
   }
 
   _drawGraph() {
@@ -101,21 +125,12 @@ export class OraWorkspaceGraph extends LitElement {
       .join("line")
       .attr("stroke-width", 1.5);
 
-    const node = g
+    const nodeGroup = g
       .append("g")
-      .selectAll("circle")
+      .selectAll("g.ora-node")
       .data(nodes)
-      .join("circle")
-      .attr("r", (d) => {
-        const deg = degree.get(d.id) || 0;
-        return Math.min(Math.max(4, deg * 1.5 + 3), 10);
-      })
-      .attr("fill", (d) => {
-        if (d.community_id == null) return "#94a3b8";
-        return `hsl(${(d.community_id * 137.508) % 360}, 70%, 55%)`;
-      })
-      .attr("stroke", "#fff")
-      .attr("stroke-width", 1.5)
+      .join("g")
+      .attr("class", "ora-node")
       .style("cursor", "pointer")
       .on("click", (event, d) => {
         event.stopPropagation();
@@ -126,6 +141,29 @@ export class OraWorkspaceGraph extends LitElement {
           })
         );
       });
+
+    const node = nodeGroup
+      .append("circle")
+      .attr("r", (d) => {
+        const deg = degree.get(d.id) || 0;
+        return Math.min(Math.max(8, deg * 1.5 + 6), 16);
+      })
+      .attr("fill", (d) => {
+        if (d.community_id == null) return "#94a3b8";
+        return `hsl(${(d.community_id * 137.508) % 360}, 70%, 55%)`;
+      })
+      .attr("stroke", "#fff")
+      .attr("stroke-width", 2);
+
+    nodeGroup
+      .append("text")
+      .attr("x", 14)
+      .attr("y", 4)
+      .attr("font-size", "11px")
+      .attr("font-family", "system-ui, sans-serif")
+      .attr("fill", "#374151")
+      .style("pointer-events", "none")
+      .text((d) => d.label || "");
 
     node.append("title").text((d) => d.label || d.id);
 
@@ -140,25 +178,10 @@ export class OraWorkspaceGraph extends LitElement {
         .attr("y1", (d) => d.source.y)
         .attr("x2", (d) => d.target.x)
         .attr("y2", (d) => d.target.y);
-      node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+      nodeGroup.attr("transform", (d) => `translate(${d.x}, ${d.y})`);
     });
   }
 
-  render() {
-    if (!this._graphData.nodes.length) {
-      return html`
-        <div class="flex items-center justify-center h-full text-notion-text-light">
-          Add pages to see the graph
-        </div>
-      `;
-    }
-
-    return html`
-      <div class="relative w-full h-full overflow-hidden">
-        <svg class="w-full h-full block"></svg>
-      </div>
-    `;
-  }
 }
 
 if (!customElements.get("ora-workspace-graph")) {

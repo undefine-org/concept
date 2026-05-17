@@ -1,6 +1,16 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss" source(none);
+
+/* Custom elements that use light DOM need explicit sizing because
+   :host pseudo-class only applies in shadow DOM. ora-workspace-graph
+   is the only full-canvas element; the others manage their own host
+   styles via shadow-DOM `static styles`. */
+ora-workspace-graph {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 @source "../../deps/ash_authentication_phoenix";
 @source "../css";
 @source "../js";

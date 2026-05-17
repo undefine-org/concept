@@ -1,6 +1,6 @@
 import { LitElement, html, css } from "lit";
 
-const GROUP_ORDER = ["basic", "list", "media", "advanced"];
+const GROUP_ORDER = ["ai", "basic", "list", "media", "advanced"];
 
 const FALLBACK_ITEMS = [
   { type: "ai_answer", label: "AI answer", icon: "✨", group: "ai" },
