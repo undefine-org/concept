@@ -1,0 +1,46 @@
+#+TITLE: Page updates do not propagate cross-tab in real browser despite BUG-022 send_update
+#+STATE: DONE
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-038-page-updates-do-not-propagate-cross-tab
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W3.6 Slice J found a real regression hiding behind BUG-022's green tests: in a real browser, when TAB A renames a page, TAB B (subscribed to same `lv:page-editor-<uuid>` channel) does NOT receive any update for 10+ seconds. Only a manual reload pulls the new title from the server. Same for sidebar page-list label which stays stale even in TAB A.
+
+BUG-022's unit test "8 tests, 0 failures" was a lie. Per the agent's own note: "Ash Notifier.PubSub defers broadcasts inside Ecto sandbox transactions, so we emit the broadcast directly in test to simulate production behaviour". That simulation bypassed the actual production code path. In prod the broadcast either never fires or is on the wrong topic.
+
+* Root-cause hypotheses
+1. `page_updated` is broadcast on `workspace:<id>:pages` topic (WorkspaceLive subscribes). But the PAGE editor LV (`lv:page-editor-<uuid>`) is a NESTED live_render, NOT subscribed to the workspace topic \u2014 it subscribes to per-page block broadcasts only. So WorkspaceLive's send_update only refreshes ITS OWN nested PageHeader live_component, but the SECOND TAB is a different WorkspaceLive process that should receive the broadcast on the workspace topic and re-render.
+2. The Ash Notifier.PubSub configuration may emit on a topic that no LV subscribes to in prod. Verify `page.ex pub_sub do` block and confirm the topic matches what WorkspaceLive subscribes to in mount.
+3. Sandbox-only test (the test) used `Phoenix.PubSub.broadcast/3` directly, bypassing Ash. Prod path needs Ash to actually dispatch.
+4. PageList component / sidebar component subscribes to a different topic from PageHeader.
+
+* Investigation steps
+1. Check `lib/concept/pages/page.ex` `pub_sub` block: what topic is `page_updated` broadcast on? Is it interpolated correctly?
+2. Check `lib/concept_web/live/workspace_live.ex` `mount/3` and `handle_params/3`: what topic does it subscribe to? Does the pattern match?
+3. Test in dev (not test env): start `mix phx.server`, open two tabs, watch the server log for `[debug] BROADCAST topic=...` lines on rename. Confirm whether a broadcast event is emitted at all.
+4. If broadcast IS emitted: confirm WorkspaceLive's `handle_info` pattern matches the event shape.
+5. If broadcast is NOT emitted: dig into Ash notifier config (maybe `publish` selector excludes the action, or the `previous` flag is wrong, or the topic interpolation references a field that's nil at notify-time).
+
+* Scope
+- IN: root-cause + fix the production broadcast path so cross-tab rename works.
+- IN: extend `test/concept_web/live/page_header_test.exs` with an INTEGRATION test that does NOT manually broadcast \u2014 it should drive the actual `save_title` event through the real notifier path (configure the test env appropriately, e.g. Ecto sandbox `shared` mode, or run as integration test outside sandbox).
+- IN: ensure sidebar page-list (PageTree component) also receives the update (may need separate send_update or its own subscription).
+- OUT: optimistic UI / latency optimizations.
+
+* TDD evidence required
+Phase A FAIL (real broadcast path doesn't work) + Phase B PASS.
+
+* Acceptance
+- Two-tab puppeteer scenario: rename in TAB A reflects in TAB B within 2s, NO manual reload.
+- Sidebar page-list refreshes title too.
+- One commit: `fix(pages): wire page_updated broadcast for cross-tab + sidebar sync (BUG-038)`.
+
+* Related
+- W3.5 contract reviewer flagged BUG-036 (duplicate broadcasts). If BUG-038 finds the broadcast is missing from one path while doubled on another, both are symptoms of the same publish-topic misconfiguration. Consider folding into one fix if root cause overlaps.

@@ -1,0 +1,32 @@
+#+TITLE: Session 14e41fde22b3d350 Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Add no-workspace auth flow test
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:GATE_CMD: mix test test/concept_web/live/auth_flow_test.exs
+:END:
+
+Extend test/concept_web/live/auth_flow_test.exs with test for user without workspace. Verify redirect to / with error flash (current behavior).
+
+** DONE Add onboarding primary? test
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:GATE_CMD: mix test test/concept/accounts/scope_test.exs
+:END:
+
+Add test verifying Onboarding reactor sets primary?: true on created workspace. Run Reactor.run(Concept.Accounts.Reactors.Onboarding, %{user: user}, %{}, async?: false) and assert workspace.primary? == true.
+
+** DONE Add get_primary_workspace fallback test
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
+:GATE_CMD: mix test test/concept/accounts/scope_test.exs
+:END:
+
+Add test verifying get_primary_workspace/2 falls back to oldest membership when no primary marked. Create 2 workspaces via direct Ash actions, unset primary? on both, assert returns older one.

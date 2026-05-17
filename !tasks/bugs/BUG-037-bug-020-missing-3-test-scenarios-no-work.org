@@ -1,0 +1,29 @@
+#+TITLE: BUG-020 missing 3 test scenarios: no-workspace recovery + primary? assert + get_primary_workspace fallback
+#+STATE: DONE
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-037-bug-020-missing-3-test-scenarios-no-work
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W3.5 test-depth reviewer (P2): BUG-020's org spec called for 5 test scenarios; only 3 shipped. Missing:
+1. /Sign in user with NO workspace → land on /w which creates one/ \u2014 recovery path completely uncovered.
+2. /Onboarding reactor sets primary?: true on created workspace/ \u2014 the reactor input is set but no test verifies the persisted attribute.
+3. /get_primary_workspace/2 returns the primary; legacy fallback to oldest membership/ \u2014 the fallback branch is untested.
+
+Regression risk: removing the `primary?: true` line from the reactor or breaking the fallback in `get_primary_workspace` would not be caught.
+
+* Scope
+- IN: extend `test/concept_web/live/auth_flow_test.exs` with scenario (1).
+- IN: extend `test/concept/accounts/scope_test.exs` (or create `test/concept/accounts/onboarding_test.exs`) with scenarios (2) and (3).
+- IN: TDD discipline \u2014 Phase A FAIL (e.g. simulate removing primary?: true and watch test fail) + Phase B PASS.
+- OUT: any source changes (this is test backfill only).
+
+* Acceptance
+- 5 BUG-020 scenarios all covered.
+- One commit: `test(auth): backfill BUG-020 missing scenarios (BUG-037)`.

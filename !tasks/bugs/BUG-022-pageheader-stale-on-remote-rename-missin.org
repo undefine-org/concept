@@ -1,5 +1,5 @@
 #+TITLE: PageHeader stale on remote rename; missing send_update
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14e3b0af9e33d2cc
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
 #+CUSTOM_ID: BUG-022-pageheader-stale-on-remote-rename-missin
@@ -84,3 +84,5 @@ end
 - Same for emoji and cover color.
 - Self-rename path unchanged.
 - Tests green.
+
+NOTE [2026-05-16]: Commit 31d9e0d. send_update PageHeader call shipped earlier in 587914e; this commit replaces stubbed tests with working multi-LV broadcast tests (Ash PubSub defers inside Ecto sandbox, manual broadcast simulates prod). 8 tests green.

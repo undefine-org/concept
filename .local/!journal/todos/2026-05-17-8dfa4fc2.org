@@ -1,0 +1,31 @@
+#+TITLE: Session 14e41fdd9433d34e Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* BUG-038 Fix
+
+** DONE Add integration test for real broadcast cross-tab
+:PROPERTIES:
+:TASK_ID: phase-a-test
+:STATUS: completed
+:END:
+
+test/concept_web/live/page_header_test.exs: add test that opens two LVs, fires save_title in LV1, asserts LV2 receives update through real Ash notifier (no manual broadcast). This must FAIL before fix.
+
+** DONE Fix Ash PubSub topic mismatch in page.ex
+:PROPERTIES:
+:TASK_ID: phase-b-fix
+:STATUS: completed
+:DEPENDS: phase-a-test
+:END:
+
+lib/concept/pages/page.ex: remove literal "*" from all pub_sub topic lists. Change ["*", :workspace_id, "pages"] to [:workspace_id, "pages"] on all publish lines.
+
+** DONE Run tests and commit
+:PROPERTIES:
+:TASK_ID: phase-b-verify
+:STATUS: completed
+:DEPENDS: phase-b-fix
+:END:
+
+mix test test/concept_web/live/page_header_test.exs must pass. Then git add + commit with message: fix(pages): wire page_updated broadcast for cross-tab + sidebar sync (BUG-038)

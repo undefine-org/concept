@@ -4,17 +4,11 @@
 
 * Wave -1 Setup
 
-** DOING Apply migrations; mix precommit baseline green
+** DONE Apply migrations; mix precommit baseline green
 :PROPERTIES:
 :TASK_ID: setup-baseline
-:STATUS: in_progress
+:STATUS: completed
 :GATE_CMD: mix precommit
 :END:
 
-* Wave 4.5 closing
-
-** DONE Fix 10 page-rename + notifier + header failures
-:PROPERTIES:
-:TASK_ID: task-1
-:STATUS: completed
-:END:
+mix precommit green: 199 tests, 0 failures, 5 excluded (2 LLM stub FUP-019 + 3 cross-LV PubSub FUP-022). Foreground gate execution at job bash/341.

@@ -10,23 +10,22 @@
 :STATUS: failed
 :END:
 
-* PLAN-005 Wave 3 implementer batch
+* PLAN-005 W3.6 browser swarm
 
-** DONE AuthOverrides + .ora-auth-* CSS layer + smoke tests
+** DONE BUG-020: register → confirm → redirect to /w/<slug>; sign-in redirect; /-redirect
 :PROPERTIES:
-:TASK_ID: task-5
+:TASK_ID: task-9
 :STATUS: completed
 :END:
 
-** DONE Block lock indicators via presence metadata + data-locked-by
+** DOING BUG-021: peer LV sees data-locked-by during focus; clears on blur; self does not see own
 :PROPERTIES:
-:TASK_ID: task-7
-:STATUS: completed
-:DEPENDS: task-5
+:TASK_ID: task-11
+:STATUS: in_progress
 :END:
 
-** DOING send_update PageHeader on page_updated PubSub
+** DOING BUG-022 + BUG-023: title rename propagates across tabs + whitespace trim
 :PROPERTIES:
-:TASK_ID: task-8
+:TASK_ID: task-12
 :STATUS: in_progress
 :END:

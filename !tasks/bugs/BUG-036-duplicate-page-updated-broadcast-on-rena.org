@@ -1,0 +1,35 @@
+#+TITLE: Duplicate page_updated broadcast on rename/set_icon/set_cover_color
+#+STATE: DONE
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-036-duplicate-page-updated-broadcast-on-rena
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W3.5 contract + convention reviewers both flagged (P2, conf 0.85+): =lib/concept/pages/page.ex= has both ~publish_all :update, ..., event: "page_updated"~ AND explicit ~publish :rename, ... event: "page_updated"~ (plus :set_icon, :set_cover_color). Ash's PubSub notifier iterates EVERY matching publication \u2014 the `:update` action-type match catches all three, so each rename/icon/cover change broadcasts twice. WorkspaceLive.handle_info runs twice per change → 2x DB queries + 2x send_update calls. Cheap waste but compounding for active editing.
+
+* Fix sketch
+Two options:
+- (A) Drop the three explicit `publish` lines (`publish_all :update` already covers them).
+- (B) Scope `publish_all :update` with `except: [:rename, :set_icon, :set_cover_color]` if the per-action publishes intentionally narrow the topic.
+
+(A) is the conservative, smallest change. Use it.
+
+* TDD evidence required
+- Phase A: extend `test/concept_web/live/page_header_test.exs` with an assertion that handle_info fires EXACTLY ONCE per rename (count via subscribe to topic + `assert_receive` exactly one + `refute_receive` second).
+- Phase B: fix; re-run; PASS.
+
+* Scope
+- IN: `lib/concept/pages/page.ex` pub_sub block — remove the three duplicate publish lines.
+- IN: `test/concept_web/live/page_header_test.exs` — add the once-only broadcast assertion.
+- OUT: any other broadcast scope.
+
+* Acceptance
+- Single page_updated broadcast per rename/icon/cover change.
+- Test asserts the count.
+- One commit: `fix(pages): de-duplicate page_updated broadcasts (BUG-036)`.

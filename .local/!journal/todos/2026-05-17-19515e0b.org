@@ -1,0 +1,15 @@
+#+TITLE: Session 14e417fb6473d347 Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Slice I Test
+
+** DONE Two-session test or report gaps
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: completed
+:END:
+
+If invite UX exists: B signs in, A invites B, verify lock visibility. Else report gap.
+
+Invite UX not shipped. B redirected to own workspace. Single-LV self-test passed: lockedCount=0 on focus and blur.

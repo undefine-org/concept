@@ -1,0 +1,23 @@
+#+TITLE: ingestion_job.ex has same pub_sub "*" topic segment bug as BUG-038
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: FUP-023-ingestion-job-ex-has-same-pub-sub-topic
+#+LAYER: platform
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+BUG-038 found that `lib/concept/pages/page.ex` pub_sub block had a literal `"*"` topic segment that broke production broadcasts. BUG-038 agent flagged the same pattern in `lib/concept/knowledge/ingestion_job.ex` pub_sub (`["*", :workspace_id, "ingest"]`). Indexing pill subscribes to `workspace:<id>:ingest` and never receives broadcasts in real browser.
+
+This is PLAN-004 (Arcana) territory. PLAN-004 owns the fix.
+
+* Fix sketch
+- `lib/concept/knowledge/ingestion_job.ex` pub_sub block: remove `"*"` from every publish topic list, leaving `[:workspace_id, "ingest"]`.
+- Verify indexing pill in the workspace shell receives status updates cross-tab.
+
+* Acceptance
+- Real-browser integration test: an IngestionJob lifecycle update reaches the IndexingPill in another tab within 2s.

@@ -1,0 +1,27 @@
+#+TITLE: Session 14e3b0af9e33d2cc Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* PLAN-005 W2.7.6 browser swarm
+
+** BLOCKED Re-verify BUG-031 link editor round-trip
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: failed
+:END:
+
+* PLAN-005 W3.7 cleanup batch
+
+** BLOCKED Backfill 3 missing BUG-020 test scenarios
+:PROPERTIES:
+:TASK_ID: task-14
+:STATUS: gate_failed
+:END:
+
+* PLAN-005 W4 FEAT-050
+
+** DOING Composite blocks (table + columns) child cell creation flow
+:PROPERTIES:
+:TASK_ID: task-15
+:STATUS: in_progress
+:END:

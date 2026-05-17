@@ -1,0 +1,37 @@
+#+TITLE: Session 14e417fb6473d347 Todos
+#+DATE: 2026-05-16
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Slice I Test
+
+** DOING Browser A: register + create page
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: in_progress
+:END:
+
+Register slice-i-a@concept.dev, create page with 2 paragraph blocks alpha+beta
+
+** ITEM Single-LV self-test: data-locked-by filtering
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: pending
+:END:
+
+Focus block alpha in A, assert document.querySelectorAll('[data-locked-by]').length === 0
+
+** ITEM Inspect presence track payload
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: pending
+:END:
+
+Check document.__presence__ or LiveView socket for locked_block_id in payload
+
+** ITEM Two-session test or report gaps
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: pending
+:END:
+
+If invite UX exists: B signs in, A invites B, verify lock visibility. Else report gap.

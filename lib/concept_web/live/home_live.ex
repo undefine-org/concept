@@ -25,7 +25,11 @@ defmodule ConceptWeb.HomeLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="min-h-screen bg-white flex flex-col items-center justify-center gap-8 px-6">
+      <div
+        id="home-root"
+        phx-hook="GlobalKeys"
+        class="min-h-screen bg-white flex flex-col items-center justify-center gap-8 px-6"
+      >
         <div class="text-center space-y-4 max-w-xl">
           <div class="text-6xl">📝</div>
           <h1
@@ -76,5 +80,21 @@ defmodule ConceptWeb.HomeLive do
       </div>
     </Layouts.app>
     """
+  end
+
+  # GlobalKeys hook (BUG-025) — Cmd-K opens the command palette. HomeLive has
+  # no palette UI of its own; for a signed-in user we forward to /w (which
+  # then resolves the primary workspace), and for signed-out users we no-op
+  # rather than crash on a missing handler.
+  @impl true
+  def handle_event("open_command_palette", _params, socket) do
+    case socket.assigns[:current_user] do
+      nil -> {:noreply, socket}
+      _user -> {:noreply, Phoenix.LiveView.push_navigate(socket, to: ~p"/w")}
+    end
+  end
+
+  def handle_event("close_command_palette", _params, socket) do
+    {:noreply, socket}
   end
 end

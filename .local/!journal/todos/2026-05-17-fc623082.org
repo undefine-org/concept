@@ -1,0 +1,25 @@
+#+TITLE: Session 14e424104773d352 Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Phase A - Red test
+
+** DOING Add exact-once broadcast test
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: in_progress
+:GATE_CMD: mix test test/concept_web/live/page_header_test.exs --seed 0
+:END:
+
+Extend test/concept_web/live/page_header_test.exs with a test that subscribes to workspace:#{ws.id}:pages, triggers a rename via render_hook, asserts one page_updated broadcast, and refutes a second. Must FAIL before fix.
+
+* Phase B - Fix
+
+** ITEM Remove duplicate publish lines
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: pending
+:GATE_CMD: mix test test/concept_web/live/page_header_test.exs --seed 0
+:END:
+
+In lib/concept/pages/page.ex, delete the 3 explicit publish lines for :rename, :set_icon, :set_cover_color (already covered by publish_all :update).
