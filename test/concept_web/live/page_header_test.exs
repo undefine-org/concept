@@ -149,4 +149,30 @@ defmodule ConceptWeb.PageHeaderTest do
 
     assert render(view2) =~ "ora-cover-blue"
   end
+  test "real notifier broadcast updates LV2 cross-tab without manual broadcast", %{
+    conn: conn,
+    ws: ws,
+    page: page
+  } do
+    {:ok, view1, _html1} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+    {:ok, view2, _html2} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    # Sanity: both views start with the original title in the page header and sidebar.
+    assert has_element?(view2, "h1#page-title-#{page.id}", "Roadmap")
+    assert render(view2) =~ "Roadmap"
+
+    # LV1 dispatches the real production save_title path. NO manual broadcast.
+    view1
+    |> element("#page-header-#{page.id}")
+    |> render_hook("save_title", %{"value" => "Cross-Tab Renamed"})
+
+    # LV2 must receive the page_updated event via Ash.Notifier.PubSub → Phoenix.PubSub
+    # and update both the page header live_component and the sidebar PageTree.
+    html2 = render(view2)
+
+    assert has_element?(view2, "h1#page-title-#{page.id}", "Cross-Tab Renamed")
+    assert html2 =~ "Cross-Tab Renamed"
+    # Original title in the sidebar tree is replaced.
+    refute has_element?(view2, "aside.ora-sidebar a[href$=\"/p/#{page.id}\"]", "Roadmap")
+  end
 end
