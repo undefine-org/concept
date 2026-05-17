@@ -623,7 +623,6 @@ defmodule ConceptWeb.WorkspaceLive do
               />
               {live_render(@socket, ConceptWeb.PageEditorLive,
                 id: "page-editor-#{@current_page.id}",
-                container: {:div, phx_hook: "PageEditor"},
                 session: %{
                   "workspace_id" => @workspace.id,
                   "page_id" => @current_page.id,
