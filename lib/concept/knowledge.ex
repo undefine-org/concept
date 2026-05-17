@@ -69,22 +69,32 @@ defmodule Concept.Knowledge do
   Emits telemetry event consumed by Telemetry.Metrics.last_value/1.
   """
   # Reads raw SQL count to bypass multitenant TenantRequired; safe since this is a process-wide metric.
+  # Defensive: telemetry_poller starts before Concept.Repo (see application.ex child order), and if a
+  # measurement raises, telemetry_poller blacklists it for the rest of the VM lifetime
+  # (make_measurements_and_filter_misbehaving/1). We short-circuit when the Repo isn't registered and
+  # rescue any unexpected error so the metric keeps ticking. See BUG-042.
   def report_ingestion_queue_depth do
-    import Ecto.Query
+    if Process.whereis(Concept.Repo) do
+      import Ecto.Query
 
-    count =
-      Concept.Repo.aggregate(
-        from(j in "knowledge_ingestion_jobs",
-          where: j.state == "queued" and is_nil(j.archived_at)
-        ),
-        :count
+      count =
+        Concept.Repo.aggregate(
+          from(j in "knowledge_ingestion_jobs",
+            where: j.state == "queued" and is_nil(j.archived_at)
+          ),
+          :count
+        )
+
+      :telemetry.execute(
+        [:concept, :knowledge, :ingestion_job, :queue],
+        %{depth: count},
+        %{}
       )
+    end
 
-    :telemetry.execute(
-      [:concept, :knowledge, :ingestion_job, :queue],
-      %{depth: count},
-      %{}
-    )
+    :ok
+  rescue
+    _ -> :ok
   end
 
   @doc "Returns workspace graph for visualization."

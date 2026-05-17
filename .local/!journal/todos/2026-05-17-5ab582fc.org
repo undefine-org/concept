@@ -1,0 +1,50 @@
+#+TITLE: Session 14e4c3c5992acd20 Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* FUP-027: cross-domain reuse + Block fix
+
+** DONE Move tenancy modules to Concept.AshOban namespace
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:END:
+
+Create lib/concept/ash_oban/workspace_tenants.ex and lib/concept/ash_oban/system_actor_persister.ex. Delete the two old files under lib/concept/knowledge/. Update IngestionJob trigger to reference new module names.
+
+** DONE Add failing Block scheduler tenant test
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:DEPENDS: task-1
+:END:
+
+test/concept/pages/block_release_expired_locks_test.exs — enqueue an expired-locked Block, call Concept.Pages.Block.AshOban.Scheduler.ReleaseExpiredLocks.perform(%Oban.Job{args: %{}}); assert :ok and assert_enqueued worker for that tenant. Confirm red without fix.
+
+** DONE Wire list_tenants + actor_persister into Block trigger
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
+:DEPENDS: task-2
+:END:
+
+lib/concept/pages/block.ex — trigger :release_expired_locks gains list_tenants + actor_persister referencing the new Concept.AshOban modules.
+
+** DONE Run precommit — ensure all green
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: completed
+:GATE_CMD: mix precommit
+:DEPENDS: task-3
+:END:
+
+mix precommit
+
+** DONE Close FUP-027
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:DEPENDS: task-4
+:END:
+
+org update FUP-027 state DONE with note.

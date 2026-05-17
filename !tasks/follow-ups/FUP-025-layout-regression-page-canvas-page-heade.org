@@ -1,0 +1,30 @@
+#+TITLE: Layout regression: page-canvas + page-header widths broken in viewport
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: FUP-025-layout-regression-page-canvas-page-heade
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W5.5 Slice K: `.ora-page-canvas` computed width is 432px and `.ora-page-header` is 240px in a 1365px viewport. Title text "Slice K Test" renders one letter per line vertically. Cover band only 48px wide despite `width: 100%`. Major visual regression making editing unusable at standard desktop widths.
+
+Pre-existing (NOT introduced by PLAN-005's named scope). Likely culprit: a flex/grid constraint added during PLAN-004 sidebar/chat-panel work that broke the main column's flex-basis.
+
+* Investigation
+1. Inspect WorkspaceLive shell HEEx: the main column should be `flex-1` (or `flex-grow`) inside a horizontal flex container with sidebar.
+2. Check if a recent commit added `width: 432px` or similar fixed width on the main column.
+3. Compare against the baseline screenshot in `plan-artifacts/PLAN-001/` (Notion MVP) if available.
+
+* Fix sketch
+- Remove the bad fixed width OR add `flex: 1 1 auto; min-width: 0` to the main column.
+- Re-check `.ora-page-canvas` — should be `max-width: 720px; margin: 0 auto` per PLAN-001.
+
+* Acceptance
+- Page canvas at viewport widths 1024/1366/1920 is consistently 720px wide centered.
+- Title renders horizontally.
+- One commit: `fix(layout): restore page-canvas + header width (FUP-025)`.

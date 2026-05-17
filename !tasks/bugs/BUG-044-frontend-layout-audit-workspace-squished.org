@@ -1,5 +1,5 @@
 #+TITLE: Frontend layout audit: workspace squished, slash menu always visible, daisyUI not loaded
-#+STATE: DOING
+#+STATE: DONE
 #+SESSION_ID: 14e4c301086c15a5
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-17T12-08-43-809Z_14e4c301086c15a5.jsonl]]
 #+CUSTOM_ID: BUG-044-frontend-layout-audit-workspace-squished
@@ -85,3 +85,5 @@ User screenshots show:
 - Pressing Enter on title moves caret to first block
 - Command palette selected row highlighted
 - No daisyUI classes remain in lib/concept_web/
+
+NOTE [2026-05-17]: Shipped in 5 commits: 9c67439 (foundation: tokens+css+slash menu), 2804fc2 (shell+flash+title-enter), a5d7c73 (de-daisy core/chat/pill/router/etc), 57a0642 (mix format + artifacts), 8f2ed2a (graph empty state). Verifier 10/10 PASS. 222/222 tests pass.

@@ -1,0 +1,92 @@
+#+TITLE: telemetry poller crashes + blacklists ingestion_queue_depth when Repo absent
+#+STATE: ITEM
+#+SESSION_ID: 14e4c3e035be0e94
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-17T12-12-32-342Z_14e4c3e035be0e94.jsonl]]
+#+CUSTOM_ID: BUG-042-telemetry-poller-crashes-blacklists-inge
+#+LAYER: infra
+
+* Initial Message
+
+∙ mix phx.server
+[error] Error when calling MFA defined by measurement: Concept.Knowledge :report_ingestion_queue_depth []
+Class=:error
+Reason=%RuntimeError{
+  message: "could not lookup Ecto repo Concept.Repo because it was not started or it does not exist"
+}
+Stacktrace=[
+  {Ecto.Repo.Registry, :lookup, 1,
+   [
+     file: ~c"lib/ecto/repo/registry.ex",
+     line: 22,
+     error_info: %{module: Exception}
+   ]},
+  {Ecto.Repo.Supervisor, :tuplet, 2,
+   [file: ~c"lib/ecto/repo/supervisor.ex", line: 176]},
+  {Concept.Repo, :aggregate, 3, [file: ~c"lib/concept/repo.ex", line: 2]},
+  {Concept.Knowledge, :report_ingestion_queue_depth, 0,
+   [file: ~c"lib/concept/knowledge.ex", line: 76]},
+  {:telemetry_poller, :make_measurement, 1,
+   [
+     file: ~c"/home/user/code/ora/concept/deps/telemetry_poller/src/telemetry_poller.erl",
+     line: 474
+   ]},
+  {:telemetry_poller, :"-make_measurements_and_filter_misbehaving/1-lc$^0/1-0-",
+   1,
+   [
+     file: ~c"/home/user/code/ora/concept/deps/telemetry_poller/src/telemetry_poller.erl",
+     line: 470
+   ]},
+  {:telemetry_poller, :handle_info, 2,
+   [
+     file: ~c"/home/user/code/ora/concept/deps/telemetry_poller/src/telemetry_poller.erl",
+     line: 495
+   ]},
+  {:gen_server, :try_handle_info, 3, [file: ~c"gen_server.erl", line: 2434]},
+  {:gen_server, :handle_msg, 3, [file: ~c"gen_server.erl", line: 2420]},
+  {:proc_lib, :init_p_do_apply, 3, [file: ~c"proc_lib.erl", line: 333]}
+]
+
+
+
+what is this? explain what went wrong and what it was trying to do
+
+* Symptom
+
+On `mix phx.server` boot (and any time `Concept.Repo` is briefly down/restarting), telemetry_poller logs:
+
+#+begin_example
+[error] Error when calling MFA defined by measurement: Concept.Knowledge :report_ingestion_queue_depth []
+Class=:error
+Reason=%RuntimeError{message: "could not lookup Ecto repo Concept.Repo because it was not started or it does not exist"}
+  Ecto.Repo.Registry.lookup/1
+  Concept.Repo.aggregate/3
+  Concept.Knowledge.report_ingestion_queue_depth/0
+  :telemetry_poller.make_measurement/1
+#+end_example
+
+* Root cause
+
+`lib/concept/application.ex` starts `ConceptWeb.Telemetry` (which boots `:telemetry_poller`) *before* `Concept.Repo`. The poller's periodic measurement `{Concept.Knowledge, :report_ingestion_queue_depth, []}` calls `Concept.Repo.aggregate/3`, which requires the Repo to be in `Ecto.Repo.Registry`. If the poller ticks while Repo is not registered (slow boot, Repo crash/restart, DB unreachable), the measurement raises.
+
+`telemetry_poller` filters misbehaving measurements via `make_measurements_and_filter_misbehaving/1` — after one raise, the measurement is *dropped from future ticks*. ∴ `last_value("concept.knowledge.ingestion_job.queue.depth")` stops updating until app restart. That's the real damage; the log line is the cosmetic part.
+
+* Fix (option A from analysis)
+
+Make `Concept.Knowledge.report_ingestion_queue_depth/0` defensive:
+
+- short-circuit when `Process.whereis(Concept.Repo)` is nil (no-emit, return :ok)
+- rescue any unexpected error and return :ok so the poller never blacklists the measurement
+
+Rejected alternatives:
+- Reordering supervision (Repo before Telemetry) — Phoenix defaults to Telemetry-first deliberately so it observes Repo boot events. Don't fight the convention.
+- Delay first tick — `:telemetry_poller` exposes no initial-delay knob.
+
+* Scope
+
+- =lib/concept/knowledge.ex= — wrap `report_ingestion_queue_depth/0` body in `if Process.whereis(Concept.Repo) do ... end` with a `rescue _ -> :ok` clause.
+
+* Acceptance
+
+- Booting with Repo intentionally delayed (or stopped) no longer prints the error.
+- After Repo recovers, queue-depth metric resumes updating on the next 10s tick.
+- `mix precommit` passes.

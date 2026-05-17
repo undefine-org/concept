@@ -303,6 +303,16 @@ defmodule ConceptWeb.ChatComponent do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("seed_prompt", %{"prompt" => prompt}, socket) do
+    socket =
+      socket
+      |> assign(:initial_text, prompt)
+      |> assign_message_form()
+
+    {:noreply, socket}
+  end
+
   defp load_conversation(socket, conversation_id) do
     if true && is_nil(socket.assigns.current_user) do
       socket

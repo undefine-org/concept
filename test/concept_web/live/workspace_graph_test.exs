@@ -40,7 +40,7 @@ defmodule ConceptWeb.WorkspaceGraphTest do
 
   test "empty workspace shows message", %{conn: conn, ws: ws} do
     {:ok, _view, html} = live(conn, ~p"/w/#{ws.slug}/graph")
-    assert html =~ "Add pages to see the graph"
+    assert html =~ "No knowledge yet"
   end
 
   test "5-page workspace shows nodes", %{conn: conn, ws: ws, user: user} do

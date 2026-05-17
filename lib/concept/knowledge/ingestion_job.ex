@@ -13,7 +13,8 @@ defmodule Concept.Knowledge.IngestionJob do
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
     extensions: [AshStateMachine, AshArchival.Resource, AshOban],
-    notifiers: [Ash.Notifier.PubSub]
+    notifiers: [Ash.Notifier.PubSub],
+    primary_read_warning?: false
 
   postgres do
     table "knowledge_ingestion_jobs"
@@ -50,6 +51,8 @@ defmodule Concept.Knowledge.IngestionJob do
         scheduler_cron "* * * * *"
         queue :knowledge_ingest
         use_tenant_from_record? true
+        list_tenants Concept.AshOban.WorkspaceTenants
+        actor_persister Concept.AshOban.SystemActorPersister
         scheduler_module_name Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process
         worker_module_name Concept.Knowledge.IngestionJob.AshOban.Worker.Process
       end

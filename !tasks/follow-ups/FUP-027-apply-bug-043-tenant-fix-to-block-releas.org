@@ -1,0 +1,72 @@
+#+TITLE: Apply BUG-043 tenant fix to Block.release_expired_locks trigger
+#+STATE: DONE
+#+SESSION_ID: 14e4c3c5992acd20
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-17T12-12-05-092Z_14e4c3c5992acd20.jsonl]]
+#+CUSTOM_ID: FUP-027-apply-bug-043-tenant-fix-to-block-releas
+
+* Initial Message
+
+SELECT b0."id", b0."position", b0."type", b0."state", b0."content", b0."inserted_at", b0."workspace_id", b0."page_id", b0."parent_block_id", b0."props", b0."updated_at", b0."archived_at", b0."lock_acquired_at", b0."lock_expires_at", b0."lock_holder_id", b0."lock_state" FROM "blocks" AS b0 WHERE (b0."page_id"::uuid = $1::uuid) AND (b0."archived_at"::timestamp IS NULL) AND (b0."workspace_id"::uuid = $2::uuid) ORDER BY b0."parent_block_id", b0."position" ["adc5789b-d6cb-4293-bb0a-260020313c59", "eb06ed9d-d7ed-46e1-8f0f-8ac9daec713a"]
+↳ anonymous fn/3 in AshPostgres.DataLayer.run_query/2, at: lib/data_layer.ex:860
+[debug] Replied in 6ms
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "Meta"}
+[debug] Replied in 129µs
+[error] Error running AshOban scheduler Elixir.Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process.
+** (Ash.Error.Invalid)
+Bread Crumbs:
+  > Error returned from: Concept.Knowledge.IngestionJob.read
+
+Invalid Error
+
+* Queries against the Concept.Knowledge.IngestionJob resource require a tenant to be specified
+  (ash 3.24.6) lib/ash/actions/read/read.ex:88: Ash.Actions.Read.run/3
+  (ash 3.24.6) lib/ash.ex:2826: Ash.read/2
+  (ash 3.24.6) lib/ash.ex:2761: Ash.read!/2
+  (ash 3.24.6) lib/ash/actions/read/stream.ex:53: anonymous fn/5 in Ash.Actions.Read.Stream.do_stream/4
+  (concept 0.1.0) deps/ash_oban/lib/transformers/define_schedulers.ex:193: Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process.insert/1
+  (elixir 1.19.5) lib/enum.ex:961: Enum."-each/2-lists^foreach/1-0-"/2
+  (concept 0.1.0) deps/ash_oban/lib/transformers/define_schedulers.ex:258: Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process.perform/1
+  (oban 2.22.1) lib/oban/queue/executor.ex:145: Oban.Queue.Executor.perform/1
+  (oban 2.22.1) lib/oban/queue/executor.ex:77: Oban.Queue.Executor.call/1
+    (ash 3.24.6) lib/ash/actions/read/read.ex:88: Ash.Actions.Read.run/3
+    (ash 3.24.6) lib/ash.ex:2826: Ash.read/2
+    (ash 3.24.6) lib/ash.ex:2761: Ash.read!/2
+    (ash 3.24.6) lib/ash/actions/read/stream.ex:53: anonymous fn/5 in Ash.Actions.Read.Stream.do_stream/4
+    (concept 0.1.0) deps/ash_oban/lib/transformers/define_schedulers.ex:193: Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process.insert/1
+    (elixir 1.19.5) lib/enum.ex:961: Enum."-each/2-lists^foreach/1-0-"/2
+    (concept 0.1.0) deps/ash_oban/lib/transformers/define_schedulers.ex:258: Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process.perform/1
+    (oban 2.22.1) lib/oban/queue/executor.ex:145: Oban.Queue.Executor.perform/1
+    (oban 2.22.1) lib/oban/queue/executor.ex:77: Oban.Queue.Executor.call/1
+
+[debug] QUERY OK source="conversations" db=0.5ms queue=0.8ms idle=154.5ms
+
+
+
+what is this? exlpain the root cause and what it was trying to do
+
+Concept.Pages.Block declares multitenancy :attribute / global? false and has an AshOban trigger :release_expired_locks (cron */10). Same root cause as BUG-043 — the scheduler reads without a tenant.
+
+Apply the same fix:
+- list_tenants Concept.Knowledge.WorkspaceTenants
+- actor_persister Concept.Knowledge.SystemActorPersister  (or a Pages-scoped persister)
+
+Note: Block read/release_lock policies must accept SystemActor; verify before wiring. May need a Pages.SystemActor or expose a shared one.
+
+Related: BUG-043.
+
+NOTE [2026-05-17]: Closed via TDD + structural hoist.
+
+Audit: Block.:release_expired_locks was the only other broken site. Two other AshOban triggers (Chat.Conversation, Chat.Message) are non-multitenant; no fix needed.
+
+Structural fix: shared modules hoisted out of Concept.Knowledge into a project-wide Concept.AshOban namespace.
+- lib/concept/ash_oban/workspace_tenants.ex (Concept.AshOban.WorkspaceTenants)
+- lib/concept/ash_oban/system_actor_persister.ex (Concept.AshOban.SystemActorPersister)
+
+Block fix:
+- test/concept/pages/block_release_expired_locks_test.exs (red → green)
+- lib/concept/pages/block.ex — trigger gains list_tenants + actor_persister
+
+Precommit: 222/0.
+
+Both broken triggers now share the same one-line wiring. Future tenant-aware AshOban triggers reuse the same modules.

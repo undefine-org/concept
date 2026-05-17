@@ -1,0 +1,21 @@
+#+TITLE: Sign-out redirects to / (marketing) instead of /sign-in
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: FUP-026-sign-out-redirects-to-marketing-instead
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W5.5 Slice M: sign-out from sidebar redirects to `/` (marketing landing) instead of `/sign-in`. The marketing page does not have `.ora-auth-root` class. The user lands on a "Get started / Sign in" landing instead of the sign-in form.
+
+* Fix sketch
+- Sign-out flow probably uses ash_authentication's default sign-out → `/`. Override the post-sign-out path to `/sign-in` via the auth route configuration OR a `SignOutController`.
+
+* Acceptance
+- Click sign-out → /sign-in opens with the password form visible.
+- One commit: `fix(auth): sign-out redirects to /sign-in (FUP-026)`.

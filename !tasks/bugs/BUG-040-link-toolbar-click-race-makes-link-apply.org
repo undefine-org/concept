@@ -1,0 +1,35 @@
+#+TITLE: Link toolbar click race makes link apply impossible in real browser
+#+STATE: DONE
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-040-link-toolbar-click-race-makes-link-apply
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W5.5 Slice L: clicking the Link button in `<ora-format-toolbar>.shadowRoot` does NOT show `<ora-link-editor>`. Same click steals focus from contenteditable → `selectionchange` fires with empty selection → FormatToolbar hook's `_activeEditor` is nulled → `_handleRequestLink` returns early. The Slice E dispatch-CustomEvent-directly workaround that worked in W2.7.6 ALSO fails now because `_activeEditor` is null. Link UX completely broken in real browser.
+
+Originally filed as FUP-021 (polish). Slice L promotes it to BUG-040 — this is a P1 blocker for the link feature.
+
+* Fix sketch
+- Add `mousedown` (with `preventDefault`) to each button inside `<ora-format-toolbar>` shadow. Prevents focus loss on click.
+- AND/OR in FormatToolbar hook: debounce `selectionchange` for ~200ms after any button click; ignore selection events during that window.
+- AND/OR cache `_activeEditor` for ~500ms post-toolbar-show; don't null it on selectionchange unless the new active element is outside our ora-block.
+
+Three converging fixes; pick the one most surgical (mousedown.preventDefault is usually cleanest).
+
+* TDD evidence required (real browser)
+Integration test that simulates the actual click → selectionchange race and asserts `<ora-link-editor>` becomes visible.
+
+* Scope
+- `assets/js/components/ora-format-toolbar.js` — add `@mousedown` handler to buttons.
+- `assets/js/hooks/format_toolbar.js` — defensive caching of _activeEditor.
+- `assets/js/hooks/__tests__/format_toolbar.test.js` — new race scenario.
+
+* Acceptance
+- Slice L step 14 re-run: link applies cleanly. <a href> appears in DOM. Persists on reload.
+- One commit: `fix(editor): prevent toolbar click race; link applies reliably (BUG-040)`.

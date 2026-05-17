@@ -1,0 +1,32 @@
+#+TITLE: Session 14e44748e1b3d36b Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* BUG-041
+
+** DONE Read current test and block_render files
+:PROPERTIES:
+:TASK_ID: read-files
+:STATUS: completed
+:END:
+
+** DONE Add failing table cell render test
+:PROPERTIES:
+:TASK_ID: add-test
+:STATUS: completed
+:DEPENDS: read-files
+:END:
+
+** DONE Fix BlockRender @text_types for table_cell + column
+:PROPERTIES:
+:TASK_ID: fix-render
+:STATUS: completed
+:DEPENDS: add-test
+:END:
+
+** DONE Run tests and commit
+:PROPERTIES:
+:TASK_ID: verify-commit
+:STATUS: completed
+:DEPENDS: fix-render
+:END:

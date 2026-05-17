@@ -1,0 +1,100 @@
+#+TITLE: Session 14e4321bf5f3d354 Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Phase A Red
+
+** DONE Write domain tests for composite blocks
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:GATE_ARTIFACT: test/concept/pages/composite_blocks_test.exs
+:END:
+
+File: test/concept/pages/composite_blocks_test.exs
+Tests:
+1. Pages.create_table/5 returns Table parent + 6 TableCells; list_for_page returns 1+6
+2. Pages.create_columns/4 returns Columns parent + 3 Column children
+3. Archive parent cascades to children
+Setup: create user, ws, page. Use DataCase.
+
+** DONE Write LiveView tests for composite blocks
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:GATE_ARTIFACT: test/concept_web/live/composite_blocks_test.exs
+:END:
+
+File: test/concept_web/live/composite_blocks_test.exs
+Tests:
+1. render_hook(view, root, "insert_composite_below", %{type: "table", rows: 2, cols: 3, block_id: above.id}) → list grows by 7; render shows grid; first cell block-id present
+Setup: same ConnCase pattern as page_editor_test.exs.
+
+** DOING Run Phase A and capture FAIL output
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: in_progress
+:GATE_ARTIFACT: artifact://phase_a_fail.txt
+:END:
+
+mix test test/concept/pages/composite_blocks_test.exs test/concept_web/live/composite_blocks_test.exs → all FAIL. Paste snippets for report.
+
+7 tests, 7 failures. Domain: create_table/create_columns undefined. LV: insert_composite_below handler no function clause matching.
+
+* Phase B Green
+
+** DONE Create reactors for table and columns
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: completed
+:DEPENDS: task-1 task-2
+:END:
+
+Files:
+- lib/concept/pages/reactors/create_table.ex: Reactor creates Table parent then rows*cols TableCells with parent_block_id + position (row-major). Use Ecto transaction via Reactor undo compensation.
+- lib/concept/pages/reactors/create_columns.ex: analogous for Columns parent + N Column children.
+- lib/concept/pages.ex: add create_table/5 and create_columns/4 definitions.
+
+** DONE BlockRender recursion + PageEditorLive integration
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:DEPENDS: task-4
+:END:
+
+Files:
+- lib/concept_web/components/block_render.ex: pattern-match on :table and :columns; render HEEx grid; for each cell fetch child blocks (preloaded) and recurse via BlockRender.block/1.
+- lib/concept_web/live/page_editor_live.ex: preload children for Table/Columns parents (depth-1 load: [:children]). Add handle_event("insert_composite_below", ...) dispatching to right reactor.
+
+** DONE Composite picker UI + BlockEditor tab handler
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: completed
+:DEPENDS: task-5
+:END:
+
+Files:
+- lib/concept_web/components/composite_picker.ex: new HEEx component (function component) — small rows×cols picker.
+- assets/js/hooks/block_editor.js: Tab key handler when host has data-composite-parent → dispatch nav_block_tab event; server resolves next sibling row-major and pushes focus_block_caret.
+- SlashMenu hook: detect type in {table, columns} → show picker before insert.
+
+** DOING Run Phase B and capture PASS output
+:PROPERTIES:
+:TASK_ID: task-7
+:STATUS: in_progress
+:GATE_CMD: mix test test/concept/pages/composite_blocks_test.exs test/concept_web/live/composite_blocks_test.exs
+:DEPENDS: task-5 task-6
+:END:
+
+mix test test/concept/pages/composite_blocks_test.exs test/concept_web/live/composite_blocks_test.exs → green. mix compile clean. Paste PASS snippets.
+
+** ITEM Commit final changes
+:PROPERTIES:
+:TASK_ID: task-8
+:STATUS: pending
+:GATE_COMMIT: true
+:DEPENDS: task-7
+:END:
+
+One commit: feat(blocks): composite blocks (table + columns) child cell creation (FEAT-050)
+git add -A && git commit -m "..."

@@ -90,6 +90,39 @@ defmodule ConceptWeb.CommandPaletteLive do
                   />
                 </div>
 
+                <%!-- Shortcuts cheatsheet (empty query) --%>
+                <%= if @query == "" do %>
+                  <div class="px-4 pt-3 pb-1 text-xs font-medium text-notion-text-light uppercase tracking-wide">
+                    Shortcuts
+                  </div>
+                  <ul class="px-4 py-1 space-y-1 text-sm text-notion-text">
+                    <li class="flex items-center gap-2">
+                      <kbd class="px-1.5 py-0.5 bg-notion-sidebar-hover rounded font-mono text-xs">
+                        ⌘K
+                      </kbd>
+                      <span>Open this palette</span>
+                    </li>
+                    <li class="flex items-center gap-2">
+                      <kbd class="px-1.5 py-0.5 bg-notion-sidebar-hover rounded font-mono text-xs">
+                        ⌘J
+                      </kbd>
+                      <span>Open chat panel</span>
+                    </li>
+                    <li class="flex items-center gap-2">
+                      <kbd class="px-1.5 py-0.5 bg-notion-sidebar-hover rounded font-mono text-xs">
+                        /
+                      </kbd>
+                      <span>Slash menu in editor</span>
+                    </li>
+                    <li class="flex items-center gap-2">
+                      <kbd class="px-1.5 py-0.5 bg-notion-sidebar-hover rounded font-mono text-xs">
+                        Esc
+                      </kbd>
+                      <span>Close any panel</span>
+                    </li>
+                  </ul>
+                <% end %>
+
                 <%!-- Title results bucket --%>
                 <%= if match?(%{ok?: true, result: %{title_results: results}} when results != [], @title_results) do %>
                   <div class="px-4 pt-3 pb-1 text-xs font-medium text-notion-text-light uppercase tracking-wide">

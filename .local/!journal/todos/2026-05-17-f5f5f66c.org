@@ -1,0 +1,13 @@
+#+TITLE: Session 14e4d36c5da6d047 Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Implementation
+
+** DONE Update tests and verify
+:PROPERTIES:
+:TASK_ID: verify
+:STATUS: completed
+:END:
+
+Update graph_test assertion. Run mix test test/concept_web/ and mix compile --warnings-as-errors. Fix any broken tests.

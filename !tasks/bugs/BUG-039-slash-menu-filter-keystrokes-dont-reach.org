@@ -1,0 +1,34 @@
+#+TITLE: Slash menu filter keystrokes don't reach menu input in real browser
+#+STATE: DONE
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-039-slash-menu-filter-keystrokes-dont-reach
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W5.5 Slice L (BUG-033 retrospective): in real browser after typing "/" + "h1", the slash menu opens but filter input stays empty and all 17 items remain visible. Filter keystrokes ARE swallowed (block content doesn't accumulate "h1") but never reach the menu's internal filter input. Pressing Enter selects "Text" (default first), not the intended Heading 1.
+
+BUG-033 vitest passes because tests directly set `menu._filter = "h1"` instead of dispatching keys through the production path. The production path (`registerTextContentListener` on the focused editor) detects the trigger but doesn't forward subsequent keystrokes to the menu's input.
+
+* Fix sketch
+- The hook needs to capture keydown events on the editor AFTER trigger detection and forward to `<ora-slash-menu>`'s internal input (set ~menu.value~ + dispatch synthetic input on the shadow input element), OR
+- The hook's text content listener should diff "what user typed since trigger" and update `menu.filter` programmatically each tick.
+
+Choose option 2 — simpler, no DOM event synthesis required.
+
+* TDD evidence required
+Phase A: integration test (real Lexical editor + ora-slash-menu) where after "/" + "h1" via `editor.update($getSelection().insertText("h"))`, `menu.filter` is "h1" and `_filteredItems` is single Heading 1.
+Phase B: fix.
+
+* Scope
+- `assets/js/hooks/slash_menu.js` — text content listener now also updates `menu.filter` from the diff.
+- `assets/js/hooks/__tests__/slash_menu_integration.test.js` — new scenario.
+
+* Acceptance
+- Slice L step 11 re-run passes with "h1" filter narrowing to Heading 1; Enter selects it.
+- One commit: `fix(editor): slash menu filter follows editor text in real browser (BUG-039)`.

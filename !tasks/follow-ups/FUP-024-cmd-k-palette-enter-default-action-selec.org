@@ -1,0 +1,24 @@
+#+TITLE: Cmd-K palette Enter default action selects "+ New page" instead of first result
+#+STATE: ITEM
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: FUP-024-cmd-k-palette-enter-default-action-selec
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W5.5 Slice M: Cmd-K opens palette, typing a query shows matching page in results, but pressing Enter creates a NEW page instead of navigating to the matched result. ArrowDown+Enter also creates new pages. Default-highlighted action is "+ New page" rather than the first search result.
+
+* Fix sketch
+- `lib/concept_web/live/command_palette_live.ex`: when results are non-empty, default-highlight the first SEARCH RESULT (not the quick-action). Enter dispatches navigation to its page; arrow keys move within the results-first ordering.
+
+* Also: Cmd+K keyboard binding doesn't fire in headless puppeteer — only the search button click opens the palette. Verify the `GlobalKeys` hook key detection actually works for the Cmd+K combo in real browsers (vs being only test-mocked).
+
+* Acceptance
+- Type a query → Enter → navigate to first matched page.
+- Quick actions sit BELOW search results when search is non-empty.
+- One commit: `fix(palette): default-highlight first search result; Enter navigates (FUP-024)`.

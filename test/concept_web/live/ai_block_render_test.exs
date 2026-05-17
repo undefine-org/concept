@@ -111,7 +111,9 @@ defmodule ConceptWeb.AiBlockRenderTest do
               "model" => "default",
               "ran_at" => DateTime.utc_now() |> DateTime.to_iso8601()
             }
-          }, actor: %{system?: true})
+          },
+          actor: %{system?: true}
+        )
         |> Ash.update!(actor: %{system?: true}, tenant: ws.id)
 
       {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
@@ -181,7 +183,9 @@ defmodule ConceptWeb.AiBlockRenderTest do
               "model" => "default",
               "ran_at" => DateTime.utc_now() |> DateTime.to_iso8601()
             }
-          }, actor: %{system?: true})
+          },
+          actor: %{system?: true}
+        )
         |> Ash.update!(actor: %{system?: true}, tenant: ws.id)
 
       {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")

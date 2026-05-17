@@ -1,0 +1,15 @@
+#+TITLE: Session 14e4c301086c15a5 Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Verify
+
+** DONE Run mix precommit and fix any issues
+:PROPERTIES:
+:TASK_ID: precommit
+:STATUS: completed
+:END:
+
+mix precommit (compile --warnings-as-errors, deps.unlock --unused, format, test --exclude integration). Address any failures.
+
+compile --warnings-as-errors clean; 222/222 web+core tests pass; mix format clean; deps.unlock --unused no-op.

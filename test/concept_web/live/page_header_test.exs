@@ -149,6 +149,7 @@ defmodule ConceptWeb.PageHeaderTest do
 
     assert render(view2) =~ "ora-cover-blue"
   end
+
   test "real notifier broadcast updates LV2 cross-tab without manual broadcast", %{
     conn: conn,
     ws: ws,

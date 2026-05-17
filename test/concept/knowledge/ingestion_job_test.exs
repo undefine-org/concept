@@ -1,5 +1,6 @@
 defmodule Concept.Knowledge.IngestionJobTest do
   use Concept.DataCase, async: true
+  use Oban.Testing, repo: Concept.Repo
 
   import Phoenix.ChannelTest
 
@@ -292,6 +293,33 @@ defmodule Concept.Knowledge.IngestionJobTest do
 
       assert reloaded1.state == :succeeded
       assert reloaded2.state == :succeeded
+    end
+  end
+
+  describe "AshOban scheduler tenancy (BUG-043)" do
+    setup do
+      Application.put_env(:concept, :arcana_module, MockArcana)
+      on_exit(fn -> Application.delete_env(:concept, :arcana_module) end)
+      :ok
+    end
+
+    test "scheduler perform/1 fans out per workspace and enqueues worker jobs" do
+      %{workspace: workspace, page: page} = create_fixtures()
+      job = Knowledge.enqueue_ingest!(workspace.id, page.id)
+      assert job.state == :queued
+
+      # Pre-fix: raises Ash.Error.Invalid -- tenant required for IngestionJob read.
+      # Post-fix: scheduler iterates workspaces under a system actor, streams
+      # queued rows per-tenant, and enqueues a worker job per row.
+      assert :ok =
+               Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process.perform(%Oban.Job{
+                 args: %{}
+               })
+
+      assert_enqueued(
+        worker: Concept.Knowledge.IngestionJob.AshOban.Worker.Process,
+        args: %{"primary_key" => %{"id" => job.id}, "tenant" => workspace.id}
+      )
     end
   end
 end

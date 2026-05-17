@@ -57,6 +57,8 @@ defmodule Concept.Pages.Block do
         scheduler_cron "*/10 * * * *"
         queue :locks
         use_tenant_from_record? true
+        list_tenants Concept.AshOban.WorkspaceTenants
+        actor_persister Concept.AshOban.SystemActorPersister
         worker_module_name Concept.Pages.Block.AshOban.Worker.ReleaseExpiredLocks
         scheduler_module_name Concept.Pages.Block.AshOban.Scheduler.ReleaseExpiredLocks
       end

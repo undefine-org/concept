@@ -1,0 +1,31 @@
+#+TITLE: Session 14e447480ff3d369 Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Phase B
+
+** DONE Add mousedown.prevent to toolbar buttons
+:PROPERTIES:
+:TASK_ID: phase-b-mousedown
+:STATUS: completed
+:END:
+
+In ora-format-toolbar.js: add @mousedown.prevent to every button to stop focus theft
+
+** DONE Add defense-in-depth in hook
+:PROPERTIES:
+:TASK_ID: phase-b-defense
+:STATUS: completed
+:END:
+
+In format_toolbar.js: cache _activeEditor, don't null on selectionchange when document.activeElement is inside toolbar host
+
+* Verify
+
+** DONE Run tests and commit
+:PROPERTIES:
+:TASK_ID: verify-commit
+:STATUS: completed
+:END:
+
+Run vitest, confirm green. Commit with specified message.

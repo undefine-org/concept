@@ -1,0 +1,11 @@
+#+TITLE: Session 14e3b087d426cfb5 Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Discovery + Demo
+
+** DONE mix concept.demo seed task
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:END:

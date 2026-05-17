@@ -1,0 +1,60 @@
+#+TITLE: Session 14e4d36be966d045 Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Investigate
+
+** DONE Inspect block content shape and APIs
+:PROPERTIES:
+:TASK_ID: task-1
+:STATUS: completed
+:END:
+
+grep Pages.Block in test/ and lib/ to understand content map shape, actor/tenant patterns, create_page API
+
+** DONE Inspect knowledge resources APIs
+:PROPERTIES:
+:TASK_ID: task-2
+:STATUS: completed
+:END:
+
+Look at Chat.Conversation, Chat.Message, Citation, Link, TokenLedger resources for create actions
+
+** DONE Inspect Accounts/Workspaces APIs
+:PROPERTIES:
+:TASK_ID: task-3
+:STATUS: completed
+:END:
+
+Understand register_with_password, workspace creation, onboarding reactor
+
+* Implement
+
+** DONE Create mix task lib/mix/tasks/concept.demo.ex
+:PROPERTIES:
+:TASK_ID: task-4
+:STATUS: completed
+:DEPENDS: task-1 task-2 task-3
+:END:
+
+Full idempotent demo seeder with 4 pages, blocks, chat, citations, links, token ledger, cheat sheet output
+
+** DONE Create docs/CONCEPT_HOWTO.md
+:PROPERTIES:
+:TASK_ID: task-5
+:STATUS: completed
+:DEPENDS: task-1 task-2 task-3
+:END:
+
+User-facing walkthrough of Concept features, awareness surfaces, knowledge spine, shortcuts
+
+* Verify
+
+** DONE Compile and verify mix task runs
+:PROPERTIES:
+:TASK_ID: task-6
+:STATUS: completed
+:DEPENDS: task-4 task-5
+:END:
+
+mix compile --warnings-as-errors, then try running mix concept.demo

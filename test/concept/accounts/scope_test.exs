@@ -108,6 +108,7 @@ defmodule Concept.Accounts.ScopeTest do
 
     %{user: user, ws: ws, membership: membership}
   end
+
   describe "Onboarding reactor (BUG-037 scenario 2)" do
     # Direct invocation of `Concept.Accounts.Reactors.Onboarding` so the
     # `primary?: true` input to `Workspace.:create_personal` is exercised

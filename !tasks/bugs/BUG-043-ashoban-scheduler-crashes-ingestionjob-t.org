@@ -1,0 +1,94 @@
+#+TITLE: AshOban scheduler crashes: IngestionJob tenant missing
+#+STATE: DONE
+#+SESSION_ID: 14e4c3c5992acd20
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-17T12-12-05-092Z_14e4c3c5992acd20.jsonl]]
+#+CUSTOM_ID: BUG-043-ashoban-scheduler-crashes-ingestionjob-t
+
+* Initial Message
+
+SELECT b0."id", b0."position", b0."type", b0."state", b0."content", b0."inserted_at", b0."workspace_id", b0."page_id", b0."parent_block_id", b0."props", b0."updated_at", b0."archived_at", b0."lock_acquired_at", b0."lock_expires_at", b0."lock_holder_id", b0."lock_state" FROM "blocks" AS b0 WHERE (b0."page_id"::uuid = $1::uuid) AND (b0."archived_at"::timestamp IS NULL) AND (b0."workspace_id"::uuid = $2::uuid) ORDER BY b0."parent_block_id", b0."position" ["adc5789b-d6cb-4293-bb0a-260020313c59", "eb06ed9d-d7ed-46e1-8f0f-8ac9daec713a"]
+↳ anonymous fn/3 in AshPostgres.DataLayer.run_query/2, at: lib/data_layer.ex:860
+[debug] Replied in 6ms
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "Meta"}
+[debug] Replied in 129µs
+[error] Error running AshOban scheduler Elixir.Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process.
+** (Ash.Error.Invalid)
+Bread Crumbs:
+  > Error returned from: Concept.Knowledge.IngestionJob.read
+
+Invalid Error
+
+* Queries against the Concept.Knowledge.IngestionJob resource require a tenant to be specified
+  (ash 3.24.6) lib/ash/actions/read/read.ex:88: Ash.Actions.Read.run/3
+  (ash 3.24.6) lib/ash.ex:2826: Ash.read/2
+  (ash 3.24.6) lib/ash.ex:2761: Ash.read!/2
+  (ash 3.24.6) lib/ash/actions/read/stream.ex:53: anonymous fn/5 in Ash.Actions.Read.Stream.do_stream/4
+  (concept 0.1.0) deps/ash_oban/lib/transformers/define_schedulers.ex:193: Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process.insert/1
+  (elixir 1.19.5) lib/enum.ex:961: Enum."-each/2-lists^foreach/1-0-"/2
+  (concept 0.1.0) deps/ash_oban/lib/transformers/define_schedulers.ex:258: Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process.perform/1
+  (oban 2.22.1) lib/oban/queue/executor.ex:145: Oban.Queue.Executor.perform/1
+  (oban 2.22.1) lib/oban/queue/executor.ex:77: Oban.Queue.Executor.call/1
+    (ash 3.24.6) lib/ash/actions/read/read.ex:88: Ash.Actions.Read.run/3
+    (ash 3.24.6) lib/ash.ex:2826: Ash.read/2
+    (ash 3.24.6) lib/ash.ex:2761: Ash.read!/2
+    (ash 3.24.6) lib/ash/actions/read/stream.ex:53: anonymous fn/5 in Ash.Actions.Read.Stream.do_stream/4
+    (concept 0.1.0) deps/ash_oban/lib/transformers/define_schedulers.ex:193: Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process.insert/1
+    (elixir 1.19.5) lib/enum.ex:961: Enum."-each/2-lists^foreach/1-0-"/2
+    (concept 0.1.0) deps/ash_oban/lib/transformers/define_schedulers.ex:258: Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process.perform/1
+    (oban 2.22.1) lib/oban/queue/executor.ex:145: Oban.Queue.Executor.perform/1
+    (oban 2.22.1) lib/oban/queue/executor.ex:77: Oban.Queue.Executor.call/1
+
+[debug] QUERY OK source="conversations" db=0.5ms queue=0.8ms idle=154.5ms
+
+
+
+what is this? exlpain the root cause and what it was trying to do
+
+* Summary
+:PROPERTIES:
+:SEVERITY: high
+:COMPONENT: knowledge / ingestion / ash_oban
+:END:
+
+The cron-scheduled scheduler module
+`Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process` raises every
+minute in production logs:
+
+#+begin_example
+Queries against the Concept.Knowledge.IngestionJob resource require a tenant to be specified
+  (ash) Ash.Actions.Read.run/3
+  (ash_oban) define_schedulers.ex:193 …Scheduler.Process.insert/1
+  (ash_oban) define_schedulers.ex:258 …Scheduler.Process.perform/1
+#+end_example
+
+* Root cause
+~IngestionJob~ is multi-tenant by ~workspace_id~ with ~global? false~.
+The AshOban scheduler streams ~state == :queued~ rows without a tenant,
+so the generated ~Ash.read!~ call is rejected.
+
+The trigger does not configure ~list_tenants~. ~AshOban~ falls back to
+~AshOban.Info.oban_list_tenants!/1~ which yields ~[nil]~, hitting the
+~global? false~ guard.
+
+* Impact
+- No queued ~IngestionJob~ rows ever execute via the cron path
+  (workers only fire when callers manually publish, e.g. on page save).
+- Stack trace floods logs once per minute.
+- Backfill / retry of stuck ~:queued~ rows is broken.
+
+* Fix (TDD)
+1. Add ~AshOban.ListTenants~ implementation that returns all
+   ~Workspace.id~ values under a system actor.
+2. Wire it into the trigger via ~list_tenants Module~.
+3. Failing test: invoke
+   ~Concept.Knowledge.IngestionJob.AshOban.Scheduler.Process.perform(%Oban.Job{args: %{}})~
+   after enqueuing a job; assert it returns ~:ok~ and that a worker job
+   is enqueued for the workspace tenant.
+
+* Files
+- ~lib/concept/knowledge/ingestion_job.ex~ — add ~list_tenants~
+- ~lib/concept/knowledge/workspace_tenants.ex~ — new behaviour impl
+- ~test/concept/knowledge/ingestion_job_test.exs~ — scheduler test
+
+NOTE [2026-05-17]: Fixed via TDD. See follow-up FUP-027 for Block trigger sharing the same root cause.

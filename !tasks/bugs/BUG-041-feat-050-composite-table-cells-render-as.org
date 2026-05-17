@@ -1,0 +1,36 @@
+#+TITLE: FEAT-050 composite table cells render as empty static_block; not editable
+#+STATE: DONE
+#+SESSION_ID: 14e3b0af9e33d2cc
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-16T16-10-12-984Z_14e3b0af9e33d2cc.jsonl]]
+#+CUSTOM_ID: BUG-041-feat-050-composite-table-cells-render-as
+#+LAYER: web
+
+* Initial Message
+
+do a thorough review of the Concept frontend using subagents and come back to me with a full list of the experience vs. the stated claims when you see the codebase. Concept is unusable at this stage
+
+* Initial Message
+
+PLAN-005 W5.5 Slice M (FEAT-050 retrospective): table creation works — picker fires `insert_composite_below`, 4 cells persist server-side — but in browser each `<td>` contains only an empty `<div class="block-anchor scroll-mt-20">` with NO `<ora-block>` editor inside. Clicking a cell doesn't focus an editor; typing has no effect. Tab navigation between cells can't be tested.
+
+Root cause: BlockRender's text-block branch only renders `<ora-block>` for types in `@text_types ~w(paragraph heading_1 ... toggle)`. `:table_cell` and `:column` aren't in that list, so cells fall through to the `static_block` fallback which returns `raw("")`.
+
+FEAT-050 commit (d65d131) added the composite parent rendering but not the leaf-cell editor mounting.
+
+* Fix sketch
+- Add `:table_cell` and `:column` to `@text_types` in `lib/concept_web/components/block_render.ex` — they should render as `<ora-block>` editors just like paragraphs.
+- Confirm cells get full keyboard treatment (Enter, ArrowUp/Down, slash menu) within their cell scope.
+- Tab handling for cell-to-cell nav already exists in `BlockEditor` hook (FEAT-050 task added it); verify it activates inside cells now that they're editable.
+
+* TDD evidence
+- Extend `test/concept_web/live/composite_blocks_test.exs`: after creating a 2x3 table, assert rendered HTML contains 6 `<ora-block block-type="table_cell">` elements (not empty divs).
+- Browser slice: click cell (1,1), type "x", Tab, type "y" in (1,2). Reload. Both cells persist.
+
+* Scope
+- `lib/concept_web/components/block_render.ex` — extend `@text_types`.
+- `test/concept_web/live/composite_blocks_test.exs` — new assertion.
+- Possibly `assets/js/components/ora-block.js` if cell type needs special editor config.
+
+* Acceptance
+- Cells contain `<ora-block>` editors. Typing works. Tab navigates.
+- One commit: `fix(blocks): render table_cell + column as editable ora-blocks (BUG-041)`.

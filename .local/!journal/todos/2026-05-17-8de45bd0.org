@@ -18,10 +18,10 @@
 :STATUS: gate_failed
 :END:
 
-* PLAN-005 W4 FEAT-050
+* PLAN-005 W6 closing batch
 
-** DOING Composite blocks (table + columns) child cell creation flow
+** DONE Render table_cell + column as editable ora-blocks
 :PROPERTIES:
-:TASK_ID: task-15
-:STATUS: in_progress
+:TASK_ID: task-17
+:STATUS: completed
 :END:
