@@ -7,6 +7,7 @@ defmodule ConceptWeb.BlockRender do
   @text_types ~w(
     paragraph heading_1 heading_2 heading_3 quote
     callout to_do bulleted_list_item numbered_list_item code toggle
+    table_cell column
   )
 
   attr :block, :map, required: true

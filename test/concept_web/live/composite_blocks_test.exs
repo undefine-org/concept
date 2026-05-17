@@ -106,4 +106,27 @@ defmodule ConceptWeb.CompositeBlocksTest do
     html = render(view)
     assert html =~ "ora-composite-columns"
   end
+
+  test "table cells render as editable ora-blocks, not empty anchor divs",
+       %{conn: conn, user: user, ws: ws, page: page} do
+    {:ok, _table} =
+      Pages.create_table(ws.id, page.id, 2, 3, actor: user, tenant: ws.id)
+
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    html = render(view)
+
+    # Each table cell must render as an editable <ora-block ... block-type="table_cell">,
+    # not as a content-less <div class="block-anchor"></div>.
+    cell_blocks = Regex.scan(~r/<ora-block[^>]*block-type="table_cell"/, html)
+
+    assert length(cell_blocks) == 6,
+           "expected 6 ora-block elements with block-type=\"table_cell\"; got #{length(cell_blocks)}"
+
+    # The BlockEditor hook must be attached on every cell so it is typable.
+    hook_blocks =
+      Regex.scan(~r/<ora-block[^>]*phx-hook="BlockEditor"[^>]*block-type="table_cell"/, html)
+
+    assert length(hook_blocks) == 6
+  end
 end
