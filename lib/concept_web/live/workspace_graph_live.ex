@@ -56,7 +56,7 @@ defmodule ConceptWeb.WorkspaceGraphLive do
         </div>
       <% else %>
         <ora-workspace-graph
-          .data={Jason.encode!(@graph_data)}
+          data={Jason.encode!(@graph_data)}
           data-nodes-count={length(@graph_data.nodes)}
           data-edges-count={length(@graph_data.edges)}
           workspace-slug={@workspace.slug}
