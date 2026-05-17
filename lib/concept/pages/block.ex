@@ -98,6 +98,7 @@ defmodule Concept.Pages.Block do
       accept []
       require_atomic? false
       change set_attribute(:archived_at, DateTime.utc_now())
+      change Concept.Pages.Block.Changes.CascadeArchive
     end
 
     update :acquire_lock do

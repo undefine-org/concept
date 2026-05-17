@@ -238,11 +238,17 @@ export const SlashMenu = {
       }
     });
 
-    // Push insert event to server
-    this.pushEvent("insert_block_below", {
-      block_id: blockId,
-      type: type,
-    });
+    // Push insert event to server. Composite types (table/columns) go
+    // through the rows×cols picker first; everything else inserts a
+    // single block immediately.
+    if (type === "table" || type === "columns") {
+      this._openCompositePicker(type, blockId);
+    } else {
+      this.pushEvent("insert_block_below", {
+        block_id: blockId,
+        type: type,
+      });
+    }
 
     this._close();
   },
@@ -250,6 +256,63 @@ export const SlashMenu = {
   /** Close the menu without dispatching a block insert. */
   _handleClose() {
     this._close();
+  },
+
+  /**
+   * Open the composite picker overlay for the given type ({@code "table"}
+   * or {@code "columns"}). The picker reads `data-source-block-id` and
+   * `data-mode` to know what to dispatch when the user selects an option.
+   */
+  _openCompositePicker(type, sourceBlockId) {
+    const picker = document.getElementById("composite-picker");
+    if (!picker) return;
+
+    picker.classList.remove("hidden");
+    picker.setAttribute("data-open", "true");
+    picker.setAttribute("data-mode", type);
+    picker.setAttribute("data-source-block-id", sourceBlockId || "");
+
+    picker.querySelectorAll("[data-mode-target]").forEach((el) => {
+      if (el.getAttribute("data-mode-target") === type) {
+        el.classList.remove("hidden");
+      } else {
+        el.classList.add("hidden");
+      }
+    });
+
+    // Intercept clicks once: read the chosen dimensions + source id,
+    // dispatch insert_composite_below, then close the picker.
+    if (!picker._oraPickerBound) {
+      picker.addEventListener("click", (e) => {
+        const btn = e.target.closest("[phx-click='insert_composite_below']");
+        if (!btn || !picker.contains(btn)) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const mode = picker.getAttribute("data-mode") || "table";
+        const blockId = picker.getAttribute("data-source-block-id") || "";
+
+        const payload = { type: mode, block_id: blockId };
+        if (mode === "table") {
+          payload.rows = Number(btn.getAttribute("data-rows")) || 2;
+          payload.cols = Number(btn.getAttribute("data-cols")) || 2;
+        } else {
+          payload.count = Number(btn.getAttribute("data-count")) || 2;
+        }
+
+        this.pushEvent("insert_composite_below", payload);
+        this._closeCompositePicker();
+      });
+      picker._oraPickerBound = true;
+    }
+  },
+
+  _closeCompositePicker() {
+    const picker = document.getElementById("composite-picker");
+    if (!picker) return;
+    picker.classList.add("hidden");
+    picker.setAttribute("data-open", "false");
+    picker.setAttribute("data-source-block-id", "");
   },
 
   _close() {

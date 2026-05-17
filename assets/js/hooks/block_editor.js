@@ -76,6 +76,21 @@ export const BlockEditor = {
     this.el.addEventListener("ora-block-enter-at-end", this._onEnterAtEnd);
     this.el.addEventListener("ora-block-backspace-at-start", this._onBackspaceAtStart);
 
+    // Tab / Shift-Tab inside a composite parent (table cell / column):
+    // move focus to the next or previous sibling cell in row-major order.
+    // Outside composite parents, Tab falls through to the browser default.
+    this._onKeyDown = (e) => {
+      if (e.key !== "Tab") return;
+      const composite = this.el.closest("[data-composite-parent]");
+      if (!composite) return;
+      e.preventDefault();
+      this.pushEvent("nav_block_tab", {
+        block_id: this.el.getAttribute("block-id"),
+        direction: e.shiftKey ? "prev" : "next",
+      });
+    };
+    this.el.addEventListener("keydown", this._onKeyDown);
+
     // Handle server-pushed focus_block_caret event
     this.handleEvent("focus_block_caret", ({ block_id, position }) => {
       if (block_id === this.el.getAttribute("block-id")) {
@@ -160,5 +175,6 @@ export const BlockEditor = {
     this.el.removeEventListener("ora-block-arrow-down", this._onArrowDown);
     this.el.removeEventListener("ora-block-enter-at-end", this._onEnterAtEnd);
     this.el.removeEventListener("ora-block-backspace-at-start", this._onBackspaceAtStart);
+    if (this._onKeyDown) this.el.removeEventListener("keydown", this._onKeyDown);
   },
 };

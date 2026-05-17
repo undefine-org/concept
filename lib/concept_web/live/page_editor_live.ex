@@ -28,7 +28,7 @@ defmodule ConceptWeb.PageEditorLive do
 
     blocks =
       case Pages.list_for_page(page_id, actor: user, tenant: ws_id) do
-        {:ok, list} -> list
+        {:ok, list} -> build_block_tree(list)
         _ -> []
       end
 
@@ -52,7 +52,7 @@ defmodule ConceptWeb.PageEditorLive do
       <div id="page-editor-content" class="space-y-1 relative" phx-hook="AskSelection">
         <ul :if={@blocks != []} id={"block-list-#{@page_id}"} phx-hook="BlockList" class="space-y-1">
           <li :for={b <- @blocks} data-block-id={b.id}>
-            <ConceptWeb.BlockRender.block block={b} locked_by={@locked_blocks[b.id]} />
+            <ConceptWeb.BlockRender.block block={b} locked_by={@locked_blocks[b.id]} locked_blocks={@locked_blocks} />
           </li>
         </ul>
         <div :if={@blocks == []} class="py-8 text-center">
@@ -79,6 +79,7 @@ defmodule ConceptWeb.PageEditorLive do
         >
           <ora-slash-menu />
         </div>
+        <ConceptWeb.CompositePicker.picker id="composite-picker" />
       </div>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".PageScroll">
@@ -276,6 +277,114 @@ defmodule ConceptWeb.PageEditorLive do
         end
       else
         socket
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("nav_block_tab", %{"block_id" => block_id, "direction" => direction}, socket)
+      when direction in ["next", "prev"] do
+    user = socket.assigns.current_user
+    ws_id = socket.assigns.workspace.id
+    page_id = socket.assigns.page_id
+
+    siblings =
+      with {:ok, flat} <- Pages.list_for_page(page_id, actor: user, tenant: ws_id),
+           current when not is_nil(current) <- Enum.find(flat, &(&1.id == block_id)),
+           parent_id when not is_nil(parent_id) <- current.parent_block_id do
+        flat
+        |> Enum.filter(&(&1.parent_block_id == parent_id))
+        |> Enum.sort_by(& &1.position)
+      else
+        _ -> []
+      end
+
+    target =
+      case Enum.find_index(siblings, &(&1.id == block_id)) do
+        nil ->
+          nil
+
+        idx when direction == "next" ->
+          Enum.at(siblings, idx + 1)
+
+        idx when direction == "prev" and idx > 0 ->
+          Enum.at(siblings, idx - 1)
+
+        _ ->
+          nil
+      end
+
+    socket =
+      if target do
+        push_event(socket, "focus_block_caret", %{
+          block_id: target.id,
+          position: if(direction == "next", do: "start", else: "end")
+        })
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("insert_composite_below", %{"type" => type_str} = payload, socket)
+      when type_str in ["table", "columns"] do
+    user = socket.assigns.current_user
+    ws_id = socket.assigns.workspace.id
+    page_id = socket.assigns.page_id
+    blocks = socket.assigns.blocks
+    source_id = Map.get(payload, "block_id")
+
+    source = source_id && Enum.find(blocks, &(&1.id == source_id))
+    source_idx = source && Enum.find_index(blocks, &(&1.id == source_id))
+
+    position =
+      cond do
+        is_nil(source) ->
+          nil
+
+        true ->
+          next_block = Enum.at(blocks, source_idx + 1)
+
+          if next_block do
+            Concept.Pages.FractionalIndex.between(source.position, next_block.position)
+          else
+            Concept.Pages.FractionalIndex.after_(source.position)
+          end
+      end
+
+    result =
+      case type_str do
+        "table" ->
+          rows = payload |> Map.get("rows", 2) |> ensure_int(2)
+          cols = payload |> Map.get("cols", 2) |> ensure_int(2)
+
+          Pages.create_table(ws_id, page_id, rows, cols,
+            actor: user,
+            tenant: ws_id,
+            position: position
+          )
+
+        "columns" ->
+          count = payload |> Map.get("count", 2) |> ensure_int(2)
+
+          Pages.create_columns(ws_id, page_id, count,
+            actor: user,
+            tenant: ws_id,
+            position: position
+          )
+      end
+
+    socket =
+      case result do
+        {:ok, _parent} ->
+          {:ok, list} = Pages.list_for_page(page_id, actor: user, tenant: ws_id)
+          assign(socket, :blocks, build_block_tree(list))
+
+        {:error, _reason} ->
+          socket
       end
 
     {:noreply, socket}
@@ -543,6 +652,36 @@ defmodule ConceptWeb.PageEditorLive do
 
     :ok
   end
+
+  # Build a depth-1 block tree from a flat `list_for_page` result.
+  # Top-level blocks (parent_block_id == nil) become the outer list;
+  # each parent has its `children` association populated with its direct
+  # children sorted by position. Composite renderers (Table/Columns) read
+  # `block.children` to lay out cells without an extra round-trip.
+  defp build_block_tree(flat_blocks) do
+    by_parent = Enum.group_by(flat_blocks, & &1.parent_block_id)
+
+    top_level =
+      by_parent
+      |> Map.get(nil, [])
+      |> Enum.sort_by(& &1.position)
+
+    Enum.map(top_level, fn block ->
+      children = by_parent |> Map.get(block.id, []) |> Enum.sort_by(& &1.position)
+      %{block | children: children}
+    end)
+  end
+
+  defp ensure_int(v, _default) when is_integer(v), do: v
+
+  defp ensure_int(v, default) when is_binary(v) do
+    case Integer.parse(v) do
+      {n, _} -> n
+      _ -> default
+    end
+  end
+
+  defp ensure_int(_, default), do: default
 
   defp release_if_held(socket, id) do
     if socket.assigns.held_locks[id] do

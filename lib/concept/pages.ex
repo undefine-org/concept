@@ -44,6 +44,56 @@ defmodule Concept.Pages do
   end
 
   @doc """
+  Atomically create a Table parent + rows*cols TableCell children.
+
+  Returns `{:ok, parent}` on success, `{:error, reason}` if any insert
+  fails (parent and partial cells rolled back).
+  """
+  def create_table(workspace_id, page_id, rows, cols, opts)
+      when is_integer(rows) and is_integer(cols) and rows > 0 and cols > 0 do
+    actor = Keyword.fetch!(opts, :actor)
+    position = Keyword.get(opts, :position)
+
+    Reactor.run(
+      Concept.Pages.Reactors.CreateTable,
+      %{
+        workspace_id: workspace_id,
+        page_id: page_id,
+        rows: rows,
+        cols: cols,
+        actor: actor,
+        position: position
+      },
+      %{},
+      async?: false
+    )
+  end
+
+  @doc """
+  Atomically create a Columns parent + N Column children.
+
+  Returns `{:ok, parent}` on success, `{:error, reason}` on failure.
+  """
+  def create_columns(workspace_id, page_id, count, opts)
+      when is_integer(count) and count > 0 do
+    actor = Keyword.fetch!(opts, :actor)
+    position = Keyword.get(opts, :position)
+
+    Reactor.run(
+      Concept.Pages.Reactors.CreateColumns,
+      %{
+        workspace_id: workspace_id,
+        page_id: page_id,
+        count: count,
+        actor: actor,
+        position: position
+      },
+      %{},
+      async?: false
+    )
+  end
+
+  @doc """
   Computes staleness for an `:ai_answer` block.
 
   Returns `%{stale?: boolean, drifted_count: integer, drifted_block_ids: [uuid]}`.
