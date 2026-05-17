@@ -211,6 +211,44 @@ describe("FormatToolbar hook", () => {
     document.body.removeChild(block);
   });
 
+  // ── Test: click race — mousedown steals focus, selectionchange must not wipe _activeEditor ──
+
+  it("click race: mousedown on toolbar does not wipe active editor before click", () => {
+    const block = createOraBlock();
+    const cleanupSel = activateToolbar(env, block);
+
+    // Sanity: editor is active after initial selectionchange
+    expect(env.ctx._activeEditor).toBe(block._editor);
+
+    // Simulate the race: in a real browser, mousedown on a toolbar button
+    // steals focus into the toolbar host. activeElement now points inside
+    // the toolbar host (not the ora-block).
+    const toolbarInner = document.createElement("span");
+    env.toolbar.appendChild(toolbarInner);
+    Object.defineProperty(document, "activeElement", {
+      configurable: true,
+      get: () => toolbarInner,
+    });
+
+    // Browser fires selectionchange after focus shift. Without the
+    // defense-in-depth guard, the hook would null _activeEditor here.
+    document.dispatchEvent(new Event("selectionchange"));
+
+    // _activeEditor must remain valid so the subsequent click can route
+    // commands to the original editor.
+    expect(env.ctx._activeEditor).toBe(block._editor);
+
+    // Click bubbles up as a toggle-format event on the host; assert the
+    // command still reaches the editor.
+    env.host.dispatchEvent(
+      new CustomEvent("toggle-format", { detail: { format: "bold" } }),
+    );
+    expect(block._editor.dispatchCommand).toHaveBeenCalledTimes(1);
+
+    cleanupSel();
+    document.body.removeChild(block);
+  });
+
   // ── Test 6: destroyed cleans up listeners ───────────────────────
 
   it("destroyed removes event listeners", () => {

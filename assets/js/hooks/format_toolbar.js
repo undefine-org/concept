@@ -87,6 +87,17 @@ export const FormatToolbar = {
 
   /** @param {Event} [event] */
   _handleSelectionChange(event) {
+    // Defense-in-depth (BUG-040): ignore selectionchange while focus is
+    // inside the toolbar host. In a real browser, mousedown on a toolbar
+    // button can momentarily steal focus from the contenteditable before
+    // the click handler runs; without this guard the resulting
+    // selectionchange would null _activeEditor and the click would be a
+    // no-op. The component itself also calls preventDefault on mousedown
+    // to prevent the blur in the first place.
+    if (this.host && this.host.contains(document.activeElement)) {
+      return;
+    }
+
     const sel = window.getSelection();
 
     // Hide toolbar if selection is empty, collapsed, or outside an ora-block

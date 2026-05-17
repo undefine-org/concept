@@ -211,14 +211,15 @@ export class OraFormatToolbar extends LitElement {
       { key: "strikethrough", label: "S" },
       { key: "code", label: "</>" },
     ];
+    const preventBlur = (e) => e.preventDefault();
     return html`
       ${formats.map(
         (f) => html`
-          <button @click=${() => this._toggleFormat(f.key)}>${f.label}</button>
+          <button @mousedown=${preventBlur} @click=${() => this._toggleFormat(f.key)}>${f.label}</button>
         `
       )}
-      <button @click=${this._requestLink}>🔗</button>
-      <button @click=${this._askSelection} title="Ask about this">✨</button>
+      <button @mousedown=${preventBlur} @click=${this._requestLink}>🔗</button>
+      <button @mousedown=${preventBlur} @click=${this._askSelection} title="Ask about this">✨</button>
     `;
   }
 }
