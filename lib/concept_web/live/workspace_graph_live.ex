@@ -48,8 +48,11 @@ defmodule ConceptWeb.WorkspaceGraphLive do
     ~H"""
     <div id="workspace-graph-root" class="h-screen w-full">
       <%= if @graph_data.nodes == [] do %>
-        <div class="flex items-center justify-center h-full text-notion-text-light">
-          Add pages to see the graph
+        <div class="flex flex-col items-center justify-center h-full text-notion-text-light gap-1 px-6">
+          <h2 class="text-lg font-medium text-notion-text">No knowledge yet</h2>
+          <p class="text-sm max-w-md text-center">
+            Write a few pages and links between blocks will appear here as a graph.
+          </p>
         </div>
       <% else %>
         <ora-workspace-graph
