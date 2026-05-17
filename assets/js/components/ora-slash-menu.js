@@ -25,8 +25,10 @@ const FALLBACK_ITEMS = [
 export class OraSlashMenu extends LitElement {
   static styles = css`
     :host {
-      display: block;
-      position: absolute;
+      display: none;
+      position: fixed;
+      top: var(--menu-top, 0);
+      left: var(--menu-left, 0);
       background: white;
       border: 1px solid #e5e5e5;
       border-radius: 8px;
@@ -39,6 +41,7 @@ export class OraSlashMenu extends LitElement {
       padding: 4px;
       box-sizing: border-box;
     }
+    :host([visible]) { display: block; }
     input {
       width: 100%;
       padding: 8px;

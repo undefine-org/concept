@@ -112,8 +112,9 @@ export const SlashMenu = {
       if (domSel && domSel.rangeCount) {
         const range = domSel.getRangeAt(0);
         const caretRect = range.getBoundingClientRect();
-        menu.style.setProperty("--menu-top", `${caretRect.bottom + window.scrollY}px`);
-        menu.style.setProperty("--menu-left", `${caretRect.left + window.scrollX}px`);
+        // viewport-relative — :host is `position: fixed`
+        menu.style.setProperty("--menu-top", `${caretRect.bottom + 4}px`);
+        menu.style.setProperty("--menu-left", `${caretRect.left}px`);
       }
     } catch {
       // Position unavailable (e.g. jsdom tests) — menu still shows without coords.

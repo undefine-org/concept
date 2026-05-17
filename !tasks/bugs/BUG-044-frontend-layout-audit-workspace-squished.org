@@ -1,0 +1,87 @@
+#+TITLE: Frontend layout audit: workspace squished, slash menu always visible, daisyUI not loaded
+#+STATE: DOING
+#+SESSION_ID: 14e4c301086c15a5
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-17T12-08-43-809Z_14e4c301086c15a5.jsonl]]
+#+CUSTOM_ID: BUG-044-frontend-layout-audit-workspace-squished
+#+LAYER: web
+
+* Initial Message
+
+there are a lot of layout issues currently:
+[Image #1] -> the notificatoins message is out of whack
+[Image #2] this is so horrible I can't even begin to describe it
+[Image #3] the app is not center aligned
+[Image #1] the / bar is always showing, and the text does not go down when I press Enter.
+
+
+There are many more that you need to find yourself. Make a big deep list please, and how you'd fix each of them. Thoroughly review the whole frontend
+
+User screenshots show:
+- Image 1: flash notification mispositioned; slash menu always visible at bottom
+- Image 2: page title wraps letter-per-line (one column-wide); editor canvas squished
+- Image 3: workspace not center aligned (sits inside a max-w-2xl column from Layouts.app)
+- Image 4: same as #1, plus title Enter does not advance to first block
+
+* Root causes (confirmed via codebase review)
+
+** §1.1 Layouts.app wraps WorkspaceLive in max-w-2xl
+  lib/concept_web/components/layouts.ex renders <main class="px-4 py-20"><div class="mx-auto max-w-2xl">. WorkspaceLive's flex h-screen workspace shell renders inside it. After sidebar 240px, canvas ~432px, with 96+96 padding twice (canvas + page-header), title content area collapses to ~48px → letter-per-line wrap.
+
+** §1.2 ora-slash-menu always rendered visible
+  assets/js/components/ora-slash-menu.js :host has `display: block; position: absolute` with no `:host(:not([visible])) { display: none }` rule. The `visible` attribute toggles nothing. Custom properties --menu-top/--menu-left are written but :host never consumes them.
+
+** §1.3 --color-notion-hover referenced but undefined
+  7+ usages of bg-notion-hover / var(--color-notion-hover) across command_palette_live.ex, composite_picker.ex, live_citation_rail.ex, app.css :: theme only has --color-notion-sidebar-hover. All hover highlights invisible.
+
+** §1.4 app.css structural breakage
+  - 4 .ora-citation-* rules placed BEFORE @import directives (spec violation)
+  - Stray closing brace inside `.block-highlight` rule terminates @layer components mid-block; rules after it silently dropped
+  - 3 separate `@layer components` blocks, fragile
+
+** §1.5 Flash uses daisyUI (not loaded)
+  core_components.ex flash/1 uses `toast toast-top toast-end alert alert-info` — daisyUI plugin is not in @plugin list. Flash flows inline at top-left of body.
+
+** §1.6 Title Enter blurs without advancing
+  content_editable.js: Enter blurs only. Notion behaviour is to focus next block (create if empty). Currently the caret disappears.
+
+** §2 daisyUI half-migration
+  daisyUI vendor exists at assets/vendor/daisyui.js but NOT loaded. Code still uses navbar/btn/btn-ghost/dropdown/avatar/menu/alert/toast/chat-bubble/loading-dots/bg-base-*/input input-primary/select select-bordered/table table-zebra in:
+  - layouts.ex (navbar)
+  - core_components.ex (flash, input, button, select, textarea, header, table, list)
+  - chat_component.ex (whole component)
+  - workspace_live/chat_panel.ex (header + scope/profile selectors)
+  - indexing_pill.ex (popover)
+  - router.ex (AshAuthentication.Phoenix.Overrides.DaisyUI)
+
+** §3 Misc
+  - indexing_pill.ex: duplicate `class=` attribute on `<li>` (silently dropped)
+  - command_palette_live.ex: duplicate `phx-value-index` per item
+  - cover_band.ex: `{@rest}` only spread on default branch — clicking colored cover dead
+  - sidebar mx-2 + padding 8px double-offsets rows
+  - page_tree padding-left inline overrides ora-sidebar-row padding (only left)
+  - heroicon names referenced without size suffix or non-existent — leaves icon voids
+  - Google Fonts fetched at runtime (privacy + blocking render)
+
+* Execution plan
+1. Add --color-notion-hover to @theme (§1.3)
+2. Fix app.css ordering and braces (§1.4)
+3. Fix slash-menu visibility (§1.2)
+4. Fix title Enter advance (§1.6)
+5. Introduce Layouts.shell, switch WorkspaceLive + PageEditorLive (§1.1)
+6. Rewrite flash with .ora-flash (§1.5)
+7. Promote .ora-auth-* to .ora-input/.ora-button-primary + rewrite core_components.ex inputs (§2)
+8. Rewrite IndexingPill popover + ChatPanel + ChatComponent (§2)
+9. Remove daisyUI override from router (§2)
+10. Cleanup: duplicate attrs, cover_band rest, sidebar spacing, page_tree depth var, heroicons
+11. Decide theme toggle (remove until dark mode is real)
+12. Delete assets/vendor/daisyui.js + daisyui-theme.js
+
+* Acceptance
+- Home page hero centered horizontally, no narrow column
+- Workspace shell full-bleed; sidebar 240px + canvas centered at 720px max
+- Page title renders horizontally at any viewport ≥ 1024px
+- Slash menu hidden until "/" trigger; appears at caret
+- Flash toasts appear top-right, styled
+- Pressing Enter on title moves caret to first block
+- Command palette selected row highlighted
+- No daisyUI classes remain in lib/concept_web/
