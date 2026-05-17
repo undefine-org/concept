@@ -585,10 +585,10 @@ defmodule ConceptWeb.WorkspaceLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.shell flash={@flash} current_scope={@current_scope}>
       <div
         id="workspace-root"
-        class="flex h-screen"
+        class="flex min-h-screen"
         phx-hook="GlobalKeys LiveCitationRail"
         phx-window-keydown="global_key"
       >
@@ -682,7 +682,7 @@ defmodule ConceptWeb.WorkspaceLive do
         target_block_id={@link_modal_state && @link_modal_state.target_block_id}
         error={@link_modal_state && @link_modal_state.error}
       />
-    </Layouts.app>
+    </Layouts.shell>
     """
   end
 end

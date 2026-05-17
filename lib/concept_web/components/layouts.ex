@@ -1,29 +1,28 @@
 defmodule ConceptWeb.Layouts do
   @moduledoc """
-  This module holds layouts and related functionality
-  used by your application.
+  Layout function components for the Concept application.
+
+  Two top-level shells are exposed:
+
+    * `app/1` — narrow centered shell used by marketing/home and any
+      future settings-style pages. Renders the brand bar, then the
+      slot inside a max-width container.
+
+    * `shell/1` — full-bleed shell used by the workspace. No top
+      chrome (the sidebar is the chrome); just renders the slot
+      across the full viewport and mounts the flash group.
+
+  Both call `flash_group/1` so toasts surface no matter which shell
+  the route uses.
   """
   use ConceptWeb, :html
 
   # Embed all files in layouts/* within this module.
-  # The default root.html.heex file contains the HTML
-  # skeleton of your application, namely HTML headers
-  # and other static content.
   embed_templates "layouts/*"
 
   @doc """
-  Renders your app layout.
-
-  This function is typically invoked from every template,
-  and it often contains your application menu, sidebar,
-  or similar.
-
-  ## Examples
-
-      <Layouts.app flash={@flash}>
-        <h1>Content</h1>
-      </Layouts.app>
-
+  Marketing / auth-style shell. Brand bar across the top, then a
+  centered content column.
   """
   attr :flash, :map, required: true, doc: "the map of flash messages"
 
@@ -35,60 +34,33 @@ defmodule ConceptWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">
-            Concept{if @current_scope && @current_scope.workspace,
-              do: " / " <> to_string(@current_scope.workspace.name)}
-          </span>
-        </a>
-      </div>
-      <div class="flex-none">
-        <ul class="flex flex-column px-1 space-x-4 items-center">
-          <li>
-            <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
-          </li>
-          <li>
-            <a href="https://github.com/phoenixframework/phoenix" class="btn btn-ghost">GitHub</a>
-          </li>
-          <li>
-            <.theme_toggle />
-          </li>
-          <%= if @current_scope do %>
-            <li class="dropdown dropdown-end">
-              <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar placeholder">
-                <div class="bg-neutral text-neutral-content rounded-full w-8">
-                  <span>
-                    {@current_scope.user.email |> to_string() |> String.first() |> String.upcase()}
-                  </span>
-                </div>
-              </div>
-              <ul
-                tabindex="0"
-                class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow"
-              >
-                <li class="menu-title">{@current_scope.user.email}</li>
-                <li><a href={~p"/w"}>Dashboard</a></li>
-                <li><a href={~p"/sign-out"} method="delete">Sign out</a></li>
-              </ul>
-            </li>
-          <% else %>
-            <li>
-              <a href="https://hexdocs.pm/phoenix/overview.html" class="btn btn-primary">
-                Get Started <span aria-hidden="true">&rarr;</span>
-              </a>
-            </li>
-          <% end %>
-        </ul>
+    <header class="ora-app-header">
+      <a href={~p"/"} class="ora-app-header__brand">
+        <img src={~p"/images/logo.svg"} width="24" height="24" alt="" />
+        <span>Concept{if @current_scope && @current_scope.workspace,
+              do: " / " <> to_string(@current_scope.workspace.name)}</span>
+      </a>
+      <div class="ora-app-header__actions">
+        <%= if @current_scope do %>
+          <details class="relative">
+            <summary class="ora-avatar list-none">
+              {@current_scope.user.email |> to_string() |> String.first() |> String.upcase()}
+            </summary>
+            <div class="ora-menu">
+              <div class="ora-menu__title">{@current_scope.user.email}</div>
+              <a class="ora-menu__item" href={~p"/w"}>Dashboard</a>
+              <.link class="ora-menu__item" href={~p"/sign-out"} method="delete">Sign out</.link>
+            </div>
+          </details>
+        <% else %>
+          <.link navigate={~p"/sign-in"} class="ora-btn ora-btn--ghost">Sign in</.link>
+          <.link navigate={~p"/register"} class="ora-btn ora-btn--primary">Get started</.link>
+        <% end %>
       </div>
     </header>
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-2xl space-y-4">
-        {render_slot(@inner_block)}
-      </div>
+    <main class="mx-auto max-w-2xl px-6 py-12 space-y-4">
+      {render_slot(@inner_block)}
     </main>
 
     <.flash_group flash={@flash} />
@@ -96,19 +68,39 @@ defmodule ConceptWeb.Layouts do
   end
 
   @doc """
-  Shows the flash group with standard titles and content.
-
-  ## Examples
-
-      <.flash_group flash={@flash} />
+  Full-bleed shell used by the workspace. The page itself owns the
+  layout (sidebar + canvas); we just mount the flash group on top.
   """
-  attr :flash, :map, required: true, doc: "the map of flash messages"
-  attr :id, :string, default: "flash-group", doc: "the optional id of flash container"
+  attr :flash, :map, required: true
+
+  attr :current_scope, :map,
+    default: nil,
+    doc: "currently unused but kept to mirror app/1's signature"
+
+  slot :inner_block, required: true
+
+  def shell(assigns) do
+    ~H"""
+    <main class="min-h-screen bg-notion-bg">
+      {render_slot(@inner_block)}
+    </main>
+
+    <.flash_group flash={@flash} />
+    """
+  end
+
+  @doc """
+  Renders the flash group (info / error / warning) plus the
+  client-error / server-error reconnection pills.
+  """
+  attr :flash, :map, required: true
+  attr :id, :string, default: "flash-group"
 
   def flash_group(assigns) do
     ~H"""
-    <div id={@id} aria-live="polite">
+    <div id={@id} class="ora-flash-group" aria-live="polite">
       <.flash kind={:info} flash={@flash} />
+      <.flash kind={:warning} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
 
       <.flash
@@ -134,43 +126,6 @@ defmodule ConceptWeb.Layouts do
         {gettext("Attempting to reconnect")}
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
-    </div>
-    """
-  end
-
-  @doc """
-  Provides dark vs light theme toggle based on themes defined in app.css.
-
-  See <head> in root.html.heex which applies the theme before page load.
-  """
-  def theme_toggle(assigns) do
-    ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-100 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 transition-[left]" />
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
-      >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="light"
-      >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="dark"
-      >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
     </div>
     """
   end

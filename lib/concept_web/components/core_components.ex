@@ -42,7 +42,7 @@ defmodule ConceptWeb.CoreComponents do
   attr :id, :string, doc: "the optional id of flash container"
   attr :flash, :map, default: %{}, doc: "the map of flash messages to display"
   attr :title, :string, default: nil
-  attr :kind, :atom, values: [:info, :error], doc: "used for styling and flash lookup"
+  attr :kind, :atom, values: [:info, :error, :warning], doc: "used for styling and flash lookup"
   attr :rest, :global, doc: "the arbitrary HTML attributes to add to the flash container"
 
   slot :inner_block, doc: "the optional inner block that renders the flash message"
@@ -56,28 +56,28 @@ defmodule ConceptWeb.CoreComponents do
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      class="toast toast-top toast-end z-50"
+      class={["ora-flash", flash_kind_class(@kind)]}
       {@rest}
     >
-      <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
-      ]}>
-        <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
-        <div>
-          <p :if={@title} class="font-semibold">{@title}</p>
-          <p>{msg}</p>
-        </div>
-        <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label={gettext("close")}>
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
-        </button>
+      <span class="ora-flash__icon">
+        <.icon :if={@kind == :info} name="hero-information-circle-mini" class="size-4" />
+        <.icon :if={@kind == :warning} name="hero-exclamation-triangle-mini" class="size-4" />
+        <.icon :if={@kind == :error} name="hero-exclamation-circle-mini" class="size-4" />
+      </span>
+      <div class="ora-flash__body">
+        <p :if={@title} class="ora-flash__title">{@title}</p>
+        <p class="ora-flash__msg">{msg}</p>
       </div>
+      <button type="button" class="ora-flash__close" aria-label={gettext("close")}>
+        <.icon name="hero-x-mark" class="size-4" />
+      </button>
     </div>
     """
   end
+
+  defp flash_kind_class(:info), do: "ora-flash--info"
+  defp flash_kind_class(:warning), do: "ora-flash--warning"
+  defp flash_kind_class(:error), do: "ora-flash--error"
 
   @doc """
   Renders a button with navigation support.

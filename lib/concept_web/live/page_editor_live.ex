@@ -52,7 +52,11 @@ defmodule ConceptWeb.PageEditorLive do
       <div id="page-editor-content" class="space-y-1 relative" phx-hook="AskSelection">
         <ul :if={@blocks != []} id={"block-list-#{@page_id}"} phx-hook="BlockList" class="space-y-1">
           <li :for={b <- @blocks} data-block-id={b.id}>
-            <ConceptWeb.BlockRender.block block={b} locked_by={@locked_blocks[b.id]} locked_blocks={@locked_blocks} />
+            <ConceptWeb.BlockRender.block
+              block={b}
+              locked_by={@locked_blocks[b.id]}
+              locked_blocks={@locked_blocks}
+            />
           </li>
         </ul>
         <div :if={@blocks == []} class="py-8 text-center">
@@ -87,10 +91,34 @@ defmodule ConceptWeb.PageEditorLive do
           mounted() {
             this.scrollToHash()
             this.hashHandler = () => this.scrollToHash()
+            this.titleEnterHandler = () => this.focusFirstBlock()
             window.addEventListener('hashchange', this.hashHandler)
+            window.addEventListener('ora:title-enter', this.titleEnterHandler)
             this.handleEvent('scroll_to_block', ({block_id}) => this.flashBlock(`block-${block_id}`))
           },
-          destroyed() { window.removeEventListener('hashchange', this.hashHandler) },
+          destroyed() {
+            window.removeEventListener('hashchange', this.hashHandler)
+            window.removeEventListener('ora:title-enter', this.titleEnterHandler)
+          },
+          focusFirstBlock() {
+            const first = this.el.querySelector('ora-block')
+            if (!first) {
+              this.pushEvent('add_first_block', {})
+              return
+            }
+            // Place caret at the start of the first block's contenteditable.
+            const editable = first.querySelector('[contenteditable="true"]') ||
+                             first.querySelector('[data-editor]')
+            if (editable) {
+              editable.focus()
+              const sel = window.getSelection()
+              const range = document.createRange()
+              range.selectNodeContents(editable)
+              range.collapse(true)
+              sel.removeAllRanges()
+              sel.addRange(range)
+            }
+          },
           scrollToHash() {
             const hash = window.location.hash
             if (!hash.startsWith('#block-')) return
