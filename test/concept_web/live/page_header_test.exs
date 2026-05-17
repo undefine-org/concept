@@ -175,4 +175,15 @@ defmodule ConceptWeb.PageHeaderTest do
     # Original title in the sidebar tree is replaced.
     refute has_element?(view2, "aside.ora-sidebar a[href$=\"/p/#{page.id}\"]", "Roadmap")
   end
+
+  test "page_updated broadcasts exactly once per rename", %{conn: conn, ws: ws, page: page} do
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    view
+    |> element("#page-header-#{page.id}")
+    |> render_hook("save_title", %{"value" => "Once Only"})
+
+    assert_receive %Phoenix.Socket.Broadcast{event: "page_updated"}, 500
+    refute_receive %Phoenix.Socket.Broadcast{event: "page_updated"}, 200
+  end
 end

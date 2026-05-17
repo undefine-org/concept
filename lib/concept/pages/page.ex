@@ -107,9 +107,6 @@ defmodule Concept.Pages.Page do
 
     publish_all :create, [:workspace_id, "pages"], event: "page_created"
     publish_all :update, [:workspace_id, "pages"], event: "page_updated"
-    publish :rename, [:workspace_id, "pages"], event: "page_updated"
-    publish :set_icon, [:workspace_id, "pages"], event: "page_updated"
-    publish :set_cover_color, [:workspace_id, "pages"], event: "page_updated"
     publish :archive, [:workspace_id, "pages"], event: "page_archived"
     publish :restore, [:workspace_id, "pages"], event: "page_restored"
   end
