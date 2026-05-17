@@ -19,20 +19,39 @@ defmodule ConceptWeb.Components.Sidebar do
       <button
         type="button"
         phx-click="open_command_palette"
-        class="ora-sidebar-row mb-1 text-notion-text-light"
+        class="ora-sidebar-row mb-1 text-notion-text-light flex items-center gap-2"
       >
         <.icon name="hero-magnifying-glass-micro" class="size-4" />
-        <span>Search... (⌘K)</span>
+        <span class="flex-1 text-left">Search…</span>
+        <span class="text-xs text-notion-text-light">⌘K</span>
       </button>
 
       <button
         type="button"
         phx-click="new_page"
-        class="ora-sidebar-row mb-2 text-notion-text font-medium"
+        class="ora-sidebar-row mb-1 text-notion-text font-medium flex items-center gap-2"
       >
         <.icon name="hero-plus-micro" class="size-4" />
-        <span>+ New page</span>
+        <span class="flex-1 text-left">New page</span>
       </button>
+
+      <button
+        type="button"
+        phx-click="toggle_chat"
+        class="ora-sidebar-row mb-1 text-notion-text-light flex items-center gap-2"
+      >
+        <.icon name="hero-chat-bubble-left-right-micro" class="size-4" />
+        <span class="flex-1 text-left">Chat</span>
+        <span class="text-xs text-notion-text-light">⌘J</span>
+      </button>
+
+      <.link
+        navigate={~p"/w/#{@workspace.slug}/graph"}
+        class="ora-sidebar-row mb-2 text-notion-text-light flex items-center gap-2 no-underline"
+      >
+        <.icon name="hero-share-micro" class="size-4" />
+        <span class="flex-1 text-left">Graph view</span>
+      </.link>
 
       <div class="flex-1 overflow-y-auto">
         <.live_component

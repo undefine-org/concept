@@ -44,7 +44,7 @@ defmodule ConceptWeb.Components.IndexingPillTest do
   test "renders idle state by default", %{conn: conn, ws: ws} do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}")
 
-    assert view |> element(".ora-pill") |> render() =~ "Idle"
+    assert view |> element(".ora-pill") |> render() =~ "Not yet indexed"
   end
 
   test "PubSub ingest_started event → indexing state with count 1", %{conn: conn, ws: ws} do

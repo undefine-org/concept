@@ -139,8 +139,54 @@ defmodule Mix.Tasks.Concept.Demo do
     seed_links!(ds_blocks, ws, user)
     seed_token_ledger!(ws)
     update_ai_block!(roadmap_blocks, agent_msg, ws, user)
+    seed_ingestion_jobs!(pages, ws)
 
     print_cheat_sheet(ws)
+  end
+
+  defp seed_ingestion_jobs!(pages, ws) do
+    # Pre-seed succeeded ingestion jobs so the IndexingPill popover has history
+    # without requiring live embedder calls. Inserts via Ecto to bypass the
+    # state-machine `:run` action that would call the embedder.
+    import Ecto.Query
+    now = DateTime.utc_now()
+
+    existing_ids =
+      Concept.Repo.all(
+        from j in Concept.Knowledge.IngestionJob,
+          where: j.workspace_id == ^ws.id,
+          select: j.page_id
+      )
+      |> MapSet.new()
+
+    rows =
+      for {page, idx} <- Enum.with_index(pages),
+          page.id not in existing_ids do
+        started = DateTime.add(now, -(idx + 1) * 60, :second)
+        finished = DateTime.add(started, 2, :second)
+
+        %{
+          id: Ecto.UUID.dump!(Ash.UUID.generate()),
+          workspace_id: Ecto.UUID.dump!(ws.id),
+          page_id: Ecto.UUID.dump!(page.id),
+          op: "upsert",
+          state: "succeeded",
+          attempt: 1,
+          chunk_count: Enum.random(8..32),
+          embed_tokens: Enum.random(200..800),
+          scheduled_at: started,
+          started_at: started,
+          finished_at: finished,
+          inserted_at: started,
+          updated_at: finished
+        }
+      end
+
+    if rows != [] do
+      Concept.Repo.insert_all("knowledge_ingestion_jobs", rows)
+    end
+
+    :ok
   end
 
   defp find_or_create_user! do

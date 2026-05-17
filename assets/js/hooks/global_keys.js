@@ -5,7 +5,14 @@ const GlobalKeys = {
     this._onKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        e.stopPropagation();
         this.pushEvent("open_command_palette", {});
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        e.stopPropagation();
+        this.pushEvent("toggle_chat", {});
       }
 
       if (e.key === "Escape" && this._paletteOpen) {

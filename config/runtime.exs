@@ -1,5 +1,8 @@
 import Config
-config :req_llm, google_api_key: System.get_env("GOOGLE_API_KEY")
+
+config :req_llm,
+  google_api_key: System.get_env("GOOGLE_API_KEY"),
+  openrouter_api_key: System.get_env("OPENROUTER_API_KEY")
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the

@@ -33,7 +33,10 @@ defmodule Concept.Knowledge.Chat.Conversation.Changes.GenerateName do
             end
           end)
 
-      ReqLLM.generate_text("google:gemini-2.5-flash-lite", prompt_messages)
+      ReqLLM.generate_text(
+        Concept.Knowledge.Profiles.route_model("google:gemini-2.5-flash-lite"),
+        prompt_messages
+      )
       |> case do
         {:ok, response} ->
           Ash.Changeset.force_change_attribute(

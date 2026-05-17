@@ -397,6 +397,10 @@ defmodule ConceptWeb.WorkspaceLive do
     toggle_palette(socket)
   end
 
+  def handle_event("toggle_chat", _params, socket) do
+    {:noreply, update(socket, :chat_open?, &(!&1))}
+  end
+
   def handle_event("global_key", %{"key" => "j", "metaKey" => true}, socket) do
     {:noreply, update(socket, :chat_open?, &(!&1))}
   end

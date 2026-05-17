@@ -3,6 +3,7 @@ import { LitElement, html, css } from "lit";
 const GROUP_ORDER = ["basic", "list", "media", "advanced"];
 
 const FALLBACK_ITEMS = [
+  { type: "ai_answer", label: "AI answer", icon: "✨", group: "ai" },
   { type: "paragraph", label: "Text", icon: "T", group: "basic" },
   { type: "heading_1", label: "Heading 1", icon: "H1", group: "basic" },
   { type: "heading_2", label: "Heading 2", icon: "H2", group: "basic" },

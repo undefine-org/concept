@@ -40,7 +40,7 @@ defmodule ConceptWeb.Components.IndexingPill do
               <%= if @last_succeeded_at do %>
                 Indexed {time_ago(@last_succeeded_at)}
               <% else %>
-                Idle
+                Not yet indexed
               <% end %>
             </span>
           <% :indexing -> %>

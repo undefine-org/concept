@@ -30,7 +30,10 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
 
       profile_name = message.profile || :default
       profile = Concept.Knowledge.Profiles.get!(profile_name)
-      model = profile.answer[:model] || "google:gemini-2.5-flash"
+
+      model =
+        (profile.answer[:model] || "google:gemini-2.5-flash")
+        |> Concept.Knowledge.Profiles.route_model()
 
       # Track start time for latency
       start_time = System.monotonic_time(:millisecond)

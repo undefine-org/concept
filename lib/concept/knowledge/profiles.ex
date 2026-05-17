@@ -102,6 +102,21 @@ defmodule Concept.Knowledge.Profiles do
     end
   end
 
+  @doc """
+  Rewrite a `google:gemini-*` model spec to route through OpenRouter when
+  `OPENROUTER_API_KEY` is set in the environment. Lets us swap providers
+  at runtime without touching profile declarations.
+  """
+  @spec route_model(String.t()) :: String.t()
+  def route_model("google:" <> rest = original) do
+    case System.get_env("OPENROUTER_API_KEY") do
+      key when is_binary(key) and byte_size(key) > 0 -> "openrouter:google/" <> rest
+      _ -> original
+    end
+  end
+
+  def route_model(other) when is_binary(other), do: other
+
   @doc "List all declared profiles."
   @spec list() :: [Profile.t()]
   def list, do: @profiles
