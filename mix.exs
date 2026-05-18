@@ -86,7 +86,8 @@ defmodule Concept.MixProject do
       {:arcana, "~> 2.0"},
       {:pgvector, "~> 0.2"},
       {:req_llm, "~> 1.2"},
-      {:earmark, "~> 1.4"}
+      {:earmark, "~> 1.4"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -113,6 +114,7 @@ defmodule Concept.MixProject do
         "compile --warnings-as-errors",
         "deps.unlock --unused",
         "format",
+        "credo --strict",
         "test --exclude integration"
       ]
     ]
