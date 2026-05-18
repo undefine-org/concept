@@ -43,3 +43,10 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# Concept.AutoTools opt-out deny list. Compiled into the test fixture domains.
+config :concept, Concept.AutoTools,
+  exclude: [
+    {Concept.AutoToolsFixtures.FixtureResource, :excluded_read}
+  ]
+
