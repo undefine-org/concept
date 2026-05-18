@@ -22,13 +22,20 @@ defmodule Concept.Accounts.Membership do
   end
 
   actions do
-    defaults [:read, :destroy]
+    defaults [:destroy]
+
+    read :read do
+      primary? true
+      description "List the actor's workspace memberships."
+    end
 
     create :create do
+      description "Add a user to a workspace with a given role."
       accept [:workspace_id, :user_id, :role]
     end
 
     update :update_role do
+      description "Change a member's role in the workspace."
       accept [:role]
     end
   end

@@ -23,27 +23,44 @@ defmodule Concept.Accounts.Workspace do
   end
 
   actions do
-    defaults [:read, :destroy]
+    defaults [:destroy]
+
+    read :read do
+      primary? true
+      description "Read a workspace by id."
+    end
 
     create :create_personal do
       accept [:name, :slug, :icon_emoji, :owner_id, :primary?]
     end
 
     update :rename do
+      description "Rename a workspace."
       accept [:name]
     end
 
     update :set_icon do
+      description "Set a workspace's icon emoji."
       accept [:icon_emoji]
     end
 
     read :for_user do
-      argument :user_id, :uuid, allow_nil?: false
+      description "List workspaces a user is a member of."
+
+      argument :user_id, :uuid,
+        allow_nil?: false,
+        description: "User whose memberships to list."
+
       filter expr(memberships.user_id == ^arg(:user_id))
     end
 
     read :by_slug do
-      argument :slug, :string, allow_nil?: false
+      description "Read a workspace by its URL slug."
+
+      argument :slug, :string,
+        allow_nil?: false,
+        description: "Workspace slug from the URL path."
+
       get? true
       filter expr(slug == ^arg(:slug))
     end

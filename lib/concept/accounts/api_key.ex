@@ -11,7 +11,15 @@ defmodule Concept.Accounts.ApiKey do
   end
 
   actions do
-    defaults [:read, :destroy]
+    read :read do
+      primary? true
+      description "List the actor's API keys (hashes only; key material is shown only at creation)."
+    end
+
+    destroy :destroy do
+      primary? true
+      description "Revoke an API key by id."
+    end
 
     create :create do
       primary? true
