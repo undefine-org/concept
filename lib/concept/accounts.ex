@@ -10,6 +10,16 @@ defmodule Concept.Accounts do
 
   require Ash.Query
 
+  mcp_resources do
+    mcp_resource :my_workspaces,
+                 "concept://me/workspaces",
+                 Concept.Accounts.Workspace,
+                 :my_workspaces_json,
+                 title: "My Workspaces",
+                 description: "Workspaces the actor is a member of.",
+                 mime_type: "application/json"
+  end
+
   resources do
     resource Concept.Accounts.Token
     resource Concept.Accounts.User

@@ -64,6 +64,37 @@ defmodule Concept.Accounts.Workspace do
       get? true
       filter expr(slug == ^arg(:slug))
     end
+
+    action :my_workspaces_json, :string do
+      description "List the actor's workspaces as a JSON array. Used as an MCP resource at concept://me/workspaces."
+
+      run fn _input, ctx ->
+        actor = ctx.actor
+
+        if is_nil(actor) do
+          {:error, "actor required"}
+        else
+          require Ash.Query
+
+          query =
+            Concept.Accounts.Workspace
+            |> Ash.Query.filter(memberships.user_id == ^actor.id)
+
+          case Ash.read(query, actor: actor, authorize?: true) do
+            {:ok, workspaces} ->
+              payload =
+                Enum.map(workspaces, fn ws ->
+                  %{id: ws.id, name: ws.name, slug: ws.slug, icon_emoji: ws.icon_emoji}
+                end)
+
+              Jason.encode(payload)
+
+            {:error, e} ->
+              {:error, e}
+          end
+        end
+      end
+    end
   end
 
   policies do
