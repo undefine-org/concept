@@ -46,22 +46,27 @@ defmodule Concept.Pages.Block.Changes.EvaluateAi do
         :workspace -> nil
       end
 
-    # 3. Create message (triggers AshAI respond pipeline)
-    # Build changeset and set conversation_id argument
+    # 3. Create message (triggers AshAI respond pipeline).
+    # Ash 3.x rejects `set_argument/3` after `for_create/3` (the changeset is
+    # already validated). Set the argument first, then build the action.
     {:ok, message} =
       Concept.Knowledge.Chat.Message
+      |> Ash.Changeset.new()
+      |> Ash.Changeset.set_argument(:conversation_id, conversation_id)
       |> Ash.Changeset.for_create(:create, %{
         text: prompt,
         scope: scope,
         scope_target_id: scope_target_id,
         profile: profile
       })
-      |> Ash.Changeset.set_argument(:conversation_id, conversation_id)
       |> Ash.create(actor: actor, authorize?: false)
 
-    # 4. Subscribe to conversation PubSub and wait for completion
+    # 4. Subscribe to the chat-message PubSub. `Concept.Knowledge.Chat.Message`
+    # broadcasts via `ConceptWeb.Endpoint` (see its `pub_sub do module …` block),
+    # NOT via `Concept.PubSub`. The previous `Concept.PubSub` subscription
+    # silently received nothing.
     topic = "chat:messages:" <> conversation_id
-    Phoenix.PubSub.subscribe(Concept.PubSub, topic)
+    ConceptWeb.Endpoint.subscribe(topic)
 
     # Wait for the assistant response to complete
     wait_for_completion(block, message, profile, tenant)
@@ -108,39 +113,71 @@ defmodule Concept.Pages.Block.Changes.EvaluateAi do
   end
 
   defp wait_for_completion(block, user_message, profile, tenant) do
-    # The assistant's response will be created with response_to_id pointing to user_message
-    # We need to wait for the assistant message to complete
     receive do
-      %{
-        text: _text,
-        id: response_id,
-        source: :agent,
-        complete: true
-      } ->
-        # Update block content with message_id pointer
-        update_block_content(block, response_id, profile, tenant)
+      msg ->
+        case decide_completion(msg) do
+          {:complete, response_id} ->
+            finalize_completion(block, response_id, profile, tenant)
 
-      _ ->
-        # Ignore other messages and keep waiting
-        wait_for_completion(block, user_message, profile, tenant)
+          :continue ->
+            wait_for_completion(block, user_message, profile, tenant)
+        end
     after
       300_000 ->
-        # 5 minute timeout
         :timeout
     end
   end
 
-  defp update_block_content(block, message_id, profile, tenant) do
+  @doc """
+  Pure predicate over received messages. Returns `{:complete, response_id}`
+  when the message is a fully-complete assistant response broadcast (via
+  `ConceptWeb.Endpoint` + `Ash.Notifier.PubSub`), `:continue` otherwise.
+
+  Public so it can be unit-tested without spinning the whole Task.
+  """
+  def decide_completion(%Phoenix.Socket.Broadcast{
+        topic: "chat:messages:" <> _,
+        payload: %{source: :agent, complete: true, id: response_id}
+      }),
+      do: {:complete, response_id}
+
+  def decide_completion(_), do: :continue
+
+  @doc """
+  Persist the assistant response pointer (`message_id`) onto the AI Answer
+  block. Called from the spawned wait loop once the assistant message is
+  complete.
+
+  Uses `%{system?: true}` as the actor so the `RequireOwnLock` change on
+  `:update_content` accepts the write: the spawned Task runs in a process
+  the user never locked from, and AI-response landings are not a human
+  collaboration concern that the lock is protecting against. The lock
+  remains in force for human edits of the block.
+
+  Public so this contract is reachable from regression tests without
+  driving the full receive loop.
+  """
+  def finalize_completion(block, message_id, profile, tenant) do
     content = %{
       "message_id" => message_id,
       "model" => Atom.to_string(profile),
       "ran_at" => DateTime.utc_now() |> DateTime.to_iso8601()
     }
 
+    # Actor/tenant must be set on the changeset *before* the action runs:
+    # `Concept.Pages.Block.Changes.RequireOwnLock` reads `ctx.actor` during
+    # `change/3`, which is populated from the changeset's context. Passing
+    # `actor:` only to `Ash.update!/2` arrives too late — the lock check has
+    # already fired with `ctx.actor == nil`.
     try do
       block
-      |> Ash.Changeset.for_update(:update_content, %{content: content})
-      |> Ash.update!(authorize?: false, tenant: tenant)
+      |> Ash.Changeset.for_update(:update_content, %{content: content},
+        actor: %{system?: true},
+        tenant: tenant
+      )
+      |> Ash.update!(authorize?: false)
+
+      :ok
     rescue
       e ->
         require Logger
