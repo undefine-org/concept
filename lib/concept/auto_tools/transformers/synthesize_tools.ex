@@ -27,6 +27,7 @@ defmodule Concept.AutoTools.Transformers.SynthesizeTools do
 
   def transform(dsl_state) do
     domain = Transformer.get_persisted(dsl_state, :module)
+    IO.inspect({:autotools_transform, domain}, label: :debug2)
     existing_tools = Transformer.get_entities(dsl_state, [:tools]) || []
     existing_names = MapSet.new(existing_tools, & &1.name)
     excluded = excluded_actions()
@@ -65,7 +66,74 @@ defmodule Concept.AutoTools.Transformers.SynthesizeTools do
         :shadowed, acc -> acc
       end)
 
+    # FEAT-064: for Concept.Pages, contribute one MCP tool per block-type verb.
+    # Block-type modules export __block_type_mcp_specs__/0 (verb + action_name +
+    # description). We resolve the underlying resource from THIS dsl_state's
+    # [:resources] — Ash.Domain.Info is not yet usable because the domain is
+    # still being built.
+    dsl_state =
+      if domain == Concept.Pages do
+        add_block_type_tools(dsl_state, resources)
+      else
+        dsl_state
+      end
+
     {:ok, dsl_state}
+  end
+
+  defp add_block_type_tools(dsl_state, domain_resources) do
+    existing_tools = Transformer.get_entities(dsl_state, [:tools]) || []
+    existing_names = MapSet.new(existing_tools, & &1.name)
+
+    specs =
+      :concept
+      |> Application.get_env(:block_types, [])
+      |> Enum.filter(fn mod ->
+        Code.ensure_compiled(mod)
+        function_exported?(mod, :__block_type_mcp_specs__, 0)
+      end)
+      |> Enum.flat_map(& &1.__block_type_mcp_specs__())
+
+    Enum.reduce(specs, dsl_state, fn spec, acc ->
+      case build_block_tool(spec, domain_resources) do
+        nil ->
+          acc
+
+        tool ->
+          if MapSet.member?(existing_names, tool.name) do
+            acc
+          else
+            Transformer.add_entity(acc, [:tools], tool)
+          end
+      end
+    end)
+  end
+
+  defp build_block_tool(
+         %{name: name, action_name: action_name, description: description},
+         resources
+       ) do
+    resource =
+      Enum.find(resources, fn res ->
+        not is_nil(Ash.Resource.Info.action(res, action_name))
+      end)
+
+    if resource do
+      %AshAi.Tool{
+        name: name,
+        resource: resource,
+        action: action_name,
+        description: description,
+        load: [],
+        async: false,
+        arguments: [],
+        action_parameters: nil,
+        _meta: nil,
+        ui: nil,
+        identity: nil,
+        domain: nil
+      }
+    end
   end
 
   @doc false

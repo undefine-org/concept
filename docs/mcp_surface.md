@@ -354,7 +354,7 @@ List messages in a chat conversation, most recent first by default.
 
 ---
 ## Concept.Pages
-### Tools (24)
+### Tools (27)
 
 #### `block_acquire_lock`
 
@@ -367,6 +367,48 @@ Acquire a collaborative-editing lock on the block. Required before mutating cont
 
   - `user_id` (`UUID`, required) — User acquiring the lock; must match the actor.
   - `ttl_seconds` (`Integer`, optional) — Lock lifetime in seconds before automatic release.
+
+
+#### `block_ai_answer_evaluate`
+
+Run the AI Answer block's prompt against the workspace and stream cited results into the block.
+
+- **Resource**: `Concept.Pages.Block`
+- **Action**: `:evaluate_ai` (update)
+
+**Arguments:**
+
+  - `prompt` (`String`, required) — Question to answer using workspace content as context.
+  - `scope` (`Atom`, optional) — Retrieval scope. One of :workspace, :page, :subtree.
+  - `profile` (`Atom`, optional) — Knowledge profile. Determines model + retrieval params.
+
+
+#### `block_ai_answer_refresh`
+
+Re-run the AI Answer's prompt against the current workspace state (used when context has drifted).
+
+- **Resource**: `Concept.Pages.Block`
+- **Action**: `:evaluate_ai` (update)
+
+**Arguments:**
+
+  - `prompt` (`String`, required) — Question to answer using workspace content as context.
+  - `scope` (`Atom`, optional) — Retrieval scope. One of :workspace, :page, :subtree.
+  - `profile` (`Atom`, optional) — Knowledge profile. Determines model + retrieval params.
+
+
+#### `block_ai_answer_retry`
+
+Re-run the AI Answer after a failure.
+
+- **Resource**: `Concept.Pages.Block`
+- **Action**: `:evaluate_ai` (update)
+
+**Arguments:**
+
+  - `prompt` (`String`, required) — Question to answer using workspace content as context.
+  - `scope` (`Atom`, optional) — Retrieval scope. One of :workspace, :page, :subtree.
+  - `profile` (`Atom`, optional) — Knowledge profile. Determines model + retrieval params.
 
 
 #### `block_archive`
