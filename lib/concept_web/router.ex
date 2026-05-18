@@ -120,8 +120,10 @@ defmodule ConceptWeb.Router do
   scope "/mcp" do
     pipe_through :mcp
 
+    # Surface ALL exposed tools — every described action across every domain.
+    # See lib/concept/auto_tools.ex (the keystone of PLAN-007) for the contract.
     forward "/", AshAi.Mcp.Router,
-      tools: [:search_workspace, :answer_question, :link_blocks, :create_page],
+      tools: true,
       protocol_version_statement: "2025-03-26",
       otp_app: :concept
   end
