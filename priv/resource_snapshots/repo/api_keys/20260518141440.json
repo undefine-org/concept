@@ -21,8 +21,8 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "name",
-      "type": "text"
+      "source": "api_key_hash",
+      "type": "binary"
     },
     {
       "allow_nil?": false,
@@ -33,23 +33,11 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "slug",
-      "type": "text"
+      "source": "expires_at",
+      "type": "utc_datetime_usec"
     },
     {
       "allow_nil?": true,
-      "default": "\"🏠\"",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "icon_emoji",
-      "type": "text"
-    },
-    {
-      "allow_nil?": false,
       "default": "nil",
       "generated?": false,
       "precision": null,
@@ -67,7 +55,38 @@
           "global": null,
           "strategy": null
         },
-        "name": "workspaces_owner_id_fkey",
+        "name": "api_keys_workspace_id_fkey",
+        "on_delete": null,
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "public",
+        "table": "workspaces"
+      },
+      "scale": null,
+      "size": null,
+      "source": "workspace_id",
+      "type": "uuid"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "api_keys_user_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
@@ -76,44 +95,8 @@
       },
       "scale": null,
       "size": null,
-      "source": "owner_id",
+      "source": "user_id",
       "type": "uuid"
-    },
-    {
-      "allow_nil?": false,
-      "default": "false",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "primary?",
-      "type": "boolean"
-    },
-    {
-      "allow_nil?": false,
-      "default": "fragment(\"(now() AT TIME ZONE 'utc')\")",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "inserted_at",
-      "type": "utc_datetime_usec"
-    },
-    {
-      "allow_nil?": false,
-      "default": "fragment(\"(now() AT TIME ZONE 'utc')\")",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "updated_at",
-      "type": "utc_datetime_usec"
     }
   ],
   "base_filter": null,
@@ -122,19 +105,19 @@
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true,
-  "hash": "2E57F76F847252BC1DF524204557CE574520A92347E9F666234A94A80C5D3B6F",
+  "hash": "D0B9DAF4FA201D2163394CA326850A1741869E27ECF8BDFDB1D20000FA4322FD",
   "identities": [
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "workspaces_unique_slug_index",
+      "index_name": "api_keys_unique_api_key_index",
       "keys": [
         {
           "type": "atom",
-          "value": "slug"
+          "value": "api_key_hash"
         }
       ],
-      "name": "unique_slug",
+      "name": "unique_api_key",
       "nils_distinct?": true,
       "where": null
     }
@@ -146,5 +129,5 @@
   },
   "repo": "Elixir.Concept.Repo",
   "schema": null,
-  "table": "workspaces"
+  "table": "api_keys"
 }

@@ -9,10 +9,9 @@ defmodule ConceptWeb.Router do
   pipeline :mcp do
     plug AshAuthentication.Strategy.ApiKey.Plug,
       resource: Concept.Accounts.User,
-      # Use `required?: false` to allow unauthenticated
-      # users to connect, for example if some tools
-      # are publicly accessible.
       required?: true
+
+    plug ConceptWeb.Plugs.MCPWorkspaceContext
   end
 
   pipeline :browser do
