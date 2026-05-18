@@ -1,5 +1,41 @@
 This is a web application written using the Phoenix web framework.
 
+## Principle: MCP parity by construction
+
+> Every Ash action with a `description` is a feature.
+> The LiveView is one projection of that feature; the MCP tool is another.
+> If a human can do it in Concept, an LLM can do it via MCP —
+> automatically, with the same policies, on the same data.
+
+Practical rules (enforced by Credo + CI):
+
+1. Every public Ash action carries a one-line `description` and a description
+   on every public `argument`. Undescribed = unexposed.
+2. LiveView `handle_event/3` callbacks call domain code-interface fns only.
+   No `Ash.Query`, `Ash.Changeset.for_*`, `Ecto.Query`, or `Concept.Repo` in
+   `lib/concept_web/live/` or `lib/concept_web/components/`. Enforced by
+   `Concept.Credo.Check.LiveViewPurity` (EX9001) via `mix credo --strict`,
+   which runs as part of `mix precommit`.
+3. Cross-resource workflows live in Reactors, wrapped as a single action.
+4. Block-type modules declare their LV + JS + Ash + MCP surface in one
+   place via `BlockType.{Static,Interactive}` macros. See
+   `docs/blocks/ADDING_A_BLOCK.md`.
+5. Opt-out from MCP exposure is explicit:
+   - per-action: omit the `description`, OR add to
+     `config :concept, Concept.AutoTools, exclude: [{Mod, :action}]`.
+   - per-resource: add to
+     `config :concept, Concept.AutoTools, exclude_resources: [Mod]`.
+6. Workspace tenancy on MCP:
+   - ApiKey may be **workspace-bound** (`workspace_id` set at creation)
+     → that workspace; header ignored.
+   - Else `mcp-workspace-id` HTTP header + membership check → that workspace.
+   - Else → mutation tools refuse; workspace-agnostic reads proceed.
+
+This contract is enforced by `test/integration/mcp_parity_test.exs` and
+documented at length in `docs/mcp_parity.md`. The live MCP surface is
+auto-generated to `docs/mcp_surface.md` by
+`mix concept.docs.mcp_surface` (the `--check` variant runs in `precommit`).
+
 ## Project guidelines
 
 - Use `mix precommit` alias when you are done with all changes and fix any pending issues

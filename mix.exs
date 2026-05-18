@@ -12,7 +12,21 @@ defmodule Concept.MixProject do
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader],
-      consolidate_protocols: Mix.env() != :dev
+      consolidate_protocols: Mix.env() != :dev,
+      docs: docs()
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      extras: [
+        "README.md",
+        "docs/mcp_parity.md",
+        "docs/mcp_surface.md",
+        "docs/blocks/ADDING_A_BLOCK.md",
+        "docs/CONCEPT_HOWTO.md"
+      ]
     ]
   end
 
@@ -87,7 +101,8 @@ defmodule Concept.MixProject do
       {:pgvector, "~> 0.2"},
       {:req_llm, "~> 1.2"},
       {:earmark, "~> 1.4"},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
   end
 
@@ -110,6 +125,9 @@ defmodule Concept.MixProject do
         "esbuild concept --minify",
         "phx.digest"
       ],
+      # `mix concept.docs` regenerates the auto-derived MCP surface page
+      # then runs ExDoc against the configured extras. See docs/mcp_parity.md.
+      "concept.docs": ["concept.docs.mcp_surface", "docs"],
       precommit: [
         "compile --warnings-as-errors",
         "deps.unlock --unused",
