@@ -115,6 +115,7 @@ defmodule Concept.MixProject do
         "deps.unlock --unused",
         "format",
         "credo --strict",
+        "concept.docs.mcp_surface --check",
         "test --exclude integration"
       ]
     ]
