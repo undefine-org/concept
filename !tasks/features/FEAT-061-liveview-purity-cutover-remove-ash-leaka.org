@@ -1,0 +1,126 @@
+#+TITLE: LiveView purity cutover — remove Ash leakage in workspace_live
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-060-router-flip-tools-true
+#+CUSTOM_ID: FEAT-061-liveview-purity-cutover-remove-ash-leaka
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W3
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+
+Enforce the "LiveView = projection" invariant by moving the last
+three Ash leakages out of ~workspace_live.ex~ into proper domain actions.
+After this FEAT, ~grep -rE 'Ash\.(Query|Changeset)|Ecto\.Query|Concept\.Repo'
+lib/concept_web/live/~ returns empty.
+
+* Scope (IN)
+
+Three surgical fixes in ~lib/concept_web/live/workspace_live.ex~:
+
+** Fix 1: recent activity query (lines ~378-385)
+
+Currently:
+
+#+begin_src elixir
+require Ash.Query
+...
+Concept.Knowledge.Chat.Conversation
+|> Ash.Query.sort(inserted_at: :desc)
+|> Ash.Query.limit(10)
+|> ...
+#+end_src
+
+Move to a new read action ~:recent_for_workspace~ on Conversation:
+
+#+begin_src elixir
+# in lib/concept/knowledge/chat/conversation.ex
+read :recent_for_workspace do
+  description "List the 10 most recent chat conversations in the workspace."
+  prepare build(sort: [inserted_at: :desc], limit: 10)
+end
+#+end_src
+
+Add ~define :recent_conversations, action: :recent_for_workspace~ to
+~lib/concept/knowledge/chat.ex~. Update the LiveView to call
+~Concept.Knowledge.Chat.recent_conversations(actor: ..., tenant: ...)~.
+
+** Fix 2: link creation inline changeset (line ~497)
+
+Currently:
+
+#+begin_src elixir
+%Concept.Knowledge.Link{}
+|> Ash.Changeset.for_create(:create, link_attrs, actor: user, tenant: ws.id)
+|> Ash.create()
+#+end_src
+
+Replace with:
+
+#+begin_src elixir
+Concept.Knowledge.create_link(link_attrs, actor: user, tenant: ws.id)
+#+end_src
+
+~create_link~ already exists as a code interface (verified in
+~lib/concept/knowledge.ex~). No new action required.
+
+** Fix 3: first-block lookup (lines ~541-543)
+
+Currently:
+
+#+begin_src elixir
+Concept.Pages.Block
+|> Ash.Query.filter(page_id: ^page_id)
+|> Ash.Query.sort(:position)
+|> Ash.Query.limit(1)
+|> ...
+#+end_src
+
+Add a new read action ~:first_for_page~ on Block:
+
+#+begin_src elixir
+# in lib/concept/pages/block.ex
+read :first_for_page do
+  description "Read the first (topmost) block of a page."
+  argument :page_id, :uuid, allow_nil?: false,
+    description: "Page whose first block to read."
+  filter expr(page_id == ^arg(:page_id))
+  prepare build(sort: [position: :asc], limit: 1)
+end
+#+end_src
+
+Add code interface ~define :first_block_for_page, action: :first_for_page, args: [:page_id]~
+in ~lib/concept/pages.ex~. Update the LiveView call site.
+
+** Remove now-dead imports
+
+After all three fixes:
+- Remove ~require Ash.Query~ at the top of ~workspace_live.ex~.
+
+* Implementation notes
+
+- ~mix test~ between each fix to catch regressions early.
+- The pub_sub on these resources stays unchanged — adding a read action
+  doesn't change publish behavior.
+
+* Acceptance
+
+- ~grep -rE 'Ash\.(Query|Changeset)|Ecto\.Query|Concept\.Repo'
+  lib/concept_web/live/~ returns empty.
+- ~mix test~ green (no LiveView test regressions; the assertions look at
+  rendered output, not method calls).
+- Manual: open a workspace, open the recent-conversations strip, archive
+  a page, create a link — all flows behave as before.
+
+* Gates
+- ~gateCmd~: ~mix test --exclude integration~
+- ~gateCommit~: true
+- ~gateLlm~: "After this lands, no Ash.Query / Ash.Changeset.for_* / Ecto.Query / Concept.Repo references remain anywhere under lib/concept_web/live/. Verify by grep."

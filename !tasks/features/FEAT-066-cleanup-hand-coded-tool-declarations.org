@@ -1,0 +1,115 @@
+#+TITLE: Cleanup hand-coded tool declarations
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-065-blocktype-mcp-ui-resources-and-blockcont
+#+CUSTOM_ID: FEAT-066-cleanup-hand-coded-tool-declarations
+#+DELEGATABLE: quick_task
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W4
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+
+Remove ~tool ...~ declarations from domain files that are now redundant
+because ~Concept.AutoTools~ (FEAT-052/053) synthesizes them from the
+described actions. Single source of truth.
+
+Delegable to ~quick_task~ — purely mechanical removal with verification.
+
+* Context (read in full)
+
+** Why this is safe
+
+After W0–W3:
+- Every described action is exposed via AutoTools.
+- The parity test (FEAT-063) asserts every described action appears in
+  ~tools/list~.
+
+A manual ~tool :name, Resource, :action do description "..."~ entry
+duplicates what AutoTools would synthesize. AutoTools' transformer
+detects the manual entry by name and *prefers* it (with a compile
+warning). Removing the manual entries silences the warning and centers
+the contract on the action itself.
+
+** Where the entries live
+
+- ~lib/concept/pages.ex~ — one entry: ~:create_page~.
+- ~lib/concept/knowledge.ex~ — three entries: ~:search_workspace~,
+  ~:answer_question~, ~:link_blocks~.
+- ~lib/concept/knowledge/chat.ex~ — two entries:
+  ~:chat_list_conversations~, ~:chat_message_history~.
+
+* Scope (IN)
+
+** Files (Edit)
+
+- ~lib/concept/pages.ex~ — drop the entire ~tools do .. end~ block.
+- ~lib/concept/knowledge.ex~ — drop the entire ~tools do .. end~ block.
+- ~lib/concept/knowledge/chat.ex~ — drop the entire ~tools do .. end~ block.
+
+* Before each deletion (verification step)
+
+For each manual ~tool :foo, Resource, :action~ being removed:
+
+1. Confirm ~Resource.action(:action)~ has a non-nil ~description~ (else
+   removing the manual entry will unexpose it).
+2. Confirm the synthesized name matches what consumers expect. The
+   original name vs auto-synthesized name:
+
+   | Original (manual)         | Auto-synthesized          | Match? |
+   |---------------------------+---------------------------+--------|
+   | ~:create_page~            | ~:page_create_page~       | NO     |
+   | ~:search_workspace~       | ~:tools_search_workspace~ | NO     |
+   | ~:answer_question~        | ~:tools_answer_question~  | NO     |
+   | ~:link_blocks~            | ~:link_create~            | NO     |
+   | ~:chat_list_conversations~| ~:conversation_my_conversations~ | NO |
+   | ~:chat_message_history~   | ~:message_for_conversation~ | NO  |
+
+   Names DO change. Two options:
+
+   (a) Accept the name change. Communicate via release notes; update any
+       client that hardcoded these names.
+
+   (b) Keep manual entries as *aliases* — change them to use the new
+       AutoTools-synthesized name as the canonical and keep the old name
+       only if a documented external client depends on it.
+
+   *Default decision*: (a). The MCP client list is small (internal Spell
+   harness + maybe a few local MCP inspectors); a rename is cheap and
+   the new naming is more consistent across the surface.
+
+* Implementation steps
+
+1. Delete the three ~tools do .. end~ blocks.
+2. ~mix compile --warnings-as-errors~ — expect no warnings about
+   "manual tool shadows auto-synthesized".
+3. ~mix test --exclude integration~.
+4. ~mix concept.docs.mcp_surface~ — regenerate the docs; verify tool
+   names update.
+5. Run the parity test: ~mix test test/integration/mcp_parity_test.exs~.
+
+* Out of scope
+
+- Touching block-type-emitted tools (those come from FEAT-064; they're
+  always auto-synthesized; no manual entries existed).
+- Renaming AutoTools synthesis convention (locked at FEAT-052).
+
+* Acceptance
+
+- All three domain files no longer have ~tools do .. end~ blocks.
+- ~AshAi.exposed_tools(otp_app: :concept)~ count unchanged or higher
+  (only names may differ).
+- ~mix concept.docs.mcp_surface~ regenerated and committed.
+- Parity test green.
+
+* Gates
+- ~gateCmd~: ~mix compile --warnings-as-errors && mix test --exclude integration && mix test test/integration/mcp_parity_test.exs~
+- ~gateCommit~: true

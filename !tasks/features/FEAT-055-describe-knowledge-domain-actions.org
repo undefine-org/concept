@@ -1,0 +1,150 @@
+#+TITLE: Describe Knowledge domain actions
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-053-wire-concept-autotools-into-all-domains
+#+CUSTOM_ID: FEAT-055-describe-knowledge-domain-actions
+#+DELEGATABLE: quick_task
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W1
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+
+Add ~description~ to every public action on Knowledge resources
+(~Link~, ~Citation~, ~IngestionJob~, ~Tools~) and to every argument they
+declare. This is delegable to a ~quick_task~ swarm subagent.
+
+* Context (read in full)
+
+** The principle being enforced
+
+A public Ash action with a ~description~ is automatically projected as an
+MCP tool by ~Concept.AutoTools~ (FEAT-052). Descriptions are LLM-visible
+and human-visible. Internal/system actions are left undescribed.
+
+** Style guide
+
+- One sentence, < 110 chars where possible.
+- Imperative for mutations ("Create a relationship..."); declarative for reads ("List citations...").
+- Domain language. No implementation jargon.
+- Per-arg descriptions describe meaning + constraints.
+
+#+begin_src elixir
+argument :workspace_id, :uuid,
+  description: "Workspace scope. Read isolation is enforced by tenancy."
+#+end_src
+
+* Files to edit
+
+- ~lib/concept/knowledge/link.ex~
+- ~lib/concept/knowledge/citation.ex~
+- ~lib/concept/knowledge/ingestion_job.ex~
+- ~lib/concept/knowledge/tools.ex~ (some descriptions exist; verify all)
+- ~lib/concept/knowledge.ex~ (the domain file — DO NOT add new tool entries
+  here. After AutoTools (FEAT-053) lands, the manual ~tool ...~ entries
+  in this file become redundant and will be cleaned up in FEAT-064. Leave
+  them in place for now.)
+
+* Actions to describe
+
+** Knowledge.Link
+
+| Action      | Type    | Required description |
+|-------------+---------+----------------------|
+| ~:create~   | create  | "Assert a typed relationship between two blocks (e.g. supports, contradicts, depends_on)." |
+| ~:destroy~  | destroy | "Remove a previously asserted relationship between two blocks." |
+
+Per-arg / accepted attribute descriptions:
+- ~:source_block_id~ — "The block making the assertion."
+- ~:target_block_id~ — "The block being related to."
+- ~:relation~ — "Relationship kind. See Knowledge.Link.relation_types/0 for the allowed set."
+
+** Knowledge.Citation
+
+| Action          | Type   | Required description |
+|-----------------+--------+----------------------|
+| ~:for_message~  | read   | "List citations grounding a specific chat message." |
+| ~:for_block~    | read   | "List citations involving a specific block (forward and backward)." |
+| ~:create~       | create | "Record a citation tying a chat message to a source block." |
+
+Per-arg:
+- ~:message_id~ — "Chat message id whose citations to load."
+- ~:block_id~ — "Block id whose citation participation to load."
+
+** Knowledge.IngestionJob
+
+Read the existing actions in ~lib/concept/knowledge/ingestion_job.ex~.
+Distinguish *user-visible* vs *internal* — internal actions (driven by
+the AshOban worker: ~:run~, ~:succeed~, ~:fail~) get NO description.
+
+| Action      | Type   | Describe? | Description |
+|-------------+--------+-----------+-------------|
+| ~:read~     | read   | YES       | "List ingestion jobs (queued, running, succeeded, failed) for the workspace." |
+| ~:enqueue~  | create | YES       | "Enqueue a page for ingestion (chunking + embedding + graph build)." |
+| ~:archive~  | update | YES       | "Archive a completed or failed ingestion job from the user-visible list." |
+| ~:run~      | update | NO        | (worker-only; leave undescribed) |
+| ~:succeed~  | update | NO        | (worker-only) |
+| ~:fail~     | update | NO        | (worker-only) |
+
+Per-arg:
+- ~:enqueue.page_id~ — "Page to ingest."
+- ~:enqueue.workspace_id~ — "Workspace the page belongs to."
+- ~:enqueue.op~ — "Operation: :upsert (default) or :delete."
+
+** Knowledge.Tools (generic actions)
+
+Check ~lib/concept/knowledge/tools.ex~. Two actions exist
+(~:search_workspace~ and ~:answer_question~) and already have descriptions.
+Verify they conform to the style guide; refine if too long or too vague.
+Add per-argument descriptions if missing — each argument the LLM passes
+needs one.
+
+* Verification
+
+#+begin_src bash
+mix compile --warnings-as-errors
+mix test --exclude integration
+#+end_src
+
+Both green.
+
+Spot check in IEx:
+
+#+begin_src elixir
+for res <- [Concept.Knowledge.Link, Concept.Knowledge.Citation,
+            Concept.Knowledge.IngestionJob, Concept.Knowledge.Tools] do
+  res
+  |> Ash.Resource.Info.actions()
+  |> Enum.filter(& &1.public?)
+  |> Enum.each(fn a ->
+    if is_nil(a.description), do: IO.puts("#{inspect(res)}.#{a.name} MISSING description")
+  end)
+end
+#+end_src
+
+For ~IngestionJob~, only ~:run~/~:succeed~/~:fail~ may be missing — that's expected.
+
+* Out of scope
+
+- Adding new actions or changing behavior.
+- Modifying policies.
+- Editing manual ~tool ...~ entries in ~knowledge.ex~ (cleaned up later).
+- Touching ~lib/concept/knowledge/chat/~ (covered by FEAT-055).
+
+* Acceptance
+
+- Every user-facing public action in Link/Citation/IngestionJob/Tools has a description.
+- Every argument and accept attribute has a description.
+- ~mix precommit~ green.
+
+* Gates
+- ~gateCmd~: ~mix compile --warnings-as-errors && mix test --exclude integration~
+- ~gateCommit~: true

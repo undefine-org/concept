@@ -123,7 +123,7 @@ defmodule ConceptWeb.Router do
 
     forward "/", AshAi.Mcp.Router,
       tools: [:search_workspace, :answer_question, :link_blocks, :create_page],
-      protocol_version_statement: "2024-11-05",
+      protocol_version_statement: "2025-03-26",
       otp_app: :concept
   end
 

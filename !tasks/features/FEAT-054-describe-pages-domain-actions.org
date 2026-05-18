@@ -1,0 +1,213 @@
+#+TITLE: Describe Pages domain actions
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-053-wire-concept-autotools-into-all-domains
+#+CUSTOM_ID: FEAT-054-describe-pages-domain-actions
+#+DELEGATABLE: quick_task
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W1
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+
+Add a one-line ~description "..."~ to every public action on
+~Concept.Pages.Page~ and ~Concept.Pages.Block~, plus a one-line
+~description: "..."~ on every ~argument~ those actions declare.
+
+This is delegable to a ~quick_task~ swarm subagent. The body below is the
+full, self-contained context that subagent needs — do not assume access
+to prior conversation.
+
+* Context (read in full before editing)
+
+** The principle being enforced
+
+After this plan lands, an Ash action with a ~description~ is automatically
+projected as an MCP tool (via ~Concept.AutoTools~, FEAT-052). Therefore:
+
+- An action WITHOUT a description is *invisible* to MCP — that may be
+  intentional (internal/system actions) or a bug (forgotten public verb).
+- An action WITH a description is *visible* — and its description becomes
+  the LLM-readable tool documentation.
+
+Your job: write the description for every action a human can trigger.
+
+** Stack assumptions
+
+- Ash 3.24.6, AshAi 0.6.1, Spark 2.7.0. ~description~ is a standard Ash
+  DSL option on every action type (~create~, ~read~, ~update~, ~destroy~,
+  ~action~). Per-argument description is set via the third option of
+  ~argument~ (e.g. ~argument :foo, :string, description: "..."~).
+- Domains in this plan use ~Concept.AutoTools~ (FEAT-053 wires it).
+
+** Description style guide (apply uniformly)
+
+- *One sentence, < 110 chars where possible.*
+- *Imperative voice* for mutations ("Rename a page.") — *declarative* for reads ("List a workspace's pages as a hierarchical tree.").
+- *Domain language*, no implementation terms ("position" not "lexorank index"). Position can be described per-arg.
+- *Start with a verb for mutations*, or a noun phrase for reads.
+- *Mention the unit it operates on* if not obvious from the action name
+  (e.g. ~set_icon~ → "Set a page's icon emoji.").
+- *No marketing fluff*, no exclamation marks, no emoji in descriptions.
+
+Per-argument descriptions follow the same rules, focused on what the
+argument means and constrains:
+
+#+begin_src elixir
+argument :workspace_id, :uuid,
+  allow_nil?: false,
+  description: "Workspace to create the page in. Must be a workspace the actor is a member of."
+
+argument :position, :string,
+  allow_nil?: true,
+  description: "Lexorank fractional index. Pass nil to append after the last sibling."
+#+end_src
+
+* Files to edit
+
+- ~lib/concept/pages/page.ex~
+- ~lib/concept/pages/block.ex~
+
+* Actions to describe — Pages.Page
+
+Action header is in ~lib/concept/pages/page.ex~ around line 30+. Add
+~description "..."~ as the first line inside each ~create~/~update~/~read~
+block (after the macro name, before ~accept~/~argument~). Reference the
+existing implementation when phrasing.
+
+| Action            | Type      | Required description (suggested) |
+|-------------------+-----------+----------------------------------|
+| ~:create_page~    | create    | "Create a new page under the given parent (or top-level if no parent)." |
+| ~:rename~         | update    | "Rename a page. Title is trimmed of leading and trailing whitespace." |
+| ~:set_icon~       | update    | "Set a page's icon emoji." |
+| ~:set_cover_color~| update    | "Set a page's cover color from a fixed palette." |
+| ~:reorder~        | update    | "Reorder a page within its current parent." |
+| ~:reparent~       | update    | "Move a page under a new parent at a given position." |
+| ~:archive~        | update    | "Archive a page and cascade-archive its descendants." |
+| ~:restore~        | update    | "Restore an archived page." |
+| ~:list_tree~      | read      | "List all pages of a workspace as a hierarchical tree, sorted by parent and position." |
+| ~:recent_pages~   | read      | "List the 10 most recently updated pages in the workspace." |
+| ~:search_titles~  | read      | "Search pages by title using a case-insensitive substring match." |
+| ~:read~ (default) | read      | "Read a page by id." (override the default in the actions block.) |
+
+Per-argument descriptions to add on Pages.Page actions:
+
+- ~:create_page~
+  - ~:title~ (accept) — "Page title (may be empty; trimmed on save)."
+  - ~:icon_emoji~ (accept) — "Optional emoji icon. Defaults to 📄."
+  - ~:parent_page_id~ (accept) — "Optional parent page id. Omit for a top-level page."
+  - ~:workspace_id~ (arg) — "Workspace the page belongs to. Actor must be a member."
+- ~:rename~
+  - ~:title~ (accept) — "New title. Leading/trailing whitespace is trimmed."
+- ~:set_icon~
+  - ~:icon_emoji~ (accept) — "Emoji to display next to the page title."
+- ~:set_cover_color~
+  - ~:cover_color~ (accept) — "Cover color. One of: default, red, orange, yellow, green, blue, purple, pink, gray."
+- ~:reorder~
+  - ~:position~ (accept) — "New lexorank position string. Pass nil to append."
+- ~:reparent~
+  - ~:parent_page_id~ (accept) — "New parent page id (nil to make top-level)."
+  - ~:position~ (accept) — "New position under that parent. Pass nil to append."
+- ~:search_titles~
+  - ~:query~ (arg) — "Case-insensitive substring to search for in titles."
+
+Default ~:read~ action needs to be opted into description. Replace:
+
+#+begin_src elixir
+defaults [:read]
+#+end_src
+
+With:
+
+#+begin_src elixir
+defaults [:read]
+
+read :read do
+  primary? true
+  description "Read a page by id."
+end
+#+end_src
+
+(Ash supports redefining the default with the same name to add metadata.)
+
+* Actions to describe — Pages.Block
+
+Look at ~lib/concept/pages/block.ex~ for the action list. Apply the same
+treatment. Required descriptions:
+
+| Action               | Type   | Required description |
+|----------------------+--------+----------------------|
+| ~:create_block~      | create | "Create a new block on a page, optionally as a child of another block." |
+| ~:update_content~    | update | "Update a block's content (lexical state or block-type-specific payload)." |
+| ~:update_props~      | update | "Update a block's props (block-type-specific configuration)." |
+| ~:evaluate_ai~       | update | "Evaluate an AI Answer block against the current page or workspace context." |
+| ~:reorder~           | update | "Reorder a block within its current parent." |
+| ~:reparent~          | update | "Move a block under a new parent at a given position." |
+| ~:archive~           | update | "Archive a block (soft-delete)." |
+| ~:acquire_lock~      | update | "Acquire a collaborative-editing lock on the block. Required before mutating content." |
+| ~:refresh_lock~      | update | "Refresh an active lock's TTL while the actor continues editing." |
+| ~:release_lock~      | update | "Release a previously acquired editing lock." |
+| ~:list_for_page~     | read   | "List all blocks on a page in render order." |
+
+Per-argument descriptions: any action that takes arguments needs them.
+Focus especially on:
+
+- ~:create_block.type~ — "Block type atom. Must be a type registered in :concept :block_types config."
+- ~:update_props.props~ — "Block-type-specific configuration map. Validated against the block type's validate_props/1 callback."
+- ~:evaluate_ai.prompt~ — "Question to answer using workspace content as context."
+- ~:evaluate_ai.scope~ — "Retrieval scope. One of: subtree, page, workspace. Defaults to subtree."
+- ~:evaluate_ai.profile~ — "Knowledge profile name (e.g. fast, balanced, deep). Determines model and retrieval params."
+
+* Verification
+
+Run after the edits:
+
+#+begin_src bash
+mix compile --warnings-as-errors
+mix test --exclude integration
+#+end_src
+
+Both must be green.
+
+Manual spot check (paste in IEx after ~mix compile~):
+
+#+begin_src elixir
+Concept.Pages.Page
+|> Ash.Resource.Info.actions()
+|> Enum.filter(& &1.public?)
+|> Enum.map(&{&1.name, &1.description})
+|> Enum.each(fn {n, d} -> if is_nil(d), do: IO.puts("MISSING: #{n}") end)
+#+end_src
+
+Expect zero "MISSING:" lines for Page and Block.
+
+* Out of scope
+
+- *Do not* edit ~lib/concept/pages.ex~ (the domain file). Tool declarations
+  live in the resources; the domain extension picks them up.
+- *Do not* add new actions, change action behavior, or modify policies. This
+  FEAT is purely descriptive metadata.
+- *Do not* touch text-block modules (~paragraph.ex~, ~heading_*.ex~, etc.)
+  — they don't define their own actions; they're block-type metadata.
+
+* Acceptance
+
+- Every public action on ~Pages.Page~ and ~Pages.Block~ has a non-nil
+  ~description~.
+- Every ~argument~ + every ~accept~-listed attribute used in a described
+  action has a non-nil description (attributes via their declaration on
+  the resource — if the attribute already lacks ~description~ on the
+  attribute itself, add one).
+- ~mix precommit~ green.
+
+* Gates
+- ~gateCmd~: ~mix compile --warnings-as-errors && mix test --exclude integration~
+- ~gateCommit~: true

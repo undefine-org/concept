@@ -1,0 +1,106 @@
+#+TITLE: Concept.AutoTools Spark extension
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-051-deps-update-and-mcp-protocol-bump
+#+CUSTOM_ID: FEAT-052-concept-autotools-spark-extension
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W0
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+Make the presence of an action ~description~ sufficient to project that
+action as an MCP tool. This is the keystone delta of the plan: it converts
+"declare a tool" into "describe an action" — a single source of truth that
+also serves human documentation, ExDoc, and AshAdmin.
+
+* Mechanism
+
+A ~Spark.Dsl.Extension~ (~Concept.AutoTools~) with one
+~Spark.Dsl.Transformer~ (~Concept.AutoTools.Transformers.SynthesizeTools~)
+ordered to run *after* AshAi's tool entities are processed but *before*
+final DSL verification.
+
+For each resource registered in a domain, the transformer walks all public
+actions. For each action with a non-nil ~description~ AND no
+~meta expose: [mcp: false]~ flag, it injects a synthetic ~AshAi.Tool~
+struct into the domain's ~[:tools]~ section (unless an entry with the
+same ~name~ already exists, in which case the manual one wins and a
+compile warning is emitted).
+
+Synthesized tool name:
+- ~:"#{resource_slug}_#{action.name}"~ where ~resource_slug~ is the
+  resource module's last segment ~Macro.underscore~'d (e.g.
+  ~Concept.Pages.Page~ → ~page_~). Avoid collisions across domains by
+  including the *full* underscored module path when collision detected.
+
+Examples synthesized after wiring:
+- ~Concept.Pages.Page :rename~ → ~tool :page_rename~
+- ~Concept.Pages.Block :update_content~ → ~tool :block_update_content~
+- ~Concept.Knowledge.Citation :for_message~ → ~tool :citation_for_message~
+
+* Scope (IN)
+- ~lib/concept/auto_tools.ex~ — Spark extension declaration.
+- ~lib/concept/auto_tools/transformers/synthesize_tools.ex~ — the
+  transformer.
+- ~lib/concept/auto_tools/info.ex~ — helper to introspect synthesized vs
+  manual tools (used by FEAT-061's mix task).
+- ~test/concept/auto_tools_test.exs~ — unit tests for the extension on a
+  fixture domain (~test/support/fixtures/auto_tools/...~).
+
+* Scope (OUT)
+- Wiring into actual domains (FEAT-052..055 + FEAT-051 trio).
+- Per-action description backfill (the W1 FEATs).
+
+* Implementation notes
+
+- Use ~Spark.Dsl.Transformer.add_entity/3~ targeted at the AshAi ~[:tools]~ section. AshAi must already be in the extension list of the domain — ~Concept.AutoTools~ should declare ~add_extensions: [AshAi]~ so adding our extension also pulls AshAi.
+- Public actions only: ~Ash.Resource.Info.action(resource, name)~ filtered by ~primary?~ + non-private. Generic actions (~action :foo, :map~) are included — they're already first-class AshAi tools.
+- ~accept []~ + multi-actor mutations: still expose; policies do the gating.
+- Description fallback: if action has no ~description~, *skip silently*.
+  The action is not LLM-eligible. This is the contract.
+- Argument description requirement: not enforced here. FEAT-061's parity
+  test enforces "every exposed arg has a description" at CI time.
+- Default ~load~: ~[]~. Authors who want eager loads add it via manual
+  ~tool~ override.
+
+* Edge cases
+
+- Manual ~tool :name, Resource, :action~ already in ~tools do .. end~ →
+  detect by ~name~ match; skip synthesis; emit compile warning
+  ~"Manual tool :name shadows auto-synthesized; consider removing manual entry"~.
+- Action with ~meta expose: [mcp: false]~ → skip.
+- Resource registered in domain but with ~public? false~ → skip the
+  resource entirely.
+- Domain that uses ~Concept.AutoTools~ but not ~AshAi~ → raise compile-time
+  ~"Concept.AutoTools requires AshAi extension"~.
+
+* Tests
+
+~test/concept/auto_tools_test.exs~ uses fixture modules under
+~test/support/fixtures/auto_tools/~:
+
+1. Domain with one resource + one described action → ~AshAi.exposed_tools/1~ returns it.
+2. Same action with ~meta expose: [mcp: false]~ → not returned.
+3. Action without description → not returned.
+4. Manual ~tool~ + same name as would-be auto → manual wins, warning emitted.
+5. Generic action with description → returned with correct schema.
+6. ~load~ option respected when set on manual tool that overrides.
+
+* Acceptance
+
+- Unit tests green.
+- ~mix compile --warnings-as-errors~ green when domains adopt it (FEAT-051 trio).
+- ~AshAi.exposed_tools(otp_app: :concept)~ called on a fixture app
+  returns ≥ N entries where N is the number of described actions.
+
+* Gates
+- ~gateCmd~: ~mix test test/concept/auto_tools_test.exs~
+- ~gateCommit~: true

@@ -1,0 +1,189 @@
+#+TITLE: ApiKey workspace binding and MCP WorkspaceContext plug
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-054-describe-pages-domain-actions FEAT-055-describe-knowledge-domain-actions FEAT-056-describe-chat-domain-actions FEAT-057-describe-accounts-domain-actions
+#+CUSTOM_ID: FEAT-058-apikey-workspace-binding-and-mcp-workspa
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W2
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+
+Unify auth + tenancy for MCP. After this FEAT, an API key may be
+*workspace-bound*; otherwise the request must supply
+~mcp-workspace-id~ header. Either way, the tenant is fixed before any
+action runs.
+
+This eliminates the need for every MCP tool to take a ~workspace_id~
+argument from the LLM (and the corresponding "did the LLM pick the right
+workspace?" risk).
+
+* Mechanism
+
+Resolution precedence (will appear verbatim in AGENTS.md + docs):
+
+1. If the API key has a ~workspace_id~ → that workspace. Headers are
+   *ignored* (no override) to prevent privilege confusion.
+2. Else if request includes ~mcp-workspace-id~ AND the user is a member of
+   that workspace → that workspace.
+3. Else → no tenant assigned. Mutation tools refuse with HTTP 400 + JSON
+   error body. Workspace-agnostic reads (~list_my_workspaces~,
+   ~current_user~) proceed.
+
+* Scope (IN)
+
+** Files (Create)
+
+- ~lib/concept_web/plugs/mcp_workspace_context.ex~ — the plug.
+- ~priv/repo/migrations/<ts>_add_workspace_id_to_api_keys.exs~ — schema migration.
+- ~test/concept_web/plugs/mcp_workspace_context_test.exs~ — plug tests.
+- ~test/integration/mcp_tenancy_test.exs~ — cross-workspace isolation tests.
+
+** Files (Edit)
+
+- ~lib/concept/accounts/api_key.ex~ — add nullable ~workspace_id~ attribute;
+  add ~description~ + per-arg description to a new ~:create_for_workspace~
+  action (and update the primary ~:create~ to accept optional ~workspace_id~).
+- ~lib/concept_web/router.ex~ — chain the plug into the ~:mcp~ pipeline;
+  pass ~tenant: {Concept.MCP.WorkspaceContext, :fetch_tenant, []}~ (or
+  whatever MFA shape AshAi.Mcp.Router supports) to the forward.
+- ~lib/concept/accounts/workspace.ex~ — add a tiny read action
+  ~:list_my_workspaces~ (workspace-agnostic — the actor is the gating
+  factor, not a tenant) with description "List workspaces the actor is a
+  member of."
+- ~lib/concept/accounts.ex~ — add a ~mcp_resources~ entry pointing at
+  ~:list_my_workspaces~ at URI ~concept://me/workspaces~.
+
+* Implementation notes
+
+** ApiKey workspace_id attribute
+
+#+begin_src elixir
+attribute :workspace_id, :uuid do
+  allow_nil? true
+  public? true
+  description "If set, this API key authorizes only the bound workspace."
+end
+
+relationships do
+  belongs_to :workspace, Concept.Accounts.Workspace,
+    allow_nil?: true,
+    attribute_writable?: false
+end
+#+end_src
+
+Update ~:create~ to accept the optional ~workspace_id~ (and validate
+membership of the user being granted the key).
+
+** The plug
+
+#+begin_src elixir
+defmodule ConceptWeb.Plugs.MCPWorkspaceContext do
+  import Plug.Conn
+
+  def init(opts), do: opts
+
+  def call(conn, _opts) do
+    user = conn.assigns[:current_user]
+    api_key = conn.assigns[:current_api_key]  # set by AshAuthentication.Strategy.ApiKey.Plug
+
+    case resolve_tenant(user, api_key, conn) do
+      {:ok, ws_id} ->
+        assign(conn, :mcp_tenant, ws_id)
+      {:ok, :none} ->
+        assign(conn, :mcp_tenant, nil)
+      {:error, reason} ->
+        conn
+        |> put_status(400)
+        |> put_resp_content_type("application/json")
+        |> send_resp(400, Jason.encode!(%{
+          error: "workspace_context_invalid",
+          reason: reason,
+          hint: "Either bind the API key to a workspace at creation, or pass an `mcp-workspace-id` header with a workspace you are a member of."
+        }))
+        |> halt()
+    end
+  end
+
+  # MFA referenced from AshAi.Mcp.Router opts so the tenant comes from the conn:
+  def fetch_tenant(conn), do: conn.assigns[:mcp_tenant]
+
+  defp resolve_tenant(_user, %{workspace_id: ws_id}, _conn) when not is_nil(ws_id),
+    do: {:ok, ws_id}
+  defp resolve_tenant(user, _api_key, conn) do
+    case get_req_header(conn, "mcp-workspace-id") do
+      [ws_id | _] ->
+        case Concept.Accounts.get_membership(user.id, ws_id, actor: user) do
+          {:ok, %{}} -> {:ok, ws_id}
+          {:ok, nil} -> {:error, :not_a_member}
+          {:error, _} -> {:error, :membership_check_failed}
+        end
+      [] ->
+        {:ok, :none}
+    end
+  end
+end
+#+end_src
+
+** Router
+
+#+begin_src elixir
+pipeline :mcp do
+  plug AshAuthentication.Strategy.ApiKey.Plug,
+    resource: Concept.Accounts.User,
+    required?: true
+  plug ConceptWeb.Plugs.MCPWorkspaceContext
+end
+#+end_src
+
+Verify ~AshAi.Mcp.Router~ accepts an MFA in ~:tenant~. If not, set the
+tenant via a thin wrapper plug or by extending the forward.
+
+* Edge cases
+
+- API key with workspace_id pointing at a workspace the user is no longer
+  a member of → plug should treat this as ~:not_a_member~ and refuse;
+  document as "if you leave a workspace, revoke its workspace-bound keys."
+- ApiKey rotation: preserve ~workspace_id~ from the parent key.
+- Workspace-agnostic tools (e.g. ~workspace_list_my_workspaces~): the plug
+  assigns ~:mcp_tenant nil~ and AshAi proceeds; the action must work
+  without a tenant. Verify by adding the action to the ~Workspace~
+  resource with no ~require_tenant~ constraint.
+
+* Tests
+
+** Plug
+
+1. ApiKey bound to workspace A → tenant = A; header ignored.
+2. ApiKey unbound, valid header for workspace B (user is member) → tenant = B.
+3. ApiKey unbound, header for workspace C (user not member) → 400 + reason.
+4. ApiKey unbound, no header → ~:mcp_tenant nil~ (allowed for agnostic actions).
+
+** Cross-workspace isolation (integration)
+
+1. Create workspaces A and B, user is member of both.
+2. Create ApiKey bound to A.
+3. Call ~tools/call~ ~page_list_tree~ → returns only A's pages.
+4. Reading ~concept://workspaces/{B_id}/tree~ → empty / 403, *never* returns B's pages.
+
+* Acceptance
+
+- All tests green.
+- ~mix concept.mcp.try~ (a helper script — optional) can run an MCP
+  ~tools/list~ then ~tools/call page_list_tree~ over HTTP with a
+  workspace-bound key and get the expected page tree.
+- Documentation of the precedence ladder lives in this FEAT body until
+  FEAT-065 captures it in AGENTS.md + docs/mcp_parity.md.
+
+* Gates
+- ~gateCmd~: ~mix test test/concept_web/plugs/mcp_workspace_context_test.exs test/integration/mcp_tenancy_test.exs~
+- ~gateCommit~: true
+- ~gateArtifact~: ~priv/repo/migrations/*add_workspace_id_to_api_keys*.exs~

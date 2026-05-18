@@ -1,0 +1,112 @@
+#+TITLE: Credo LiveView purity check
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-061-liveview-purity-cutover-remove-ash-leaka
+#+CUSTOM_ID: FEAT-062-credo-liveview-purity-check
+#+DELEGATABLE: quick_task
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W3
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+
+Mechanically prevent re-introduction of Ash/Ecto leakage in LiveViews.
+Delegable to ~quick_task~.
+
+* Scope (IN)
+
+** Files (Create)
+
+- ~lib/concept/credo/check/live_view_purity.ex~ — custom Credo check.
+- ~test/concept/credo/check/live_view_purity_test.exs~ — check unit tests.
+
+** Files (Edit)
+
+- ~.credo.exs~ (create if missing) — register the check.
+- ~mix.exs~ — add ~{:credo, "~> 1.7", only: [:dev, :test], runtime: false}~ if not present.
+
+* Implementation notes
+
+** Check spec
+
+#+begin_src elixir
+defmodule Concept.Credo.Check.LiveViewPurity do
+  use Credo.Check,
+    id: "EX9001",
+    category: :design,
+    base_priority: :high,
+    explanations: [
+      check: """
+      LiveView modules must not directly construct Ash queries / changesets
+      or call Ecto / the Repo. All data access flows through domain code
+      interface functions so that the same call path is available to MCP.
+
+      Forbidden: Ash.Query, Ash.Changeset.for_*, Ecto.Query, Concept.Repo.
+
+      Allowed: Concept.<Domain>.<fn>(...) calls.
+
+      Rationale: see docs/mcp_parity.md.
+      """
+    ]
+
+  @impl Credo.Check
+  def run(source_file, params \\ []) do
+    if liveview_module?(source_file) do
+      Credo.Code.prewalk(source_file, &traverse(&1, &2, issue_meta(source_file, params)))
+    else
+      []
+    end
+  end
+
+  # detect alias/import/use Phoenix.LiveView (or live_view_helpers) in the file
+  defp liveview_module?(source_file), do: ...
+
+  defp traverse({:alias, _, [{:__aliases__, _, [:Ash, :Query]} | _]} = ast, issues, meta), do: ...
+  # also catch:
+  #   Ash.Query.<anything>
+  #   Ash.Changeset.for_create / for_update / for_destroy / for_action
+  #   Ecto.Query.<anything>
+  #   Concept.Repo.<anything>
+end
+#+end_src
+
+** Scope of files checked
+
+Apply to ~lib/concept_web/live/**/*.ex~ and
+~lib/concept_web/components/**/*.ex~. Components shouldn't be doing data
+access either — but the user-facing message should make the rationale
+clear in case of a false positive.
+
+** Allow-list for legitimate exceptions
+
+None planned. If a file genuinely needs to escape, it should be moved
+into the domain layer. Document this as the resolution path in the
+check's explanation text.
+
+* Tests
+
+1. A file under ~lib/concept_web/live/~ with ~import Ash.Query~ → issue.
+2. A file under ~lib/concept_web/live/~ with ~Ash.Changeset.for_create~ call → issue.
+3. A file under ~lib/concept_web/live/~ with ~Ecto.Query.from~ → issue.
+4. A file under ~lib/concept_web/live/~ with only ~Concept.Pages.create_page(...)~ → no issue.
+5. A file under ~lib/concept/~ with ~Ash.Query~ → no issue (out of scope).
+
+* Acceptance
+
+- ~mix credo --strict~ green on current main (FEAT-061 has cleaned up
+  workspace_live.ex).
+- Reverting one of FEAT-061's three fixes → ~mix credo --strict~ flags the
+  file.
+- Update ~mix.exs~ ~precommit~ alias to include ~credo --strict~.
+
+* Gates
+- ~gateCmd~: ~mix credo --strict && mix test test/concept/credo/check/live_view_purity_test.exs~
+- ~gateCommit~: true

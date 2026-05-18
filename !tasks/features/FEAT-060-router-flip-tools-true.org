@@ -1,0 +1,82 @@
+#+TITLE: Router flip — tools: true
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-058-apikey-workspace-binding-and-mcp-workspa FEAT-059-register-mcp-resources-per-domain
+#+CUSTOM_ID: FEAT-060-router-flip-tools-true
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W2
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+
+Drop the explicit ~tools: [...]~ whitelist in favor of ~tools: true~.
+After this FEAT, every described action across every domain is reachable
+via MCP. Workspace context is enforced by FEAT-058's plug.
+
+* Scope (IN)
+
+** ~lib/concept_web/router.ex~
+
+#+begin_src elixir
+scope "/mcp" do
+  pipe_through :mcp
+
+  forward "/", AshAi.Mcp.Router,
+    tools: true,
+    otp_app: :concept,
+    protocol_version_statement: "2025-03-26",
+    tenant: {ConceptWeb.Plugs.MCPWorkspaceContext, :fetch_tenant, []}
+end
+#+end_src
+
+* Implementation notes
+
+- ~tools: true~ is interpreted by ~AshAi.exposed_tools/1~ as "return every
+  tool declared across all domains in :ash_domains". This combined with
+  ~Concept.AutoTools~ (FEAT-052) means: every described action, exposed.
+- Confirm the ~:tenant~ option shape AshAi.Mcp.Router accepts in the
+  installed version. If MFA isn't supported there, fall back to setting
+  the tenant via Plug ~assign~ and have AshAi pick it up from
+  ~conn.assigns[:tenant]~ — check the installed code path before locking
+  in the syntax.
+
+* Verification
+
+Manual MCP exercise (record outputs in commit message):
+
+#+begin_src bash
+# 1. tools/list
+curl -s -X POST http://localhost:4279/mcp/ \
+  -H 'content-type: application/json' \
+  -H 'x-api-key: <key>' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | jq '.result.tools | length'
+
+# Expect ≥ 25 (rough count from W1 actions + manual entries).
+#+end_src
+
+* Edge cases
+
+- If a domain has an action that should be unexposed but accidentally got
+  a description in W1 → it appears in ~tools/list~. Mitigation: FEAT-061's
+  parity test fails CI if any "leaked" description is detected; add the
+  action's name to a project-level deny list (~config :concept, :mcp_deny_tools, [...]~)
+  or fix the description in source.
+
+* Acceptance
+
+- ~tools/list~ returns all expected tools.
+- ~tools/call~ on a read tool (e.g. ~page_list_tree~) returns the same
+  result as the equivalent code interface call (~Concept.Pages.list_tree~).
+- ~mix test --exclude integration~ green.
+
+* Gates
+- ~gateCmd~: ~mix compile --warnings-as-errors && mix test --exclude integration~
+- ~gateCommit~: true

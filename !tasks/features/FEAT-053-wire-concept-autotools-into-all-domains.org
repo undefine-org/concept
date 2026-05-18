@@ -1,0 +1,56 @@
+#+TITLE: Wire Concept.AutoTools into all domains
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-052-concept-autotools-spark-extension
+#+CUSTOM_ID: FEAT-053-wire-concept-autotools-into-all-domains
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W0
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+Add ~Concept.AutoTools~ to the ~extensions:~ list of every domain so the
+W1 description backfill takes effect immediately.
+
+* Scope (IN)
+- ~lib/concept/pages.ex~ — add ~Concept.AutoTools~ to extensions.
+- ~lib/concept/knowledge.ex~ — same.
+- ~lib/concept/knowledge/chat.ex~ — same.
+- ~lib/concept/accounts.ex~ — add ~AshAi~ AND ~Concept.AutoTools~.
+  Accounts does not currently use AshAi; auditing for collisions with
+  AshAuthentication-generated actions is required.
+
+* Scope (OUT)
+- Adding descriptions to actions (W1).
+- Dropping the manual ~tool~ entries in Pages/Knowledge/Chat (FEAT-064).
+
+* Implementation notes
+
+#+begin_src elixir
+# Pattern (apply to each domain):
+use Ash.Domain, otp_app: :concept,
+  extensions: [AshAdmin.Domain, AshAi, Concept.AutoTools]
+#+end_src
+
+For ~Accounts~: AshAuthentication generates internal actions
+(~register_with_password~, ~sign_in_with_password~, etc.). These have no
+~description~ today → AutoTools will skip them → no exposure. Verify this
+by running ~AshAi.exposed_tools(domain: Concept.Accounts)~ immediately
+after wiring; expect ~[]~.
+
+* Acceptance
+- ~mix compile --warnings-as-errors~ green.
+- For each domain D: ~AshAi.exposed_tools(domain: D)~ returns the same
+  set as before this FEAT (no new tools yet — descriptions land in W1).
+- No new AshAi compile warnings about missing ~description~ on actions.
+
+* Gates
+- ~gateCmd~: ~mix compile --warnings-as-errors && mix test --exclude integration~
+- ~gateCommit~: true

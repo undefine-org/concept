@@ -1,0 +1,112 @@
+#+TITLE: Describe Chat domain actions
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-053-wire-concept-autotools-into-all-domains
+#+CUSTOM_ID: FEAT-056-describe-chat-domain-actions
+#+DELEGATABLE: quick_task
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W1
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+
+Add ~description~ to every user-visible public action on
+~Concept.Knowledge.Chat.Conversation~ and ~Concept.Knowledge.Chat.Message~,
+and to every argument they declare. Delegable to a ~quick_task~ subagent.
+
+* Context (read in full)
+
+** Principle
+
+A described public Ash action = an MCP tool (via ~Concept.AutoTools~,
+FEAT-052). Internal pipeline actions are left undescribed.
+
+** Style guide
+
+- One sentence, < 110 chars.
+- Imperative for mutations, declarative for reads.
+- No implementation jargon. Domain language.
+
+* Files
+
+- ~lib/concept/knowledge/chat/conversation.ex~
+- ~lib/concept/knowledge/chat/message.ex~
+
+DO NOT edit ~lib/concept/knowledge/chat.ex~ (the domain). The manual
+~tool ...~ entries there are redundant after FEAT-053 but will be cleaned
+up in FEAT-064.
+
+* Actions to describe — Chat.Conversation
+
+| Action               | Type      | Describe? | Description |
+|----------------------+-----------+-----------+-------------|
+| ~:create~            | create    | YES       | "Start a new chat conversation in the workspace." |
+| ~:read~ default      | read      | YES       | "Read a chat conversation by id." (override the default similarly to Pages.Page :read.) |
+| ~:my_conversations~  | read      | YES       | "List the actor's chat conversations in the workspace, most recent first." |
+| ~:generate_name~     | update    | NO        | (system-only, AI-driven) |
+
+Per-arg descriptions: ~create~ takes a ~title~ at minimum — describe as
+"Optional conversation title. Defaults to an AI-generated label." (if
+that's the behavior; verify in the source).
+
+* Actions to describe — Chat.Message
+
+| Action                | Type    | Describe? | Description |
+|-----------------------+---------+-----------+-------------|
+| ~:for_conversation~   | read    | YES       | "List messages in a conversation in chronological order." |
+| ~:create~             | create  | YES       | "Send a message in a chat conversation; an AI response is generated asynchronously." |
+| ~:respond~            | update  | NO        | (worker-only) |
+| ~:upsert_response~    | create  | NO        | (worker-only) |
+
+Per-arg:
+- ~:for_conversation.conversation_id~ — "Chat conversation id."
+- ~:create.conversation_id~ — "Conversation to post the message into."
+- ~:create.body~ (or whatever the message text attribute is — verify) — "Message body in plain text or markdown."
+
+* Verification
+
+#+begin_src bash
+mix compile --warnings-as-errors
+mix test --exclude integration
+#+end_src
+
+Spot check:
+
+#+begin_src elixir
+for res <- [Concept.Knowledge.Chat.Conversation,
+            Concept.Knowledge.Chat.Message] do
+  res
+  |> Ash.Resource.Info.actions()
+  |> Enum.filter(& &1.public?)
+  |> Enum.each(fn a ->
+    if is_nil(a.description),
+      do: IO.puts("#{inspect(res)}.#{a.name} undescribed (verify whether intentional)")
+  end)
+end
+#+end_src
+
+Worker-only actions may be undescribed; double-check that the message lists only those.
+
+* Out of scope
+
+- Editing the chat domain file.
+- Touching worker code paths.
+- Modifying response/streaming behavior.
+
+* Acceptance
+
+- Every user-visible action on Conversation + Message has a description.
+- Every argument used by those actions has a description.
+- ~mix precommit~ green.
+
+* Gates
+- ~gateCmd~: ~mix compile --warnings-as-errors && mix test --exclude integration~
+- ~gateCommit~: true

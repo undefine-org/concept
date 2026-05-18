@@ -1,0 +1,202 @@
+#+TITLE: MCP parity test and docs.mcp_surface mix task
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-061-liveview-purity-cutover-remove-ash-leaka
+#+CUSTOM_ID: FEAT-063-mcp-parity-test-and-docs-mcp-surface-mix
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W3
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+
+The contract enforced in CI. Two deliverables:
+
+1. ~test/integration/mcp_parity_test.exs~ — runs the assertions that make
+   the principle non-negotiable.
+2. ~mix concept.docs.mcp_surface~ — auto-generates ~docs/mcp_surface.md~
+   from the same metadata. Source of truth for the MCP surface in docs.
+
+* Scope (IN)
+
+** Files (Create)
+
+- ~test/integration/mcp_parity_test.exs~
+- ~lib/mix/tasks/concept.docs.mcp_surface.ex~
+- ~docs/mcp_surface.md~ — generated artifact, gitignored? No: commit it so
+  drift in PRs is reviewable. Regeneration is idempotent.
+
+** Files (Edit)
+
+- ~mix.exs~ — add ~mix concept.docs~ alias and include
+  ~docs/mcp_surface.md~ in ExDoc ~:extras~.
+- ~mix.exs~ ~precommit~ alias — append ~"concept.docs.mcp_surface --check"~
+  so CI fails when descriptions drift.
+
+* Implementation notes
+
+** Parity test
+
+#+begin_src elixir
+defmodule Concept.Integration.MCPParityTest do
+  use ConceptWeb.ConnCase, async: false
+  @moduletag :integration
+
+  describe "MCP parity" do
+    test "every exposed tool has a description" do
+      tools = AshAi.exposed_tools(otp_app: :concept)
+      for tool <- tools do
+        refute is_nil(tool.action.description),
+          "tool #{tool.name} (#{inspect(tool.resource)}.#{tool.action.name}) missing description"
+      end
+    end
+
+    test "every public arg on exposed actions has a description" do
+      for tool <- AshAi.exposed_tools(otp_app: :concept),
+          arg <- tool.action.arguments,
+          arg.public? do
+        refute is_nil(arg.description),
+          "tool #{tool.name} arg #{arg.name} missing description"
+      end
+    end
+
+    test "every described public action is reachable via tools/list" do
+      described =
+        for domain <- Application.get_env(:concept, :ash_domains, []),
+            resource <- Ash.Domain.Info.resources(domain),
+            action <- Ash.Resource.Info.actions(resource),
+            action.public? and not is_nil(action.description),
+            into: MapSet.new() do
+          {resource, action.name}
+        end
+
+      exposed =
+        AshAi.exposed_tools(otp_app: :concept)
+        |> MapSet.new(fn t -> {t.resource, t.action.name} end)
+
+      missing = MapSet.difference(described, exposed)
+      assert MapSet.size(missing) == 0,
+        "actions described but not exposed: #{inspect(MapSet.to_list(missing))}"
+    end
+
+    test "tools/call on a sample read returns same result as code interface", %{conn: conn} do
+      # fixture: workspace + member + api key
+      # tools/call page_list_tree
+      # assert equal to Concept.Pages.list_tree(...)
+    end
+
+    test "cross-workspace isolation: API key for workspace A cannot read workspace B" do
+      # see FEAT-058 test stubs; final assertion lives here
+    end
+  end
+end
+#+end_src
+
+** Mix task
+
+#+begin_src elixir
+defmodule Mix.Tasks.Concept.Docs.McpSurface do
+  use Mix.Task
+
+  @shortdoc "Generates docs/mcp_surface.md from Ash action metadata."
+
+  @impl Mix.Task
+  def run(args) do
+    Mix.Task.run("app.start")
+    {opts, _} = OptionParser.parse!(args, strict: [check: :boolean])
+
+    output = render_markdown()
+    existing = File.read("docs/mcp_surface.md")
+
+    cond do
+      opts[:check] and existing == {:ok, output} -> :ok
+      opts[:check] -> Mix.raise("docs/mcp_surface.md is out of date; run `mix concept.docs.mcp_surface`")
+      true ->
+        File.write!("docs/mcp_surface.md", output)
+        Mix.shell().info("wrote docs/mcp_surface.md")
+    end
+  end
+
+  defp render_markdown do
+    # Walk Application.get_env(:concept, :ash_domains)
+    # For each: list AshAi.exposed_tools(domain: D)
+    # For each tool: emit:
+    #   ### `tool_name`
+    #   <description>
+    #   **Action**: `Concept.<Mod>.<action>` (resource: `Concept.<Resource>`)
+    #   **Arguments**:
+    #     - `name` (type, required?) — description
+    #   **Code interface call**:
+    #     ```elixir
+    #     Concept.<Domain>.<fn>(args, actor: ..., tenant: ...)
+    #     ```
+    #   **Workspace tenanted**: yes/no (derive from resource multitenancy config)
+    # Also emit a section for mcp_resources.
+    ...
+  end
+end
+#+end_src
+
+The task also exits non-zero if any tool/arg is missing a description —
+duplicating the parity test for fast precommit feedback.
+
+** mix.exs
+
+#+begin_src elixir
+defp aliases do
+  [
+    ...,
+    "concept.docs": ["concept.docs.mcp_surface", "docs"],
+    precommit: [
+      "compile --warnings-as-errors",
+      "deps.unlock --unused",
+      "format",
+      "credo --strict",
+      "concept.docs.mcp_surface --check",
+      "test --exclude integration"
+    ]
+  ]
+end
+
+defp docs do
+  [
+    main: "readme",
+    extras: [
+      "README.md",
+      "docs/CONCEPT_HOWTO.md",
+      "docs/mcp_parity.md",     # FEAT-065
+      "docs/mcp_surface.md",    # this FEAT
+      "docs/blocks/ADDING_A_BLOCK.md"
+    ]
+  ]
+end
+#+end_src
+
+* Edge cases
+
+- The integration test depends on test fixtures (workspace + user + ApiKey).
+  Use the existing fixture pattern from PLAN-006's test files. If none
+  exists, set up ~test/support/mcp_helpers.ex~.
+- The mix task runs ~Mix.Task.run("app.start")~ which boots the domain
+  list. If the test env is OK to use, no extra config needed.
+
+* Acceptance
+
+- ~mix test test/integration/mcp_parity_test.exs~ green.
+- ~mix concept.docs.mcp_surface~ writes a non-empty file.
+- ~mix concept.docs.mcp_surface --check~ exits 0 after running the
+  generation; exits non-zero if a description is added without
+  regenerating.
+- ~mix concept.docs~ runs both surface gen and ExDoc.
+
+* Gates
+- ~gateCmd~: ~mix test test/integration/mcp_parity_test.exs && mix concept.docs.mcp_surface --check~
+- ~gateCommit~: true
+- ~gateArtifact~: ~docs/mcp_surface.md~

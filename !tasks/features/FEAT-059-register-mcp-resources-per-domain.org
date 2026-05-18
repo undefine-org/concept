@@ -1,0 +1,157 @@
+#+TITLE: Register mcp_resources per domain
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-058-apikey-workspace-binding-and-mcp-workspa
+#+CUSTOM_ID: FEAT-059-register-mcp-resources-per-domain
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W2
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+
+Tools are verbs; resources are nouns. Add an MCP browse surface so the
+LLM can navigate Concept like a human reads the sidebar — without having
+to invoke a verb to discover what exists.
+
+Use AshAi's ~mcp_resource~ DSL (already supported in 0.6.1, added in
+v0.4.0 per the changelog).
+
+* Scope (IN)
+
+** ~Concept.Pages~
+
+#+begin_src elixir
+mcp_resources do
+  mcp_resource :workspace_tree,
+    "concept://workspaces/{workspace_id}/tree",
+    Concept.Pages.Page, :list_tree,
+    mime_type: "application/json",
+    description: "Hierarchical page tree of a workspace."
+
+  mcp_resource :page,
+    "concept://pages/{page_id}",
+    Concept.Pages.Page, :read,
+    mime_type: "application/json",
+    description: "A page (loaded with metadata)."
+
+  mcp_resource :page_blocks,
+    "concept://pages/{page_id}/blocks",
+    Concept.Pages.Block, :list_for_page,
+    mime_type: "application/json",
+    description: "All blocks on a page, in render order."
+
+  mcp_resource :recent_pages,
+    "concept://workspaces/{workspace_id}/recent",
+    Concept.Pages.Page, :recent_pages,
+    mime_type: "application/json",
+    description: "10 most recently updated pages in the workspace."
+end
+#+end_src
+
+** ~Concept.Knowledge.Chat~
+
+#+begin_src elixir
+mcp_resources do
+  mcp_resource :conversation_history,
+    "concept://chat/{conversation_id}",
+    Concept.Knowledge.Chat.Message, :for_conversation,
+    mime_type: "application/json",
+    description: "Messages in a chat conversation in chronological order."
+
+  mcp_resource :my_conversations,
+    "concept://chat/recent",
+    Concept.Knowledge.Chat.Conversation, :my_conversations,
+    mime_type: "application/json",
+    description: "Chat conversations visible to the actor."
+end
+#+end_src
+
+** ~Concept.Knowledge~
+
+#+begin_src elixir
+mcp_resources do
+  mcp_resource :search,
+    "concept://workspaces/{workspace_id}/search",
+    Concept.Knowledge.Tools, :search_workspace,
+    mime_type: "application/json",
+    description: "Hybrid vector+graph search; bind query via the `q` parameter."
+
+  mcp_resource :citations_for_block,
+    "concept://blocks/{block_id}/citations",
+    Concept.Knowledge.Citation, :for_block,
+    mime_type: "application/json",
+    description: "Citations involving a specific block."
+end
+#+end_src
+
+** ~Concept.Accounts~
+
+#+begin_src elixir
+mcp_resources do
+  mcp_resource :my_workspaces,
+    "concept://me/workspaces",
+    Concept.Accounts.Workspace, :list_my_workspaces,
+    mime_type: "application/json",
+    description: "Workspaces the current actor is a member of."
+end
+#+end_src
+
+* Implementation notes
+
+** URI templates
+
+Verify AshAi's URI template binding mechanism in ash_ai 0.6.1
+(~deps/ash_ai/lib/ash_ai/mcp/server.ex~). The current implementation
+expects URI template variables to map to action arguments by name.
+If the binding requires explicit option (e.g. ~argument_mapping:~),
+add it here.
+
+** Tenancy
+
+The plug (FEAT-058) assigns ~:mcp_tenant~. AshAi.Mcp.Router must propagate
+this to ~resources/read~ calls — verify by reading the server code. If
+the tenant is *not* automatically applied to resource reads, add explicit
+tenant resolution via the same MFA pattern used for tools.
+
+** Pagination
+
+For ~list_tree~ and ~for_conversation~, the action accepts pagination
+arguments. AshAi MCP returns ~nextCursor~ when paginated — verify the
+action has ~pagination~ enabled. If not, leave it for a follow-up; the
+MVP returns up to the action's default ~limit~.
+
+* Edge cases
+
+- ~concept://blocks/{block_id}/citations~: the citations action is
+  workspace-tenanted, but the URI doesn't carry workspace. Tenancy must
+  come from the plug (FEAT-058). Verify isolation by reading citations
+  of a block in workspace B with an ApiKey bound to workspace A — must
+  return empty or 404, never block B's data.
+- Templates must be exact: ~{workspace_id}~ not ~{ws_id}~ etc. Match the
+  argument names on the underlying action.
+
+* Tests
+
+~test/integration/mcp_resources_test.exs~:
+
+1. ~resources/list~ returns all registered resources.
+2. ~resources/read~ on ~concept://workspaces/{ws_id}/tree~ returns the page tree.
+3. Cross-workspace isolation per FEAT-058 holds for all resources.
+
+* Acceptance
+
+- ~resources/list~ over MCP returns ≥ 8 entries (the resources defined here).
+- ~resources/read~ on each one returns JSON-serializable Ash records.
+- Cross-workspace isolation tests green.
+
+* Gates
+- ~gateCmd~: ~mix test test/integration/mcp_resources_test.exs~
+- ~gateCommit~: true

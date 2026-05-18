@@ -1,0 +1,216 @@
+#+TITLE: BlockType MCP UI resources and BlockController
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-064-blocktype-interactive-emits-mcp-tools
+#+CUSTOM_ID: FEAT-065-blocktype-mcp-ui-resources-and-blockcont
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W4
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+
+Make each block type ship an MCP UI resource so an MCP client can render
+exactly what a human sees in the LiveView — using the *same* Phoenix
+component server-side.
+
+Static blocks and Interactive blocks both register one
+~mcp_ui_resource~ each at compile time, via a small extension to the
+~BlockType.{Static,Interactive}~ macros. A single controller
+(~ConceptWeb.MCP.BlockController~) resolves each URI by loading the block
+and calling the block type's render fn.
+
+* Context
+
+PLAN-006 established that every block type module has a ~render/1~
+(Static) or ~render_body/1~ (Interactive). Per the
+~ADDING_A_BLOCK.md~ doc, the dispatcher is type-agnostic — everything
+lives in the type module. This FEAT extends that property: the MCP UI
+surface is also "in the type module" (declaratively, via the macro).
+
+AshAi 0.6.1 supports ~mcp_ui_resource~ (added in v0.6.0 — "MCP Apps spec").
+The DSL takes a URI, an HTML path (read at request time), and metadata.
+
+We use a different shape: instead of an HTML *file*, we resolve the URI
+through a controller route that renders dynamically. AshAi's
+~mcp_ui_resource~ accepts ~html_path:~ — verify it supports a server URL
+or controller dispatch. If not, we register the resource with a
+placeholder ~html_path~ and override the URI's resolution via a thin
+extension to ~AshAi.Mcp.Router~ (or by intercepting in a custom plug
+before the forward).
+
+* Scope (IN)
+
+** Files (Create)
+
+- ~lib/concept_web/mcp/block_controller.ex~ — renders a block to HTML.
+- ~lib/concept_web/mcp/block_html.ex~ — view module (just delegates to
+  the BlockType's render fn).
+- ~test/concept_web/mcp/block_controller_test.exs~
+
+** Files (Edit)
+
+- ~lib/concept/pages/block_type/static.ex~ — emit one
+  ~mcp_ui_resource~ entity per block type.
+- ~lib/concept/pages/block_type/interactive.ex~ — same.
+- ~lib/concept/pages.ex~ — accept the contributed UI resource entries
+  (parallel to FEAT-064's tool accumulator).
+- ~lib/concept_web/router.ex~ — mount the block controller under a path
+  the MCP UI resource URIs resolve to. (See note below — depends on
+  AshAi's URI resolution mechanism.)
+- ~docs/blocks/ADDING_A_BLOCK.md~ — append an "MCP UI resource" section.
+
+* Implementation notes
+
+** URI shape
+
+~ui://blocks/{type}/{block_id}~ — the ~type~ slot determines which block
+type module to dispatch to; ~block_id~ identifies the row.
+
+** The controller
+
+#+begin_src elixir
+defmodule ConceptWeb.MCP.BlockController do
+  use ConceptWeb, :controller
+  alias Concept.Pages
+  alias Concept.Pages.BlockTypes
+
+  def render_block(conn, %{"type" => type_str, "block_id" => block_id}) do
+    with {:ok, type} <- BlockTypes.resolve(type_str),
+         {:ok, mod} <- BlockTypes.lookup_safe(type),
+         actor = conn.assigns[:current_user],
+         tenant = conn.assigns[:mcp_tenant],
+         {:ok, block} <- Ash.get(Pages.Block, block_id, actor: actor, tenant: tenant) do
+      assigns = %{
+        block: block,
+        locked_by: nil,
+        locked_blocks: [],
+        current_user: actor
+      }
+
+      html =
+        case mod.live_component?() do
+          true  -> Phoenix.LiveView.HTMLEngine.render_to_iodata(mod, :render_body, assigns)
+          false -> Phoenix.LiveView.HTMLEngine.render_to_iodata(mod, :render, assigns)
+        end
+        |> IO.iodata_to_binary()
+
+      conn
+      |> put_resp_content_type("text/html")
+      |> send_resp(200, html)
+    else
+      {:error, :unknown} -> send_resp(conn, 404, "unknown block type")
+      {:error, :unknown_type} -> send_resp(conn, 404, "unknown block type")
+      {:error, _} -> send_resp(conn, 404, "block not found or not authorized")
+    end
+  end
+end
+#+end_src
+
+NOTE on rendering: Phoenix.LiveView's render-to-HTML utilities differ
+between versions. If the call signature above isn't correct for 1.1.x,
+use ~Phoenix.HTML.Safe.to_iodata/1~ on the assigns rendered by
+~Phoenix.LiveView.TagEngine~ helper. Pin this on first implementation.
+
+** Macro extension
+
+In ~Static.__using__/1~, after defining ~render/1~ defaults, accumulate a
+spec:
+
+#+begin_src elixir
+@__block_type_mcp_ui_resource__ %{
+  name: :"block_ui_#{__MODULE__}",
+  uri_template: "ui://blocks/#{type()}/{block_id}",
+  module: __MODULE__,
+  mime_type: "text/html"
+}
+
+def __block_type_mcp_ui_resource__, do: @__block_type_mcp_ui_resource__
+#+end_src
+
+A ~Concept.Pages~ transformer reads ~Application.get_env(:concept, :block_types)~
+and for each module calls ~__block_type_mcp_ui_resource__/0~, then
+~Spark.Dsl.Transformer.add_entity/3~ to inject ~AshAi.McpUiResource~ entries
+under ~[:mcp_resources]~ (or wherever AshAi exposes the section).
+
+** Router route
+
+The MCP UI URI scheme is opaque to Plug routing — but the MCP client
+fetches it via the MCP server's ~resources/read~ method, not as a normal
+HTTP URL. AshAi's MCP server invokes the registered handler. Confirm
+the handler API in ~deps/ash_ai/lib/ash_ai/mcp/server.ex~ — likely a
+function reference passed via the resource entity. If so, the
+~BlockController~ becomes a *handler function*, not a Plug controller:
+
+#+begin_src elixir
+mcp_ui_resource :block_ui_ai_answer,
+  uri_template: "ui://blocks/ai_answer/{block_id}",
+  handler: {ConceptWeb.MCP.BlockController, :render_block, []}
+#+end_src
+
+The implementation should mirror what AshAi expects. Adjust shape after
+reading the dep source at FEAT start.
+
+** Documentation append
+
+In ~docs/blocks/ADDING_A_BLOCK.md~:
+
+#+begin_example
+### MCP UI resource (automatic)
+
+Every block type — Static or Interactive — automatically registers an
+MCP UI resource at `ui://blocks/<type>/<block_id>`. MCP clients that
+support MCP Apps render the block server-side using the same
+`render/1` (Static) or `render_body/1` (Interactive) callback used by
+the human-facing dispatcher. No per-type work required.
+
+Static blocks render with the dispatcher's standard assigns
+(`@block`, `@locked_by`, `@locked_blocks`, `@current_user`).
+Interactive blocks render their body without the LiveComponent wrapper
+(no `phx-hook`, no event wiring — MCP UI is a snapshot).
+#+end_example
+
+* Edge cases
+
+- Tenancy: the controller MUST use ~conn.assigns[:mcp_tenant]~ set by the
+  WorkspaceContext plug (FEAT-058). Reject if not present and the block's
+  workspace doesn't match the actor's accessible set.
+- Block was archived → return 404.
+- Interactive block render assumes ~@myself~ etc. when wrapped by LC. The
+  MCP render path calls ~render_body/1~ *without* the LC wrapper —
+  ensure the body doesn't reference ~@myself~ outside attributes we strip.
+  AI Answer's ~render_body/1~ already avoids ~@myself~ in the body
+  (it's only in the wrapper); verify any new interactive block follows
+  the same rule.
+- Static blocks call ~render/1~. Some take optional assigns like
+  ~@locked_blocks~ — pass them defaulted.
+
+* Tests
+
+1. Static block: ~render_block~ with valid block id returns HTML
+   identical to the dispatcher's output for that block.
+2. Interactive block: same, with body-only output (no wrapper).
+3. Cross-workspace: ApiKey bound to A, block in B → 404.
+4. Unknown block type → 404.
+5. ~resources/list~ over MCP includes one entry per registered block
+   type.
+
+* Acceptance
+
+- All static + interactive block types appear in ~resources/list~.
+- ~resources/read ui://blocks/divider/<id>~ returns the divider HTML.
+- ~resources/read ui://blocks/ai_answer/<id>~ returns the AI Answer body.
+- Smoke test: adding a new fixture ~Static~ block type and registering it
+  in ~:concept :block_types~ → it appears automatically in
+  ~resources/list~ without any further code change.
+
+* Gates
+- ~gateCmd~: ~mix test test/concept_web/mcp/block_controller_test.exs && mix test --exclude integration~
+- ~gateCommit~: true

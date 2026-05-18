@@ -1,0 +1,61 @@
+#+TITLE: Deps update and MCP protocol bump
+#+STATE: DOING
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+CUSTOM_ID: FEAT-051-deps-update-and-mcp-protocol-bump
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W0
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+Bring the project to the MCP protocol version implemented by ~ash_ai 0.6.1~
+(~2025-03-26~), and verify all Ash deps are at latest stable. No breaking
+changes expected; this is hygiene before the rest of the plan lands.
+
+* Scope (IN)
+- ~mix deps.update~ for: ~ash~, ~ash_ai~, ~ash_phoenix~, ~ash_postgres~,
+  ~ash_authentication~, ~ash_authentication_phoenix~, ~ash_oban~,
+  ~ash_admin~, ~ash_state_machine~, ~ash_paper_trail~, ~ash_archival~,
+  ~spark~.
+- Update ~protocol_version_statement~ in ~lib/concept_web/router.ex~ from
+  ~"2024-11-05"~ to ~"2025-03-26"~ (the version implemented by ash_ai per
+  its hex docs).
+
+* Scope (OUT)
+- Any code change to consume new features. AutoTools (FEAT-050) and
+  ~mcp_ui_resource~ (FEAT-063) are separate FEATs.
+
+* Files (Edit)
+- ~mix.exs~ (no version-range changes needed; ranges already permit latest)
+- ~mix.lock~ (updated via mix task)
+- ~lib/concept_web/router.ex~ (one-line change in the ~scope "/mcp"~ block)
+
+* Steps
+1. ~mix deps.update ash ash_ai ash_phoenix ash_postgres ash_authentication ash_authentication_phoenix ash_oban ash_admin ash_state_machine ash_paper_trail ash_archival spark~
+2. ~mix compile --warnings-as-errors~
+3. ~mix test --exclude integration~
+4. Update router protocol string.
+5. Hit ~/mcp~ from ~mcp-inspector~ (or ~curl~ initialize request) and
+   verify the server returns the new protocol version.
+
+* Tests
+- ~mix test~ green.
+- ~curl -s -X POST -H 'content-type: application/json' -H 'x-api-key: <key>' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' http://localhost:4279/mcp/~
+  returns ~"protocolVersion":"2025-03-26"~.
+
+* Acceptance
+- Compile clean.
+- ~mix test --exclude integration~ green.
+- Manual ~initialize~ over MCP returns the new protocol version.
+
+* Gates
+- ~gateCmd~: ~mix compile --warnings-as-errors && mix test --exclude integration~
+- ~gateCommit~: true

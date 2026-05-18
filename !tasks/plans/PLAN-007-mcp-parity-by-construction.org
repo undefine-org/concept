@@ -1,0 +1,160 @@
+#+TITLE: MCP Parity by Construction
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+CUSTOM_ID: PLAN-007-mcp-parity-by-construction
+#+LAYER: platform
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Initial Message
+
+How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would.
+
+* PLAN MCP Parity by Construction
+** Principle
+
+#+begin_quote
+Every Ash action with a ~description~ is a feature. The LiveView is one
+projection of that feature; the MCP tool is another. If a human can do it
+in Concept, an LLM can do it via MCP — automatically, with the same
+policies, on the same data.
+#+end_quote
+
+This plan makes the principle mechanically enforced. After it lands:
+
+- Adding a feature ::= adding an Ash action with a ~description~.
+- LiveView wiring is mechanical; MCP exposure is automatic; tests prove parity.
+- Block types declare their MCP surface in the same place they declare LV + JS wiring (via ~BlockType.{Static,Interactive}~).
+- Documentation generates from action metadata (~mix concept.docs.mcp_surface~).
+
+** Why now
+
+Today only 4 of ~30 actions are MCP-exposed (whitelist in router). The
+infrastructure (AshAi 0.6.1, AshAuthentication ApiKey strategy, policy
+authorizer, multitenancy) is already in place. The bottleneck is
+*declaration* and an *enforcement loop*. PLAN-006 just established the
+"one module = one feature" pattern for block types — this plan generalizes
+it to the whole product.
+
+** Architecture
+
+#+begin_example
+Ash action (the canonical unit)
+    │
+    ├── description "..."          ⇒ AutoTools → MCP tool
+    ├── arguments + types          ⇒ MCP JSON schema (free)
+    ├── policies                   ⇒ enforced on every surface
+    ├── pub_sub                    ⇒ LiveView re-render
+    │
+    └── projections:
+          • LiveView handle_event/3 → calls code interface
+          • AshPhoenix.Form         → same action
+          • MCP /mcp tools/call     → same action
+          • MCP /mcp resources/read → curated read actions
+          • Block-type macros       → register tool + ui_resource per verb
+#+end_example
+
+The MCP server stops being a separate surface and becomes a *projection of
+domain actions*. Same authz, same tenancy, same data path.
+
+** Waves
+
+| Wave | Tasks                                                                                       | Mode                          |
+|------+---------------------------------------------------------------------------------------------+-------------------------------|
+| W0   | FEAT-051, FEAT-052, FEAT-053                                                                | main, sequential              |
+| W1   | FEAT-054, FEAT-055, FEAT-056, FEAT-057                                                      | swarm (quick_task), parallel  |
+| W2   | FEAT-058 → (FEAT-059, FEAT-060)                                                             | main; FEAT-059 swarm-able     |
+| W3   | FEAT-061, FEAT-062, FEAT-063                                                                | main + 1 swarm                |
+| W4   | FEAT-064, FEAT-065, FEAT-066                                                                | main + 1 swarm                |
+| W5   | FEAT-067                                                                                    | main                          |
+
+** FEATs (17, ordered by execution)
+
+W0 — Foundation:
+- [[id:FEAT-051-deps-update-and-mcp-protocol-bump][FEAT-051]] — Bump MCP protocol_version_statement to 2025-03-26; verify Ash deps at latest stable
+- [[id:FEAT-052-concept-autotools-spark-extension][FEAT-052]] — ~Concept.AutoTools~ Spark extension: description-driven tool synthesis
+- [[id:FEAT-053-wire-concept-autotools-into-all-domains][FEAT-053]] — Wire ~Concept.AutoTools~ into Pages, Knowledge, Chat, Accounts domains
+
+W1 — Exhaustive descriptions (swarm-parallel):
+- [[id:FEAT-054-describe-pages-domain-actions][FEAT-054]] — Describe every public action on ~Pages.Page~ and ~Pages.Block~
+- [[id:FEAT-055-describe-knowledge-domain-actions][FEAT-055]] — Describe ~Knowledge.{Link,Citation,IngestionJob,Tools}~ actions
+- [[id:FEAT-056-describe-chat-domain-actions][FEAT-056]] — Describe ~Chat.{Conversation,Message}~ actions
+- [[id:FEAT-057-describe-accounts-domain-actions][FEAT-057]] — Describe ~Accounts.{User,Workspace,Membership,ApiKey}~ actions
+
+W2 — Tenancy + browse + flip:
+- [[id:FEAT-058-apikey-workspace-binding-and-mcp-workspa][FEAT-058]] — ApiKey ~workspace_id~ + ~MCPWorkspaceContext~ plug + migration
+- [[id:FEAT-059-register-mcp-resources-per-domain][FEAT-059]] — Register ~mcp_resources~ in each domain (navigable noun surface)
+- [[id:FEAT-060-router-flip-tools-true][FEAT-060]] — Router: ~tools: true~; replace explicit whitelist
+
+W3 — Enforcement:
+- [[id:FEAT-061-liveview-purity-cutover-remove-ash-leaka][FEAT-061]] — Remove ~Ash.Query~/~Ash.Changeset~ leakage from ~workspace_live.ex~
+- [[id:FEAT-062-credo-liveview-purity-check][FEAT-062]] — Custom Credo check banning Ash/Ecto imports in LiveViews
+- [[id:FEAT-063-mcp-parity-test-and-docs-mcp-surface-mix][FEAT-063]] — ~mix concept.docs.mcp_surface~ + ~test/integration/mcp_parity_test.exs~
+
+W4 — Block-type MCP surface:
+- [[id:FEAT-064-blocktype-interactive-emits-mcp-tools][FEAT-064]] — Extend ~BlockType.Interactive~ to emit MCP tool entries per verb
+- [[id:FEAT-065-blocktype-mcp-ui-resources-and-blockcont][FEAT-065]] — Extend ~BlockType.{Static,Interactive}~ to emit ~mcp_ui_resource~ + ~MCP.BlockController~
+- [[id:FEAT-066-cleanup-hand-coded-tool-declarations][FEAT-066]] — Remove redundant manual ~tool ...~ entries (now synthesized by AutoTools)
+
+W5 — Docs + principle:
+- [[id:FEAT-067-agents-md-principle-and-docs-mcp-parity][FEAT-067]] — AGENTS.md Principle section + ~docs/mcp_parity.md~ + ExDoc wiring
+
+** Acceptance (plan-level)
+
+1. ~mix precommit~ green throughout the wave sequence.
+2. ~mix concept.docs.mcp_surface~ exits 0; emits ~docs/mcp_surface.md~ listing every described tool.
+3. ~mix docs~ produces ExDoc HTML including the auto-generated surface page.
+4. ~test/integration/mcp_parity_test.exs~ passes:
+   - Every exposed tool has a non-nil ~description~ + arg descriptions.
+   - Every public action with a ~description~ appears in ~tools/list~.
+   - Workspace tenancy isolated across API keys.
+5. ~mix credo --strict~ green (LiveView purity enforced).
+6. Local ~mcp-inspector~ run lists all expected tools + resources; reading
+   ~concept://workspaces/{id}/tree~ returns the page tree.
+7. Adding a new ~BlockType.Static~ subclass automatically registers a
+   ~ui://blocks/{type}~ resource without touching ~block_render.ex~,
+   ~router.ex~, or any domain file (verified by a smoke test in FEAT-065).
+
+** Non-goals
+
+- AshJsonApi / AshGraphql layering (separate plan; foundation laid here).
+- Real-time MCP subscriptions (no client support today; left as FUP).
+- Converting legacy text blocks to ~Static~ (depends on FUP-014, out of scope).
+- Migrating every ~handle_event/3~ to ~AshPhoenix.Form~ (broader UX overhaul; FUP).
+- Per-workspace LLM provider keys (FUP-004; orthogonal).
+
+** Risks & mitigations
+
+- *Auto-exposing mutation actions* — every action must have a ~policies~
+  block. Audit policies in W1 (descriptions writer also asserts a policy
+  block exists). FEAT-058 ships before FEAT-060 so workspace context is
+  required before the whitelist drops.
+- *Description drift* — mitigated by the mix-task assertion; CI red on miss.
+- *Argument schema quality* — typed args (UUID, atom one_of, string) yield
+  good JSON schemas. Free-form ~:map~ args (e.g. ~Block.update_props~)
+  need their shape described in prose. W1 enforces this per arg.
+- *Block-type macro feature creep* — keep FEAT-064/065 additive; no breaking
+  changes to the ~ash_actions~ syntax in ~ADDING_A_BLOCK.md~. New behavior
+  is gated by a new optional ~mcp:~ keyword on ~use~.
+
+** Related work
+
+- PLAN-006 (landed): established ~BlockType.{Static,Interactive}~ macros. FEAT-064/065 extend them.
+- FUP-007: Cmd-K workspace intent bar. After this plan, palette can dispatch over the same exposed-tools set.
+- FUP-004: per-workspace LLM keys. Composable with FEAT-058 (ApiKey scoping pattern).
+- FUP-016: Promote ~Knowledge.Profiles~ to Spark DSL. Same extension pattern as ~Concept.AutoTools~.
+
+** Execution map
+
+| Wave | Lead     | Parallelism                                          |
+|------+----------+------------------------------------------------------|
+| W0   | main     | sequential; FEAT-052 blocks FEAT-053                 |
+| W1   | swarm    | 4 quick_task FEATs in parallel; all block FEAT-058   |
+| W2   | main     | FEAT-058 first; FEAT-059 swarm-able after FEAT-058   |
+| W3   | mixed    | FEAT-061 main; FEAT-062 swarm; FEAT-063 main         |
+| W4   | mixed    | FEAT-064 main; FEAT-065 main; FEAT-066 swarm        |
+| W5   | main     | FEAT-067 (docs)                                     |
+

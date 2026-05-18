@@ -1,0 +1,191 @@
+#+TITLE: BlockType.Interactive emits MCP tools
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+BLOCKERS: FEAT-063-mcp-parity-test-and-docs-mcp-surface-mix
+#+CUSTOM_ID: FEAT-064-blocktype-interactive-emits-mcp-tools
+#+LAYER: platform
+#+PARENT: PLAN-007-mcp-parity-by-construction
+#+WAVE: W4
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:PLAN-007-mcp-parity-by-construction][PLAN-007 — MCP Parity by Construction]]
+
+* Intention & Purpose
+
+Extend the existing ~Concept.Pages.BlockType.Interactive~ macro (delivered
+in PLAN-006) so that each entry in ~ash_actions:~ also registers an MCP
+tool — namespaced per block type — pointing at the same underlying Ash
+action.
+
+After this FEAT: declaring an interactive block type ships the LiveView
+event handler, the JS hook wiring, the Ash action call, AND the MCP tool
+exposure — all from a single declaration.
+
+* Context — PLAN-006 already established
+
+The block-type module is the canonical declaration. Quoting
+~docs/blocks/ADDING_A_BLOCK.md~:
+
+#+begin_quote
+The wiring guarantee: if it compiles, it works. You cannot forget to
+register a JS hook, define a LiveView event handler, or wire a
+phx-target — those are produced by the macros from a single source of
+truth.
+#+end_quote
+
+We extend that guarantee to MCP.
+
+** Current Interactive call site
+
+#+begin_src elixir
+use Concept.Pages.BlockType.Interactive,
+  ash_actions: [
+    evaluate: [Concept.Pages, :evaluate_ai, [:prompt, :scope, :profile]],
+    refresh:  [Concept.Pages, :evaluate_ai, [:prompt, :scope, :profile]],
+    retry:    [Concept.Pages, :evaluate_ai, [:prompt, :scope, :profile]]
+  ]
+#+end_src
+
+* Scope (IN)
+
+** Files (Edit)
+
+- ~lib/concept/pages/block_type/interactive.ex~ — extend the macro.
+- ~lib/concept/pages/block_types/ai_answer.ex~ — add the ~mcp:~ keyword
+  (optional descriptions per verb).
+- ~lib/concept/pages.ex~ — accept the synthesized tool entries
+  contributed by Interactive macros (via the per-module accumulator).
+- ~docs/blocks/ADDING_A_BLOCK.md~ — append a section "MCP tools" explaining
+  the new ~mcp:~ keyword.
+
+** Files (Create)
+
+- ~lib/concept/pages/block_type/mcp_registry.ex~ — compile-time accumulator
+  used by the Interactive macro to pass tool declarations up to the
+  ~Concept.Pages~ domain transformer.
+- ~test/concept/pages/block_type/interactive_mcp_test.exs~ — covers the
+  new exposure behavior.
+
+* Implementation notes
+
+** New macro option
+
+#+begin_src elixir
+use Concept.Pages.BlockType.Interactive,
+  ash_actions: [
+    evaluate: [Concept.Pages, :evaluate_ai, [:prompt, :scope, :profile]],
+    ...
+  ],
+  mcp: [
+    evaluate: "Run the AI Answer block's prompt and return cited results.",
+    refresh:  "Re-run the AI Answer's prompt against the current workspace state.",
+    retry:    "Re-run the AI Answer after a failure.",
+    # opt-out shape:
+    # only: [:evaluate]      # expose only these
+    # except: [:retry]       # expose all except these
+  ]
+#+end_src
+
+If ~mcp:~ is omitted, all verbs are exposed; descriptions fall back to the
+underlying Ash action's ~description~. If the underlying action has no
+description, the verb is *not* exposed (consistent with the AutoTools
+contract).
+
+** Tool naming
+
+~:"block_#{type}_#{verb}"~ — e.g. ~:block_ai_answer_evaluate~,
+~:block_ai_answer_refresh~. The block type comes from
+~Module.type/0~ (callback already declared).
+
+** Per-verb argument schema
+
+The macro already knows ~arg_atoms~ (third element of the ash_actions
+triple). For each, register the corresponding ~AshAi.Tool.Argument~ with:
+- type derived from the underlying action's argument type
+- ~allow_nil?~ derived from the action's argument config
+- ~description~ derived from the underlying action's argument description
+
+The MCP client sees per-tool args matching what the Ash action accepts.
+
+** Block id is implicit
+
+The Interactive macro's LiveView side injects ~block_id~ from
+~data-block-id~. For MCP, the tool must take ~block_id~ explicitly as an
+argument (since the LLM doesn't have a DOM). Add it as the first
+argument of the synthesized tool with description "Block id to operate on."
+
+** The accumulator
+
+Block type modules compile before the ~Concept.Pages~ domain. To inject
+tool entities from a child module into the parent domain, use a Spark
+~persisted~ key in the module attribute or a small ETS table populated at
+compile time + drained by a Pages domain transformer.
+
+Concrete approach (the simpler one): each Interactive module, in its
+~@before_compile~ hook, writes a ~@__mcp_tool_specs__~ module attribute.
+A ~Concept.Pages~ transformer iterates
+~Application.get_env(:concept, :block_types)~ at compile time, reads each
+module's tool specs (via a public function the macro injects), and
+~add_entity~'s them into the domain's ~[:tools]~ section.
+
+** Documentation
+
+Append to ~docs/blocks/ADDING_A_BLOCK.md~ a new section:
+
+#+begin_example
+### MCP exposure
+
+Each `ash_actions:` verb is automatically registered as an MCP tool named
+`block_<type>_<verb>` so an LLM can invoke it via MCP using the same path
+the user takes via the block UI.
+
+To customize descriptions or opt out:
+
+    mcp: [
+      evaluate: "Run the AI prompt.",
+      except: [:retry]
+    ]
+
+The tool's first argument is always `block_id`. Subsequent arguments
+mirror the underlying Ash action's arguments.
+#+end_example
+
+* Edge cases
+
+- Block type's underlying action has no description → tool not registered.
+  (Hard rule: AutoTools contract applies here too. If you want it exposed,
+  describe the action.)
+- ~ash_actions~ entries pointing at multiple distinct underlying actions:
+  expose one tool per entry (the verb is the namespace key, not the action).
+- ~ash_actions~ with the same underlying action across multiple verbs
+  (e.g. evaluate/refresh/retry all → ~:evaluate_ai~): three distinct
+  tools, all calling the same action. Descriptions differentiate intent.
+
+* Tests
+
+1. Defining a fixture interactive block type with ~ash_actions~ +
+   underlying described action → ~AshAi.exposed_tools(domain: Concept.Pages)~
+   includes three new tools named ~:block_fixture_verb1~ etc.
+2. ~mcp: [except: [:verb2]]~ excludes that verb from exposure.
+3. Underlying action has no description → no tool registered, no error.
+4. Calling the synthesized tool with ~block_id~ + verb args invokes the
+   correct underlying action with the right tenant.
+
+* Acceptance
+
+- AI Answer block's three verbs appear in ~tools/list~ as
+  ~:block_ai_answer_{evaluate,refresh,retry}~.
+- ~tools/call~ on ~:block_ai_answer_evaluate~ with ~block_id~, ~prompt~,
+  etc. triggers the same Ash action flow as the LiveView event would.
+- ~mix concept.docs.mcp_surface~ regenerated; new block tools appear in
+  the docs page.
+- ~docs/blocks/ADDING_A_BLOCK.md~ updated with the MCP section.
+
+* Gates
+- ~gateCmd~: ~mix test test/concept/pages/block_type/interactive_mcp_test.exs && mix test test/integration/mcp_parity_test.exs~
+- ~gateCommit~: true
