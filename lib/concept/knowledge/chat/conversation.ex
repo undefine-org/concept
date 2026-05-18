@@ -28,6 +28,7 @@ defmodule Concept.Knowledge.Chat.Conversation do
     defaults [:read, :destroy]
 
     create :create do
+      description "Start a new chat conversation in the workspace."
       accept [:title]
       change relate_actor(:user)
     end
@@ -40,6 +41,7 @@ defmodule Concept.Knowledge.Chat.Conversation do
     end
 
     read :my_conversations do
+      description "List the actor's chat conversations in the workspace, most recent first."
       filter expr(user_id == ^actor(:id))
     end
   end

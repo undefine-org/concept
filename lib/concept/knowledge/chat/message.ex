@@ -30,14 +30,19 @@ defmodule Concept.Knowledge.Chat.Message do
     defaults [:read, :destroy]
 
     read :for_conversation do
+      description "List messages in a chat conversation, most recent first by default."
       pagination keyset?: true, required?: false
-      argument :conversation_id, :uuid, allow_nil?: false
+
+      argument :conversation_id, :uuid,
+        allow_nil?: false,
+        description: "Conversation whose messages to load."
 
       prepare build(default_sort: [inserted_at: :desc])
       filter expr(conversation_id == ^arg(:conversation_id))
     end
 
     create :create do
+      description "Send a message in a chat conversation; an AI response is generated asynchronously."
       accept [:text, :scope, :scope_target_id, :profile]
 
       validate match(:text, ~r/\S/) do
