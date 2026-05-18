@@ -192,6 +192,18 @@ defmodule Concept.Pages.Block do
       filter expr(page_id == ^arg(:page_id) and is_nil(archived_at))
       prepare build(sort: [parent_block_id: :asc, position: :asc])
     end
+
+    read :first_for_page do
+      description "Read the first (topmost) non-archived block of a page."
+      get? true
+
+      argument :page_id, :uuid,
+        allow_nil?: false,
+        description: "Page whose first block to read."
+
+      filter expr(page_id == ^arg(:page_id) and is_nil(archived_at))
+      prepare build(sort: [position: :asc], limit: 1)
+    end
   end
 
   policies do

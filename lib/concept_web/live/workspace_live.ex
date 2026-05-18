@@ -11,7 +11,7 @@ defmodule ConceptWeb.WorkspaceLive do
   alias Concept.Accounts
   alias Concept.Pages
 
-  require Ash.Query
+
 
   @impl true
   def mount(_params, _session, socket) do
@@ -375,11 +375,7 @@ defmodule ConceptWeb.WorkspaceLive do
     ws = socket.assigns.workspace
     user = socket.assigns.current_user
 
-    jobs =
-      Concept.Knowledge.IngestionJob
-      |> Ash.Query.sort(inserted_at: :desc)
-      |> Ash.Query.limit(10)
-      |> Ash.read!(actor: user, tenant: ws.id)
+    jobs = Concept.Knowledge.recent_ingestion_jobs!(actor: user, tenant: ws.id)
 
     {:noreply, assign(socket, show_indexing_details: true, indexing_jobs: jobs)}
   end
@@ -493,9 +489,7 @@ defmodule ConceptWeb.WorkspaceLive do
         workspace_id: ws.id
       }
 
-      case Concept.Knowledge.Link
-           |> Ash.Changeset.for_create(:create, link_attrs, actor: user, tenant: ws.id)
-           |> Ash.create() do
+      case Concept.Knowledge.create_link(link_attrs, actor: user, tenant: ws.id) do
         {:ok, _link} ->
           {:noreply,
            socket
@@ -537,12 +531,8 @@ defmodule ConceptWeb.WorkspaceLive do
         ws = socket.assigns.workspace
         user = socket.assigns.current_user
 
-        case Concept.Pages.Block
-             |> Ash.Query.filter(page_id: page_id)
-             |> Ash.Query.sort(:position)
-             |> Ash.Query.limit(1)
-             |> Ash.read(actor: user, tenant: ws.id) do
-          {:ok, [block | _]} -> block.id
+        case Concept.Pages.first_block_for_page(page_id, actor: user, tenant: ws.id) do
+          {:ok, %{id: id}} -> id
           _ -> nil
         end
 

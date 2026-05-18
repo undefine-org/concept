@@ -31,6 +31,7 @@ defmodule Concept.Knowledge do
   resources do
     resource Concept.Knowledge.IngestionJob do
       define :read_ingestion_jobs, action: :read
+      define :recent_ingestion_jobs, action: :recent_for_workspace
     end
 
     resource Concept.Knowledge.Citation do

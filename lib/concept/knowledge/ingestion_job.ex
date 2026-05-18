@@ -67,6 +67,11 @@ defmodule Concept.Knowledge.IngestionJob do
       prepare build(filter: expr(is_nil(archived_at)))
     end
 
+    read :recent_for_workspace do
+      description "List the 10 most recent ingestion jobs in the workspace, newest first."
+      prepare build(sort: [inserted_at: :desc], limit: 10)
+    end
+
     create :enqueue do
       description "Enqueue a page for ingestion (chunking + embedding + graph build)."
       accept [:page_id, :op]
