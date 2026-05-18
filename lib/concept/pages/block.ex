@@ -4,7 +4,7 @@ defmodule Concept.Pages.Block do
   and lock-managed via AshStateMachine. Type-specific concerns (default content, props
   validation, render) live in `Concept.Pages.BlockType` plug-in modules.
   """
-  use Ash.Resource,
+  use Concept.Resources.WorkspaceTenanted,
     otp_app: :concept,
     domain: Concept.Pages,
     data_layer: AshPostgres.DataLayer,
@@ -45,7 +45,7 @@ defmodule Concept.Pages.Block do
     transitions do
       transition :acquire_lock, from: :unlocked, to: :locked
       transition :refresh_lock, from: :locked, to: :locked
-      transition :release_lock, from: :locked, to: :unlocked
+      transition :release_lock, from: [:locked, :unlocked], to: :unlocked
     end
   end
 
@@ -69,34 +69,44 @@ defmodule Concept.Pages.Block do
     defaults [:read]
 
     create :create_block do
+      description "Create a new block on a page, optionally as a child of another block."
       accept [:page_id, :parent_block_id, :type, :content, :props, :position]
-      argument :workspace_id, :uuid, allow_nil?: false
+
+      argument :workspace_id, :uuid,
+        allow_nil?: false,
+        description: "Workspace the block belongs to. Actor must be a member."
+
       change set_attribute(:workspace_id, arg(:workspace_id))
       change Concept.Pages.Block.Changes.AssignDefaults
       change Concept.Pages.Block.Changes.AssignAfterLastSibling
     end
 
     update :update_content do
+      description "Update a block's content (lexical state or block-type-specific payload)."
       accept [:content]
       require_atomic? false
       change Concept.Pages.Block.Changes.RequireOwnLock
     end
 
     update :update_props do
+      description "Update a block's props (block-type-specific configuration)."
       accept [:props]
       require_atomic? false
       change Concept.Pages.Block.Changes.ValidatePropsForType
     end
 
     update :reorder do
+      description "Reorder a block within its current parent."
       accept [:position]
     end
 
     update :reparent do
+      description "Move a block under a new parent at a given position."
       accept [:parent_block_id, :position]
     end
 
     update :archive do
+      description "Archive a block (soft-delete; cascades to children)."
       accept []
       require_atomic? false
       change set_attribute(:archived_at, DateTime.utc_now())
@@ -104,8 +114,16 @@ defmodule Concept.Pages.Block do
     end
 
     update :acquire_lock do
-      argument :user_id, :uuid, allow_nil?: false
-      argument :ttl_seconds, :integer, default: 30
+      description "Acquire a collaborative-editing lock on the block. Required before mutating content."
+
+      argument :user_id, :uuid,
+        allow_nil?: false,
+        description: "User acquiring the lock; must match the actor."
+
+      argument :ttl_seconds, :integer,
+        default: 30,
+        description: "Lock lifetime in seconds before automatic release."
+
       accept []
       require_atomic? false
       change transition_state(:locked)
@@ -114,8 +132,16 @@ defmodule Concept.Pages.Block do
     end
 
     update :refresh_lock do
-      argument :user_id, :uuid, allow_nil?: false
-      argument :ttl_seconds, :integer, default: 30
+      description "Refresh an active lock's TTL while the actor continues editing."
+
+      argument :user_id, :uuid,
+        allow_nil?: false,
+        description: "User holding the lock; must match the actor."
+
+      argument :ttl_seconds, :integer,
+        default: 30,
+        description: "New lock lifetime in seconds."
+
       accept []
       require_atomic? false
       change transition_state(:locked)
@@ -124,6 +150,7 @@ defmodule Concept.Pages.Block do
     end
 
     update :release_lock do
+      description "Release a previously acquired editing lock."
       accept []
       require_atomic? false
       change transition_state(:unlocked)
@@ -134,15 +161,21 @@ defmodule Concept.Pages.Block do
     end
 
     update :evaluate_ai do
-      argument :prompt, :string, allow_nil?: false
+      description "Evaluate an AI Answer block against the current page or workspace context."
+
+      argument :prompt, :string,
+        allow_nil?: false,
+        description: "Question to answer using workspace content as context."
 
       argument :scope, :atom,
         constraints: [one_of: [:workspace, :page, :subtree]],
-        default: :workspace
+        default: :workspace,
+        description: "Retrieval scope. One of :workspace, :page, :subtree."
 
       argument :profile, :atom,
         constraints: [one_of: [:fast, :default, :thorough, :outline, :contradict, :intent]],
-        default: :default
+        default: :default,
+        description: "Knowledge profile. Determines model + retrieval params."
 
       accept []
       require_atomic? false
@@ -150,18 +183,26 @@ defmodule Concept.Pages.Block do
     end
 
     read :list_for_page do
-      argument :page_id, :uuid, allow_nil?: false
+      description "List all non-archived blocks on a page, in render order."
+
+      argument :page_id, :uuid,
+        allow_nil?: false,
+        description: "Page whose blocks to list."
+
       filter expr(page_id == ^arg(:page_id) and is_nil(archived_at))
       prepare build(sort: [parent_block_id: :asc, position: :asc])
     end
   end
 
   policies do
-    bypass actor_attribute_equals(:system?, true) do
-      authorize_if always()
+    # Read floor (members) + system bypass come from
+    # `Concept.Resources.WorkspaceTenanted`. Below are the block-specific
+    # write policies.
+    policy action_type(:create) do
+      authorize_if Concept.Pages.Checks.WorkspaceMemberCreate
     end
 
-    policy always() do
+    policy action_type([:update, :destroy]) do
       authorize_if Concept.Pages.Checks.WorkspaceMember
     end
   end
@@ -173,12 +214,6 @@ defmodule Concept.Pages.Block do
     publish_all :create, [:workspace_id, "page", :page_id, "blocks"], event: "block_created"
     publish_all :update, [:workspace_id, "page", :page_id, "blocks"], event: "block_updated"
     publish :archive, [:workspace_id, "page", :page_id, "blocks"], event: "block_archived"
-  end
-
-  multitenancy do
-    strategy :attribute
-    attribute :workspace_id
-    global? false
   end
 
   attributes do
