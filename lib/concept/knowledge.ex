@@ -14,20 +14,6 @@ defmodule Concept.Knowledge do
     show? true
   end
 
-  tools do
-    tool :search_workspace, Concept.Knowledge.Tools, :search_workspace do
-      description "Hybrid vector+graph search over the workspace's pages and blocks."
-    end
-
-    tool :answer_question, Concept.Knowledge.Tools, :answer_question do
-      description "Answer a question using workspace content with citations."
-    end
-
-    tool :link_blocks, Concept.Knowledge.Link, :create do
-      description "Assert a relationship between two blocks."
-    end
-  end
-
   resources do
     resource Concept.Knowledge.IngestionJob do
       define :read_ingestion_jobs, action: :read

@@ -27,7 +27,6 @@ defmodule Concept.AutoTools.Transformers.SynthesizeTools do
 
   def transform(dsl_state) do
     domain = Transformer.get_persisted(dsl_state, :module)
-    IO.inspect({:autotools_transform, domain}, label: :debug2)
     existing_tools = Transformer.get_entities(dsl_state, [:tools]) || []
     existing_names = MapSet.new(existing_tools, & &1.name)
     excluded = excluded_actions()

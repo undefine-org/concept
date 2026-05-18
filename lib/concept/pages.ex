@@ -8,12 +8,6 @@ defmodule Concept.Pages do
     show? true
   end
 
-  tools do
-    tool :create_page, Concept.Pages.Page, :create_page do
-      description "Create a new page under the given parent (or top-level)."
-    end
-  end
-
   resources do
     resource Concept.Pages.Page do
       define :create_page, args: [:title, :workspace_id, {:optional, :parent_page_id}]

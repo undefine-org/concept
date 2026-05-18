@@ -130,20 +130,7 @@ Workspaces the actor is a member of.
 
 ---
 ## Concept.Knowledge
-### Tools (14)
-
-#### `answer_question`
-
-Answer a question using workspace content with citations.
-
-- **Resource**: `Concept.Knowledge.Tools`
-- **Action**: `:answer_question` (action)
-
-**Arguments:**
-
-  - `question` (`String`, required) — Question to answer using workspace content as context.
-  - `workspace_id` (`UUID`, required) — Workspace to draw context from.
-
+### Tools (11)
 
 #### `citation_create`
 
@@ -217,18 +204,6 @@ List the 10 most recent ingestion jobs in the workspace, newest first.
 - **Action**: `:recent_for_workspace` (read)
 
 
-#### `link_blocks`
-
-Assert a relationship between two blocks.
-
-- **Resource**: `Concept.Knowledge.Link`
-- **Action**: `:create` (create)
-
-**Arguments:**
-
-  - `workspace_id` (`UUID`, required) — Workspace both blocks belong to.
-
-
 #### `link_create`
 
 Assert a typed relationship between two blocks (e.g. supports, contradicts, depends_on).
@@ -247,21 +222,6 @@ Remove a previously asserted relationship between two blocks.
 
 - **Resource**: `Concept.Knowledge.Link`
 - **Action**: `:destroy` (destroy)
-
-
-#### `search_workspace`
-
-Hybrid vector+graph search over the workspace's pages and blocks.
-
-- **Resource**: `Concept.Knowledge.Tools`
-- **Action**: `:search_workspace` (action)
-
-**Arguments:**
-
-  - `query` (`String`, required) — Natural-language query to retrieve relevant blocks for.
-  - `workspace_id` (`UUID`, required) — Workspace to search within.
-  - `mode` (`Atom`, optional) — Retrieval mode. One of :hybrid (default), :vector, :keyword.
-  - `limit` (`Integer`, optional) — Maximum number of results to return.
 
 
 #### `tools_answer_question`
@@ -294,27 +254,7 @@ Hybrid vector+graph search over the workspace's pages and blocks.
 
 ---
 ## Concept.Knowledge.Chat
-### Tools (6)
-
-#### `chat_list_conversations`
-
-List chat conversations visible to the current actor.
-
-- **Resource**: `Concept.Knowledge.Chat.Conversation`
-- **Action**: `:my_conversations` (read)
-
-
-#### `chat_message_history`
-
-Read chat messages for a conversation_id.
-
-- **Resource**: `Concept.Knowledge.Chat.Message`
-- **Action**: `:for_conversation` (read)
-
-**Arguments:**
-
-  - `conversation_id` (`UUID`, required) — Conversation whose messages to load.
-
+### Tools (4)
 
 #### `conversation_create`
 
@@ -354,7 +294,7 @@ List messages in a chat conversation, most recent first by default.
 
 ---
 ## Concept.Pages
-### Tools (27)
+### Tools (26)
 
 #### `block_acquire_lock`
 
@@ -520,18 +460,6 @@ Update a block's props (block-type-specific configuration).
 
 - **Resource**: `Concept.Pages.Block`
 - **Action**: `:update_props` (update)
-
-
-#### `create_page`
-
-Create a new page under the given parent (or top-level).
-
-- **Resource**: `Concept.Pages.Page`
-- **Action**: `:create_page` (create)
-
-**Arguments:**
-
-  - `workspace_id` (`UUID`, required) — Workspace where the page will be created
 
 
 #### `page_archive`

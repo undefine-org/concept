@@ -3,16 +3,6 @@ defmodule Concept.Knowledge.Chat do
     otp_app: :concept,
     extensions: [AshAi, AshPhoenix, Concept.AutoTools]
 
-  tools do
-    tool :chat_list_conversations, Concept.Knowledge.Chat.Conversation, :my_conversations do
-      description "List chat conversations visible to the current actor."
-    end
-
-    tool :chat_message_history, Concept.Knowledge.Chat.Message, :for_conversation do
-      description "Read chat messages for a conversation_id."
-    end
-  end
-
   resources do
     resource Concept.Knowledge.Chat.Conversation do
       define :create_conversation, action: :create

@@ -48,8 +48,12 @@ defmodule ConceptWeb.McpTest do
       assert length(tools) >= 2
 
       tool_names = Enum.map(tools, & &1["name"])
-      assert "search_workspace" in tool_names
-      assert "answer_question" in tool_names
+      # After PLAN-007 FEAT-066, the manual `tool :search_workspace, ...` /
+      # `tool :answer_question, ...` blocks were removed in favor of
+      # description-driven auto-synthesis (Concept.AutoTools). The synthesized
+      # names carry the resource slug prefix.
+      assert "tools_search_workspace" in tool_names
+      assert "tools_answer_question" in tool_names
     end
 
     test "rejects requests without API key", %{conn: conn} do
