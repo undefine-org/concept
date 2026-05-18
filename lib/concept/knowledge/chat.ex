@@ -1,5 +1,7 @@
 defmodule Concept.Knowledge.Chat do
-  use Ash.Domain, otp_app: :concept, extensions: [AshAi, AshPhoenix]
+  use Ash.Domain,
+    otp_app: :concept,
+    extensions: [AshAi, AshPhoenix, Concept.AutoTools]
 
   tools do
     tool :chat_list_conversations, Concept.Knowledge.Chat.Conversation, :my_conversations do

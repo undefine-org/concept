@@ -1,6 +1,8 @@
 defmodule Concept.Pages do
   @moduledoc "Page tree + Block content domain."
-  use Ash.Domain, otp_app: :concept, extensions: [AshAdmin.Domain, AshAi]
+  use Ash.Domain,
+    otp_app: :concept,
+    extensions: [AshAdmin.Domain, AshAi, Concept.AutoTools]
 
   admin do
     show? true

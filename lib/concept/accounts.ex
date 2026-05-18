@@ -1,6 +1,8 @@
 defmodule Concept.Accounts do
   @moduledoc "Identity & tenancy: User, Token, Workspace, Membership."
-  use Ash.Domain, otp_app: :concept, extensions: [AshAdmin.Domain]
+  use Ash.Domain,
+    otp_app: :concept,
+    extensions: [AshAdmin.Domain, AshAi, Concept.AutoTools]
 
   admin do
     show? true

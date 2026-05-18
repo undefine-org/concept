@@ -34,6 +34,14 @@ defmodule Concept.AutoTools do
         exclude: [
           {Concept.Pages.Page, :archive},
           {Concept.Knowledge.IngestionJob, :run}
+        ],
+        # Resources whose ALL actions are excluded from auto-synthesis.
+        # Use for resources whose actions are populated by upstream extensions
+        # (e.g. AshAuthentication generates User/Token actions with descriptions
+        # that should not be exposed via MCP).
+        exclude_resources: [
+          Concept.Accounts.User,
+          Concept.Accounts.Token
         ]
 
   ### Manual `tool ...` always wins

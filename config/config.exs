@@ -145,6 +145,17 @@ config :concept, :block_types, [
   Concept.Pages.BlockTypes.AiAnswer
 ]
 
+# Concept.AutoTools — opt-out rules for MCP tool auto-synthesis.
+# See lib/concept/auto_tools.ex for full docs.
+config :concept, Concept.AutoTools,
+  exclude: [],
+  # AshAuthentication generates User/Token actions with descriptions of its own.
+  # Those actions are browser-auth-only and must not be exposed via MCP.
+  exclude_resources: [
+    Concept.Accounts.User,
+    Concept.Accounts.Token
+  ]
+
 config :arcana,
   repo: Concept.Repo,
   embedder: {:custom, module: Concept.Knowledge.GeminiEmbedder},

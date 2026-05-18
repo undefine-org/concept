@@ -3,7 +3,9 @@ defmodule Concept.Knowledge do
   RAG/GraphRAG over Concept's pages & blocks. Wraps Arcana with
   workspace tenancy + Ash policies.
   """
-  use Ash.Domain, otp_app: :concept, extensions: [AshAdmin.Domain, AshAi]
+  use Ash.Domain,
+    otp_app: :concept,
+    extensions: [AshAdmin.Domain, AshAi, Concept.AutoTools]
 
   require Ash.Query
   alias Concept.Knowledge.SystemActor

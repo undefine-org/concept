@@ -30,11 +30,13 @@ defmodule Concept.AutoTools.Transformers.SynthesizeTools do
     existing_tools = Transformer.get_entities(dsl_state, [:tools]) || []
     existing_names = MapSet.new(existing_tools, & &1.name)
     excluded = excluded_actions()
+    excluded_resources = excluded_resources()
 
     resources =
       dsl_state
       |> Transformer.get_entities([:resources])
       |> Enum.map(& &1.resource)
+      |> Enum.reject(&MapSet.member?(excluded_resources, &1))
 
     synthesis_results =
       for resource <- resources,
@@ -93,6 +95,13 @@ defmodule Concept.AutoTools.Transformers.SynthesizeTools do
     :concept
     |> Application.get_env(Concept.AutoTools, [])
     |> Keyword.get(:exclude, [])
+    |> MapSet.new()
+  end
+
+  defp excluded_resources do
+    :concept
+    |> Application.get_env(Concept.AutoTools, [])
+    |> Keyword.get(:exclude_resources, [])
     |> MapSet.new()
   end
 end
