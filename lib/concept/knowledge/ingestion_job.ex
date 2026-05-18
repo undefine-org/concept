@@ -7,7 +7,7 @@ defmodule Concept.Knowledge.IngestionJob do
 
   States: queued → running → succeeded | failed
   """
-  use Ash.Resource,
+  use Concept.Resources.WorkspaceTenanted,
     otp_app: :concept,
     domain: Concept.Knowledge,
     data_layer: AshPostgres.DataLayer,
@@ -62,13 +62,19 @@ defmodule Concept.Knowledge.IngestionJob do
   actions do
     read :read do
       primary? true
+      description "List ingestion jobs (queued, running, succeeded, failed) for the workspace."
       pagination keyset?: true, required?: false
       prepare build(filter: expr(is_nil(archived_at)))
     end
 
     create :enqueue do
+      description "Enqueue a page for ingestion (chunking + embedding + graph build)."
       accept [:page_id, :op]
-      argument :workspace_id, :uuid, allow_nil?: false
+
+      argument :workspace_id, :uuid,
+        allow_nil?: false,
+        description: "Workspace the page belongs to."
+
       change set_attribute(:workspace_id, arg(:workspace_id))
       change Concept.Knowledge.IngestionJob.Changes.SetScheduledAt
     end
@@ -97,6 +103,7 @@ defmodule Concept.Knowledge.IngestionJob do
     end
 
     update :archive do
+      description "Archive a completed or failed ingestion job from the user-visible list."
       accept []
       require_atomic? false
       change set_attribute(:archived_at, &DateTime.utc_now/0)
@@ -104,14 +111,8 @@ defmodule Concept.Knowledge.IngestionJob do
   end
 
   policies do
-    bypass actor_attribute_equals(:system?, true) do
-      authorize_if always()
-    end
-
-    policy action_type(:read) do
-      authorize_if Concept.Pages.Checks.WorkspaceMember
-    end
-
+    # Read floor (members) + system bypass come from
+    # `Concept.Resources.WorkspaceTenanted`. Writes are system-only.
     policy action_type([:create, :update]) do
       authorize_if actor_attribute_equals(:system?, true)
     end
@@ -124,12 +125,6 @@ defmodule Concept.Knowledge.IngestionJob do
     publish :run, ["*", :workspace_id, "ingest"], event: "ingest_started"
     publish :succeed, ["*", :workspace_id, "ingest"], event: "ingest_succeeded"
     publish :fail, ["*", :workspace_id, "ingest"], event: "ingest_failed"
-  end
-
-  multitenancy do
-    strategy :attribute
-    attribute :workspace_id
-    global? false
   end
 
   attributes do

@@ -9,10 +9,23 @@ defmodule Concept.Knowledge.Tools do
     action :search_workspace, {:array, :map} do
       description "Hybrid vector+graph search over the workspace's pages and blocks."
 
-      argument :query, :string, allow_nil?: false
-      argument :workspace_id, :uuid, allow_nil?: false
-      argument :mode, :atom, default: :hybrid, allow_nil?: true
-      argument :limit, :integer, default: 10, allow_nil?: true
+      argument :query, :string,
+        allow_nil?: false,
+        description: "Natural-language query to retrieve relevant blocks for."
+
+      argument :workspace_id, :uuid,
+        allow_nil?: false,
+        description: "Workspace to search within."
+
+      argument :mode, :atom,
+        default: :hybrid,
+        allow_nil?: true,
+        description: "Retrieval mode. One of :hybrid (default), :vector, :keyword."
+
+      argument :limit, :integer,
+        default: 10,
+        allow_nil?: true,
+        description: "Maximum number of results to return."
 
       run fn input, _context ->
         opts = [
@@ -34,8 +47,13 @@ defmodule Concept.Knowledge.Tools do
     action :answer_question, :map do
       description "Answer a question using workspace content with citations."
 
-      argument :question, :string, allow_nil?: false
-      argument :workspace_id, :uuid, allow_nil?: false
+      argument :question, :string,
+        allow_nil?: false,
+        description: "Question to answer using workspace content as context."
+
+      argument :workspace_id, :uuid,
+        allow_nil?: false,
+        description: "Workspace to draw context from."
 
       run fn input, _context ->
         case Concept.Knowledge.Ask.ask(

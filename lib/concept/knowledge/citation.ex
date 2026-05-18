@@ -4,7 +4,7 @@ defmodule Concept.Knowledge.Citation do
   Records ranked retrieval results during RAG queries, enabling
   citation trails and reverse lookups.
   """
-  use Ash.Resource,
+  use Concept.Resources.WorkspaceTenanted,
     otp_app: :concept,
     domain: Concept.Knowledge,
     data_layer: AshPostgres.DataLayer,
@@ -30,42 +30,44 @@ defmodule Concept.Knowledge.Citation do
     defaults [:read]
 
     create :create do
+      description "Record a citation tying a chat message to a source block."
       accept [:message_id, :block_id, :page_id, :rank, :score, :snippet, :breadcrumbs]
-      argument :workspace_id, :uuid, allow_nil?: false
+
+      argument :workspace_id, :uuid,
+        allow_nil?: false,
+        description: "Workspace the citation belongs to."
+
       change set_attribute(:workspace_id, arg(:workspace_id))
     end
 
     read :for_message do
-      argument :message_id, :uuid, allow_nil?: false
+      description "List citations grounding a specific chat message, ranked."
+
+      argument :message_id, :uuid,
+        allow_nil?: false,
+        description: "Chat message id whose citations to load."
+
       filter expr(message_id == ^arg(:message_id))
       prepare build(sort: [rank: :asc])
     end
 
     read :for_block do
-      argument :block_id, :uuid, allow_nil?: false
+      description "List citations involving a specific block (forward and backward)."
+
+      argument :block_id, :uuid,
+        allow_nil?: false,
+        description: "Block id whose citation participation to load."
+
       filter expr(block_id == ^arg(:block_id))
       prepare build(sort: [inserted_at: :desc])
     end
   end
 
   policies do
-    bypass actor_attribute_equals(:system?, true) do
-      authorize_if always()
-    end
-
-    policy action_type(:read) do
-      authorize_if Concept.Pages.Checks.WorkspaceMember
-    end
-
+    # System-only writes; read floor is contributed by Concept.Resources.WorkspaceTenanted.
     policy action_type(:create) do
       authorize_if actor_attribute_equals(:system?, true)
     end
-  end
-
-  multitenancy do
-    strategy :attribute
-    attribute :workspace_id
-    global? false
   end
 
   attributes do
