@@ -166,51 +166,34 @@ export class OraAiBlock extends LitElement {
     `;
   }
 
-  _onGenerate() {
-    if (!this._prompt.trim()) return;
-
+  _dispatch(verb) {
+    // Wiring source-of-truth lives in the `ash_actions` declaration on the
+    // server-side BlockType module; the OraBlock hook injects `block_id` from
+    // the wrapper's `data-block-id` attribute, so we omit it here.
     this.dispatchEvent(
-      new CustomEvent("ora-ai-evaluate", {
+      new CustomEvent(`ora-${verb}`, {
         bubbles: true,
         composed: true,
         detail: {
-          blockId: this.blockId,
           prompt: this._prompt,
           scope: this._scope,
           profile: this._profile,
         },
       })
     );
+  }
+
+  _onGenerate() {
+    if (!this._prompt.trim()) return;
+    this._dispatch("evaluate");
   }
 
   _onRefresh() {
-    this.dispatchEvent(
-      new CustomEvent("ora-ai-refresh", {
-        bubbles: true,
-        composed: true,
-        detail: {
-          blockId: this.blockId,
-          prompt: this._prompt,
-          scope: this._scope,
-          profile: this._profile,
-        },
-      })
-    );
+    this._dispatch("refresh");
   }
 
   _onRetry() {
-    this.dispatchEvent(
-      new CustomEvent("ora-ai-retry", {
-        bubbles: true,
-        composed: true,
-        detail: {
-          blockId: this.blockId,
-          prompt: this._prompt,
-          scope: this._scope,
-          profile: this._profile,
-        },
-      })
-    );
+    this._dispatch("retry");
   }
 
   _getAnswerText() {

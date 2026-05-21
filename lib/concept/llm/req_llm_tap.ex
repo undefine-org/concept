@@ -35,6 +35,7 @@ defmodule Concept.LLM.ReqLLMTap do
   """
 
   @key {__MODULE__, :stream_responses}
+  @meta_key {__MODULE__, :meta_chunks}
 
   @typedoc "Token usage shape as returned by `ReqLLM.StreamResponse.usage/1`."
   @type usage :: %{optional(atom()) => non_neg_integer() | number()}
@@ -47,6 +48,7 @@ defmodule Concept.LLM.ReqLLMTap do
   @spec register() :: :ok
   def register do
     Process.put(@key, [])
+    Process.put(@meta_key, [])
     :ok
   end
 
@@ -58,6 +60,7 @@ defmodule Concept.LLM.ReqLLMTap do
   @spec reset() :: :ok
   def reset do
     Process.delete(@key)
+    Process.delete(@meta_key)
     :ok
   end
 
@@ -108,9 +111,10 @@ defmodule Concept.LLM.ReqLLMTap do
   @spec stream_text(any(), any(), keyword()) :: {:ok, struct()} | {:error, term()}
   def stream_text(model, messages, opts) do
     case delegate().stream_text(model, messages, opts) do
-      {:ok, %ReqLLM.StreamResponse{} = sr} ->
+      {:ok, %ReqLLM.StreamResponse{stream: inner} = sr} ->
         push_response(sr)
-        {:ok, sr}
+        wrapped = wrap_for_meta_tap(inner)
+        {:ok, %{sr | stream: wrapped}}
 
       {:ok, other} ->
         # Non-streaming or unexpected shape — pass through, can't tap.
@@ -118,6 +122,23 @@ defmodule Concept.LLM.ReqLLMTap do
 
       {:error, _} = err ->
         err
+    end
+  end
+
+  @doc """
+  Average grounding confidence across all `:meta` chunks captured by the tap.
+
+  Looks for the Google provider's `provider_meta.\"google\".grounding_metadata.groundingSupports[].confidenceScores`
+  shape and flattens / averages every score. Returns `nil` when no grounding
+  data was observed.
+  """
+  @spec collected_grounding_score() :: float() | nil
+  def collected_grounding_score do
+    Process.get(@meta_key, [])
+    |> Enum.flat_map(&extract_confidence_scores/1)
+    |> case do
+      [] -> nil
+      scores -> Enum.sum(scores) / length(scores)
     end
   end
 
@@ -140,6 +161,41 @@ defmodule Concept.LLM.ReqLLMTap do
   end
 
   defp safe_usage(_), do: nil
+
+  defp wrap_for_meta_tap(stream) do
+    Stream.map(stream, fn
+      %ReqLLM.StreamChunk{type: :meta, metadata: metadata} = chunk ->
+        push_meta(metadata)
+        chunk
+
+      chunk ->
+        chunk
+    end)
+  end
+
+  defp push_meta(metadata) when is_map(metadata) do
+    case Process.get(@meta_key) do
+      list when is_list(list) -> Process.put(@meta_key, [metadata | list])
+      nil -> :ok
+    end
+  end
+
+  defp push_meta(_), do: :ok
+
+  defp extract_confidence_scores(%{provider_meta: provider_meta}) when is_map(provider_meta) do
+    provider_meta
+    |> get_in(["google", "grounding_metadata", "groundingSupports"])
+    |> List.wrap()
+    |> Enum.flat_map(fn
+      %{"confidenceScores" => scores} when is_list(scores) ->
+        Enum.filter(scores, &is_number/1)
+
+      _ ->
+        []
+    end)
+  end
+
+  defp extract_confidence_scores(_), do: []
 
   defp maybe_put_sum(acc, out_key, usages, source_key) do
     sum =

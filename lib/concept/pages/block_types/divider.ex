@@ -1,20 +1,26 @@
 defmodule Concept.Pages.BlockTypes.Divider do
-  @behaviour Concept.Pages.BlockType
-  @impl true
+  use Concept.Pages.BlockType.Static
+
+  @impl Concept.Pages.BlockType
   def type, do: :divider
-  @impl true
-  def default_content, do: %{}
-  @impl true
+
+  @impl Concept.Pages.BlockType
   def default_props, do: %{}
-  @impl true
+
+  @impl Concept.Pages.BlockType
   def validate_props(p) when p == %{}, do: :ok
   def validate_props(_), do: {:error, "no props"}
-  @impl true
+
+  @impl Concept.Pages.BlockType
   def lexical_node, do: "divider"
-  @impl true
+
+  @impl Concept.Pages.BlockType
   def slash_menu,
     do: %{label: "Divider", icon: "—", keywords: ["divider", "hr", "line", "rule"], group: :media}
 
-  @impl true
-  def container?, do: false
+  # Render contract (informal; see Concept.Pages.BlockType moduledoc).
+  def render(assigns) do
+    _ = assigns
+    ~H'<hr class="border-notion-divider my-2" />'
+  end
 end

@@ -19,18 +19,26 @@ defmodule Concept.Knowledge.Workers.IngestPage do
 
     with {:ok, page} <- Pages.get_page(page_id, actor: actor, tenant: workspace_id),
          {:ok, blocks} <-
-           Pages.list_for_page(page_id: page_id, actor: actor, tenant: workspace_id) do
+           Pages.list_for_page(page_id, actor: actor, tenant: workspace_id) do
       collection = Config.collection_for(workspace_id)
+      arcana_module = Application.get_env(:concept, :arcana_module, Arcana)
 
-      # Arcana.ingest accepts empty text; the chunker will extract content from opts
-      Arcana.ingest("",
-        repo: Concept.Repo,
-        collection: collection,
-        source_id: "page:#{page_id}",
-        chunker_opts: [page: page, blocks: blocks, workspace_id: workspace_id]
-      )
+      # `text` carries the page title as a non-empty document body. The custom
+      # `Concept.Knowledge.BlockChunker` ignores it and rebuilds chunks from
+      # `chunker_opts`; Arcana.Document still requires non-blank content.
+      case arcana_module.ingest(page.title || "Untitled",
+             repo: Concept.Repo,
+             collection: collection,
+             source_id: "page:#{page_id}",
+             chunker_opts: [page: page, blocks: blocks, workspace_id: workspace_id]
+           ) do
+        {:ok, _result} ->
+          :ok
 
-      :ok
+        {:error, reason} = err ->
+          Logger.error("Arcana ingest failed for page #{page_id}: #{inspect(reason)}")
+          err
+      end
     else
       {:error, %Ash.Error.Query.NotFound{}} ->
         Logger.info("Page #{page_id} not found for workspace #{workspace_id}; skipping ingest")

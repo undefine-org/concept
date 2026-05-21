@@ -1,0 +1,145 @@
+#+TITLE: Hoist workspace-tenant boilerplate into Concept.Resources.WorkspaceTenanted extension
+#+STATE: DONE
+#+SESSION_ID: 14e50fb8539646b7
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-17T17-43-54-446Z_14e50fb8539646b7.jsonl]]
+#+CUSTOM_ID: FUP-029-hoist-workspace-tenant-boilerplate-into
+
+* Initial Message
+
+[Image #1] 
+
+UPDATE "blocks" AS b0 SET "content" = $1, "updated_at" = $2 WHERE (b0."id" = $3) AND (b0."workspace_id"::uuid = $4::uuid) RETURNING b0."id", b0."workspace_id", b0."page_id", b0."parent_block_id", b0."type", b0."position", b0."content", b0."props", b0."lock_state", b0."lock_holder_id", b0."lock_acquired_at", b0."lock_expires_at", b0."inserted_at", b0."updated_at", b0."archived_at", b0."state" [%{"root" => %{"children" => [%{"children" => [], "direction" => nil, "format" => "", "indent" => 0, "textFormat" => 0, "textStyle" => "", "type" => "paragraph", "version" => 1}], "direction" => "ltr", "format" => "", "indent" => 0, "type" => "root", "version" => 1}}, ~U[2026-05-17 17:43:36.083554Z], "696d9f57-81e8-413c-b64c-3beb460e42d6", "c1aeec0d-f47c-4852-bd25-0a8411a994b6"]
+↳ AshPostgres.DataLayer.update_query/4, at: lib/data_layer.ex:1833
+[debug] Replied in 14ms
+[debug] HANDLE EVENT "blur_block" in ConceptWeb.PageEditorLive
+  Parameters: %{"block_id" => "696d9f57-81e8-413c-b64c-3beb460e42d6"}
+[debug] QUERY OK source="memberships" db=0.8ms idle=1094.2ms
+SELECT m0."id", m0."user_id", m0."role", m0."inserted_at", m0."workspace_id" FROM "memberships" AS m0 WHERE (m0."workspace_id"::uuid = $1::uuid) AND (m0."user_id"::uuid = $2::uuid) LIMIT $3 ["c1aeec0d-f47c-4852-bd25-0a8411a994b6", "191505b2-be0b-45b7-ab5d-84938776def9", 1]
+↳ anonymous fn/3 in AshPostgres.DataLayer.run_query/2, at: lib/data_layer.ex:860
+[debug] QUERY OK source="memberships" db=0.3ms idle=1092.4ms
+SELECT m0."id", m0."user_id", m0."role", m0."inserted_at", m0."workspace_id" FROM "memberships" AS m0 WHERE (m0."workspace_id"::uuid = $1::uuid) AND (m0."user_id"::uuid = $2::uuid) LIMIT $3 ["c1aeec0d-f47c-4852-bd25-0a8411a994b6", "191505b2-be0b-45b7-ab5d-84938776def9", 1]
+↳ anonymous fn/3 in AshPostgres.DataLayer.run_query/2, at: lib/data_layer.ex:860
+[debug] QUERY OK source="blocks" db=3.2ms idle=1091.4ms
+UPDATE "blocks" AS b0 SET "lock_acquired_at" = s1."__new_lock_acquired_at", "updated_at" = s1."__new_updated_at", "lock_expires_at" = s1."__new_lock_expires_at", "state" = $1, "lock_holder_id" = $2, "lock_state" = $3 FROM (SELECT sb0."id" AS "id", (CASE WHEN NOT (sb0."state"::varchar = ANY($4::varchar[])) THEN ash_raise_error(jsonb_build_object('exception', $5::text, 'input', jsonb_build_object($6::text, $7::jsonb, $8::text, $9::jsonb, $10::text, $11::jsonb, $12::text, sb0."state"::varchar))::jsonb, NULL::timestamp) ELSE NULL::timestamp::timestamp END) AS "__new_lock_acquired_at", (CASE WHEN ((((NULL::timestamp::timestamp IS DISTINCT FROM sb0."lock_expires_at"::timestamp) OR (NULL::timestamp::timestamp IS DISTINCT FROM sb0."lock_acquired_at"::timestamp)) OR ($13::varchar != sb0."state"::varchar)) OR (NULL::uuid::uuid IS DISTINCT FROM sb0."lock_holder_id"::uuid)) OR ($14::varchar IS DISTINCT FROM sb0."lock_state"::varchar) THEN $15::timestamp ELSE sb0."updated_at"::timestamp END) AS "__new_updated_at", NULL::timestamp AS "__new_lock_expires_at" FROM "blocks" AS sb0 WHERE (sb0."id"::uuid = $16::uuid) AND (sb0."workspace_id"::uuid = $17::uuid) LIMIT $18) AS s1 WHERE (b0."id" = s1."id") RETURNING b0."id", b0."workspace_id", b0."page_id", b0."parent_block_id", b0."type", b0."position", b0."content", b0."props", b0."lock_state", b0."lock_holder_id", b0."lock_acquired_at", b0."lock_expires_at", b0."inserted_at", b0."updated_at", b0."archived_at", b0."state" [:unlocked, nil, :unlocked, [:locked], "AshStateMachine.Errors.NoMatchingTransition", "target", "unlocked", "field", "lock_acquired_at", "action", "release_lock", "old_state", :unlocked, :unlocked, ~U[2026-05-17 17:43:36.811033Z], "696d9f57-81e8-413c-b64c-3beb460e42d6", "c1aeec0d-f47c-4852-bd25-0a8411a994b6", 1]
+↳ AshPostgres.DataLayer.update_query/4, at: lib/data_layer.ex:1833
+[debug] Replied in 11ms
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "Shift"}
+[debug] Replied in 247µs
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "H"}
+[debug] Replied in 219µs
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "i"}
+[debug] Replied in 202µs
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "Meta"}
+[debug] Replied in 170µs
+[debug] QUERY OK source="knowledge_ingestion_jobs" db=1.3ms idle=1935.7ms
+SELECT count(*) FROM "knowledge_ingestion_jobs" AS k0 WHERE ((k0."state" = 'queued') AND (k0."archived_at" IS NULL)) []
+↳ Concept.Knowledge.report_ingestion_queue_depth/0, at: lib/concept/knowledge.ex:81
+[debug] QUERY OK source="pages" db=1.0ms queue=0.1ms idle=1375.3ms
+SELECT p0."id", p0."position", p0."title", p0."inserted_at", p0."workspace_id", p0."parent_page_id", p0."cover_color", p0."icon_emoji", p0."updated_at", p0."archived_at" FROM "pages" AS p0 WHERE (p0."id"::uuid = $1::uuid) AND (p0."workspace_id"::uuid = $2::uuid) ["7cd17c8d-b922-4f26-872c-c4e28b015d0a", "c1aeec0d-f47c-4852-bd25-0a8411a994b6"]
+↳ anonymous fn/3 in AshPostgres.DataLayer.run_query/2, at: lib/data_layer.ex:860
+[error] Failed to ingest page 7cd17c8d-b922-4f26-872c-c4e28b015d0a: %Ash.Error.Invalid{errors: [%Ash.Error.Query.InvalidArgument{field: :page_id, message: "is invalid", value: [page_id: "7cd17c8d-b922-4f26-872c-c4e28b015d0a", actor: %{system?: true}, tenant: "c1aeec0d-f47c-4852-bd25-0a8411a994b6"], splode: Ash.Error, bread_crumbs: [], vars: [], path: [], stacktrace: #Splode.Stacktrace<>, class: :invalid}]}
+[debug] QUERY OK source="knowledge_ingestion_jobs" db=1.5ms idle=1577.9ms
+SELECT count(*) FROM "knowledge_ingestion_jobs" AS k0 WHERE ((k0."state" = 'queued') AND (k0."archived_at" IS NULL)) []
+↳ Concept.Knowledge.report_ingestion_queue_depth/0, at: lib/concept/knowledge.ex:81
+[debug] QUERY OK source="workspaces" db=0.6ms queue=0.8ms idle=1210.5ms
+
+
+
+WHAT HAPPENED???? Please find the structural root causes and explain them to me.
+
+* Summary
+After BUG-048, six workspace-tenant resources now repeat the same wiring:
+
+#+begin_src elixir
+multitenancy do
+  strategy :attribute
+  attribute :workspace_id
+  global? false
+end
+
+relationships do
+  has_many :workspace_memberships, Concept.Accounts.Membership,
+    no_attributes?: true,
+    filter: expr(workspace_id == parent(workspace_id))
+end
+
+policies do
+  bypass actor_attribute_equals(:system?, true) do
+    authorize_if always()
+  end
+
+  policy action_type(:create) do
+    authorize_if Concept.Pages.Checks.WorkspaceMemberCreate
+  end
+
+  policy action_type([:read, :update, :destroy]) do
+    authorize_if Concept.Pages.Checks.WorkspaceMember
+  end
+end
+#+end_src
+
+Live in: =Block=, =Page=, =Knowledge.Link=, =Knowledge.Citation=,
+=Knowledge.TokenLedger=, =Knowledge.IngestionJob=. Every new
+workspace-tenanted resource will need the same boilerplate or auth either
+over-issues queries (forgetting the FilterCheck) or breaks =:create=
+(forgetting =WorkspaceMemberCreate=).
+
+* Goal
+Collapse the four-block recipe into a single declaration:
+
+#+begin_src elixir
+use Concept.Resources.WorkspaceTenanted
+#+end_src
+
+The extension injects:
+1. =multitenancy= attribute strategy on =:workspace_id=.
+2. The =:workspace_memberships= =has_many= relationship.
+3. The two membership policies (create / R-U-D) with system-actor bypass.
+
+Resources retain the freedom to add extra policies (e.g. role gating) by
+appending more =policy= blocks; the macro adds to the policies DSL section
+rather than replacing it.
+
+* Implementation sketch
+- Ash supports composable resource extensions via =Spark.Dsl.Extension=. The
+  extension is a tiny module that registers DSL entities through
+  =@dsl_patches= or a transformer.
+- For pragmatism, a simpler =__using__= macro that emits the boilerplate
+  works too, and matches the style of =Concept.AshOban.WorkspaceTenants=
+  hoist done in FUP-027. Start there; promote to a Spark extension only if
+  the macro produces noisy duplicate-policy warnings.
+- Place at =lib/concept/resources/workspace_tenanted.ex=.
+
+* Migration
+- Replace the four blocks in each of the six resources with =use=.
+- Resources that already split their =:create= policy (e.g. =Citation= where
+  =:create= is system-only) keep their override; the macro's =:create=
+  policy can be opted out via an option:
+  =use Concept.Resources.WorkspaceTenanted, create_policy: :system_only=.
+
+* Tests
+- Reuse =test/concept/pages/checks/workspace_member_test.exs= as the contract
+  test — runs against the resources after migration.
+- Add a smoke test asserting all six resources expose the
+  =:workspace_memberships= relationship with the expected filter.
+
+* Acceptance
+- All six resources call =use Concept.Resources.WorkspaceTenanted= once
+  and contain no inline multitenancy / membership-policy / membership-relationship
+  boilerplate.
+- Full =mix precommit= still 255/0.
+- =mix test test/concept/pages/checks/workspace_member_test.exs= still green
+  (FilterCheck still fuses into the main SQL).
+
+* Related
+- BUG-048 (the trigger for this hoist).
+- FUP-027 (parallel hoist for AshOban scheduler boilerplate — same pattern,
+  different concern).
+
+NOTE [2026-05-17]: Implemented. New `lib/concept/resources/workspace_tenanted.ex` __using__ macro hoists the four-block recipe (multitenancy + workspace_memberships has_many + system bypass + read-by-member policy). All 6 resources migrated: Block, Page, Knowledge.{Link, Citation, TokenLedger, IngestionJob}. Pinned by contract test `test/concept/resources/workspace_tenanted_test.exs` (18 assertions across the 6 resources). Per-resource write policies stay inline (they encode real domain choices: members write Block/Page/Link; system-only for Citation/TokenLedger/IngestionJob). Precommit 273/0.
+
+Implementation note on macro hygiene: `expr(workspace_id == parent(workspace_id))` had to be emitted via `Macro.var(:workspace_id, nil)` because `quote do` tags bare identifiers with the extension module's context, and `Ash.Expr.expr/1` interprets context-tagged identifiers as bound variables instead of field refs. Documented inline.

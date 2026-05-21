@@ -69,6 +69,7 @@ defmodule Concept.Accounts.User do
     end
 
     update :change_password do
+      description "Allow a user to change their password with current password verification."
       # Use this action to allow users to change their password by providing
       # their current password and a new password.
 

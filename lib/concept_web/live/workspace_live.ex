@@ -11,8 +11,6 @@ defmodule ConceptWeb.WorkspaceLive do
   alias Concept.Accounts
   alias Concept.Pages
 
-
-
   @impl true
   def mount(_params, _session, socket) do
     if socket.assigns.live_action == :index do
@@ -47,7 +45,7 @@ defmodule ConceptWeb.WorkspaceLive do
 
     case load_workspace(slug, user) do
       {:ok, ws} ->
-        Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:pages")
+        ConceptWeb.Endpoint.subscribe("workspace:#{ws.id}:pages")
         Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:ingest")
         Phoenix.PubSub.subscribe(Concept.PubSub, "palette:#{ws.id}")
         {:ok, pages} = Pages.list_tree(actor: user, tenant: ws.id)
@@ -83,7 +81,7 @@ defmodule ConceptWeb.WorkspaceLive do
 
     case load_workspace(slug, user) do
       {:ok, ws} ->
-        Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:pages")
+        ConceptWeb.Endpoint.subscribe("workspace:#{ws.id}:pages")
         Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:ingest")
         Phoenix.PubSub.subscribe(Concept.PubSub, "palette:#{ws.id}")
         Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:page:#{page_id}:presence")

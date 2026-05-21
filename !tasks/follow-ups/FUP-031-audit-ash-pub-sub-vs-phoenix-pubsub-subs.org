@@ -1,0 +1,43 @@
+#+TITLE: Audit Ash pub_sub vs Phoenix.PubSub.subscribe call sites
+#+STATE: ITEM
+#+SESSION_ID: 14e60da014a15f70
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T12-13-14-194Z_14e60da014a15f70.jsonl]]
+#+CUSTOM_ID: FUP-031-audit-ash-pub-sub-vs-phoenix-pubsub-subs
+
+* Initial Message
+
+Epxlain how the AI Answer block is currently saved and rendered and exlain why I don't see any answer when I use it (e.g. http://localhost:4279/w/demo-931ez3/p/7cd17c8d-b922-4f26-872c-c4e28b015d0a)
+
+* ITEM Audit Ash pub_sub vs Phoenix.PubSub.subscribe call sites
+
+** Context
+
+Bug surfaced in PLAN-006 work: ~EvaluateAi~ did
+~Phoenix.PubSub.subscribe(Concept.PubSub, "chat:messages:" <> conv_id)~,
+but the ~Concept.Knowledge.Chat.Message~ resource broadcasts via
+~ConceptWeb.Endpoint~ (its ~pub_sub do module ConceptWeb.Endpoint~ block).
+Different pubsub buses \u2014 silent delivery failure.
+
+Same shape may exist elsewhere; ~Concept~ has at least three resources
+with ~pub_sub do~ blocks and many subscribers.
+
+** What to do
+
+1. Inventory every ~pub_sub do \u2026 module \u2026~ declaration in ~lib/concept/**~. Capture: resource, module (~ConceptWeb.Endpoint~ vs ~Concept.PubSub~), topic shape.
+2. Inventory every ~Phoenix.PubSub.subscribe/2~, ~Phoenix.PubSub.broadcast/3~, ~ConceptWeb.Endpoint.subscribe/1~ call site. Capture: file, topic.
+3. Diff. For every subscribe topic that looks Ash-resource-shaped (~"chat:*"~, ~"workspace:*:page:*:blocks"~, etc.), verify the subscribe target matches the resource's pub_sub module.
+4. Fix mismatches. Add a regression test per fix (modeled on ~Concept.Pages.Block.Changes.EvaluateAi.decide_completion~ unit tests).
+
+Optional follow-on:
+- Treat the audit as the seed for a generic boundary test (see ~PLAN-007 silent failure hardening~ once filed).
+- Codify the convention in ~lib/concept/AGENTS.md~ or similar: "if a resource declares ~pub_sub do module M~, subscribers MUST use ~M.subscribe(topic)~, not ~Phoenix.PubSub.subscribe(Concept.PubSub, topic)~".
+
+** Why this matters
+
+Cross-process protocol bugs are the worst class \u2014 no compile error, no runtime crash, just silent no-op. An audit is one-time cheap. Letting it bit-rot makes the next instance of the same bug as expensive as this one was to diagnose.
+
+** Acceptance
+
+- ~docs/audits/PUBSUB_AUDIT_<YYYYMMDD>.md~ (or org item) listing every (resource, module) and every (subscriber, topic, target_module) tuple.
+- Every mismatch fixed with a paired regression test.
+- Convention documented somewhere a future contributor will find it (e.g. ~lib/concept/knowledge/AGENTS.md~ + cross-link from root ~AGENTS.md~).

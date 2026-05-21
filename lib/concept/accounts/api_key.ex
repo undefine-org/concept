@@ -13,6 +13,7 @@ defmodule Concept.Accounts.ApiKey do
   actions do
     read :read do
       primary? true
+
       description "List the actor's API keys (hashes only; key material is shown only at creation)."
     end
 

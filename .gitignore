@@ -37,3 +37,6 @@ npm-debug.log
 
 
 .env
+
+.spell/*/workspace.bin
+.spell/edit-history.jsonl

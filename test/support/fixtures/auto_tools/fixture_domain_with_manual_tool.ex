@@ -1,6 +1,8 @@
 defmodule Concept.AutoToolsFixtures.FixtureDomainWithManualTool do
   @moduledoc false
-  use Ash.Domain, extensions: [AshAi, Concept.AutoTools]
+  use Ash.Domain,
+    extensions: [AshAi, Concept.AutoTools],
+    validate_config_inclusion?: false
 
   # This manual entry collides with the name AutoTools would synthesize for
   # `FixtureResource :described_read` (`:fixture_resource_described_read`).

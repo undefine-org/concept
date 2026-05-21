@@ -136,9 +136,10 @@ defmodule Concept.TestSupport.MockReqLLM do
     %{
       "google" => %{
         "grounding_metadata" => %{
-          "groundingSupports" => Enum.map(normalize(confidences), fn scores ->
-            %{"confidenceScores" => scores}
-          end)
+          "groundingSupports" =>
+            Enum.map(normalize(confidences), fn scores ->
+              %{"confidenceScores" => scores}
+            end)
         },
         "sources" => []
       }

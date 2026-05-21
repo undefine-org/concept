@@ -1,8 +1,11 @@
 defmodule Concept.AutoToolsFixtures.FixtureResource do
   @moduledoc false
-  use Ash.Resource,
-    domain: Concept.AutoToolsFixtures.FixtureDomain,
-    data_layer: :embedded
+  # Plain (non-embedded) Ash resource so the fixture domain can list it in
+  # its `resources do` block without tripping the Ash validator ("Embedded
+  # resources should not be listed in the domain"). The auto_tools test
+  # only exercises action metadata, never CRUD, so the default in-memory
+  # data layer suffices.
+  use Ash.Resource, domain: Concept.AutoToolsFixtures.FixtureDomain
 
   actions do
     defaults [:read]

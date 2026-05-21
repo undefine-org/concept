@@ -1,0 +1,59 @@
+#+TITLE: Promote parked e2e Message broadcast test
+#+STATE: ITEM
+#+SESSION_ID: 14e60da014a15f70
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T12-13-14-194Z_14e60da014a15f70.jsonl]]
+#+CUSTOM_ID: FUP-030-promote-parked-e2e-message-broadcast-tes
+
+* Initial Message
+
+Epxlain how the AI Answer block is currently saved and rendered and exlain why I don't see any answer when I use it (e.g. http://localhost:4279/w/demo-931ez3/p/7cd17c8d-b922-4f26-872c-c4e28b015d0a)
+
+* ITEM Promote parked e2e Message broadcast test
+
+** Context
+
+During PLAN-006 we shipped two PubSub-layer regression tests for
+`Concept.Pages.Block.Changes.EvaluateAi`:
+
+1. *Unit*: ~decide_completion/1~ matcher (4 tests, pure, lives in
+   ~test/concept/pages/block_evaluate_ai_test.exs~ under describe
+   ~"completion broadcast matcher (regression)"~). Passing.
+2. *Integration (skipped)*: an end-to-end test that calls
+   ~Pages.evaluate_ai/4~, polls for ~block.props["conversation_id"]~ to
+   appear, then ~ConceptWeb.Endpoint.broadcast~-s a fake
+   ~%{source: :agent, complete: true, id: <uuid>}~ envelope and polls
+   ~block.content["message_id"]~ until the spawned ~Task~ persists.
+
+The integration test is tagged ~@describetag :skip~ because
+~Concept.DataCase~ runs in ~async: true~ mode by default and the spawned
+~Task.Supervisor.start_child~ child does not share the test's sandbox
+connection, so the synchronous part of the Task fails before subscribing
+and no ~conversation_id~ is ever stamped.
+
+** What to do
+
+- Move the integration test into a new file that ~use~ s ~Concept.DataCase, async: false~ (or split into a dedicated case). This gives a shared sandbox that the spawned Task can see.
+- Drop ~@describetag :skip~ once it's in the right case.
+- Verify it goes red without either of the EvaluateAi fixes (subscription PubSub + Broadcast envelope match), then green with them.
+
+** Why this matters
+
+The pair of bugs it would have caught:
+1. Subscribing to ~Concept.PubSub~ while ~Message~ broadcasts via ~ConceptWeb.Endpoint~ \u2014 silent.
+2. Pattern-matching on a raw map while ~Ash.Notifier.PubSub~ delivers ~%Phoenix.Socket.Broadcast{}~ \u2014 silent.
+
+Both are cross-process protocol mismatches with zero compile-time signal.
+Only an end-to-end test catches them. The matcher unit test pins half the
+contract; this integration test pins the rest.
+
+** Acceptance
+
+- New test file (or recased current file) with the integration test active and passing.
+- Removing either fix from ~EvaluateAi~ (the ~ConceptWeb.Endpoint.subscribe/1~ or the ~%Phoenix.Socket.Broadcast~ pattern) makes the test fail.
+- ~mix precommit~ still green.
+
+** Related
+
+- PLAN-006 final write-up.
+- ~lib/concept/pages/block/changes/evaluate_ai.ex~
+- ~test/concept/pages/block_evaluate_ai_test.exs~ (current skipped describe)

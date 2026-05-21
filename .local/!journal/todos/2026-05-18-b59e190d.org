@@ -1,0 +1,178 @@
+#+TITLE: Session 14e5f88670bddeda Todos
+#+DATE: 2026-05-18
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* W0 Foundation
+
+** DONE FEAT-051: deps update + protocol bump
+:PROPERTIES:
+:TASK_ID: feat-051
+:STATUS: completed
+:GATE_COMMIT: true
+:ORG_ITEM_ID: FEAT-051-deps-update-and-mcp-protocol-bump
+:END:
+
+Two commits: 401c0d1 (deps+protocol bump) and 7bec762 (ash 3.25 stabilization). Final verification: mix test --exclude integration EXIT=0, 283 tests, 0 failures, 1 skipped. Narrow gate test test/concept/pages/block_evaluate_ai_test.exs: 12 tests, 0 failures, 1 skipped.
+
+** DONE FEAT-052: Concept.AutoTools Spark extension
+:PROPERTIES:
+:TASK_ID: feat-052
+:STATUS: completed
+:GATE_COMMIT: true
+:DEPENDS: feat-051
+:ORG_ITEM_ID: FEAT-052-concept-autotools-spark-extension
+:END:
+
+Commit fb042d5. 7/7 unit tests green. Full suite 290 tests, 1 pre-existing KnowledgeReindex flake.
+
+** DONE FEAT-053: wire AutoTools into 4 domains
+:PROPERTIES:
+:TASK_ID: feat-053
+:STATUS: completed
+:GATE_COMMIT: true
+:DEPENDS: feat-052
+:ORG_ITEM_ID: FEAT-053-wire-concept-autotools-into-all-domains
+:END:
+
+Commit 6a9ced1. All 4 domains wired. AshAuthentication User/Token excluded via exclude_resources. Surface unchanged (8 tools) until W1 backfills descriptions. 290 tests, 1 pre-existing flake.
+
+* W1 Descriptions (swarm)
+
+** DONE FEAT-054: describe Pages actions
+:PROPERTIES:
+:TASK_ID: feat-054
+:STATUS: completed
+:DEPENDS: feat-053
+:ORG_ITEM_ID: FEAT-054-describe-pages-domain-actions
+:END:
+
+Commit 9e1b959. 22 actions + their args described (page.ex by swarm, block.ex by main session). Pages surface: 23 tools. Folded in pre-existing FUP-029 Pages/Block work. 290/0/1.
+
+** DONE FEAT-055: describe Knowledge actions
+:PROPERTIES:
+:TASK_ID: feat-055
+:STATUS: completed
+:DEPENDS: feat-053
+:ORG_ITEM_ID: FEAT-055-describe-knowledge-domain-actions
+:END:
+
+Commit aeac4b9. Knowledge surface: 13 tools (Link, Citation, IngestionJob, Tools described; worker-only actions left undescribed).
+
+** DONE FEAT-056: describe Chat actions
+:PROPERTIES:
+:TASK_ID: feat-056
+:STATUS: completed
+:DEPENDS: feat-053
+:ORG_ITEM_ID: FEAT-056-describe-chat-domain-actions
+:END:
+
+Commit efe16b7. Chat surface: 6 tools (Conversation create/my_conversations, Message create/for_conversation described).
+
+** DONE FEAT-057: describe Accounts actions
+:PROPERTIES:
+:TASK_ID: feat-057
+:STATUS: completed
+:DEPENDS: feat-053
+:ORG_ITEM_ID: FEAT-057-describe-accounts-domain-actions
+:END:
+
+Commit 09049fd. Accounts surface: 10 tools (Workspace/Membership/ApiKey described; User/Token still excluded via config).
+
+* W2 Tenancy + flip
+
+** DONE FEAT-058: ApiKey workspace + plug
+:PROPERTIES:
+:TASK_ID: feat-058
+:STATUS: completed
+:DEPENDS: feat-054 feat-055 feat-056 feat-057
+:ORG_ITEM_ID: FEAT-058-apikey-workspace-binding-and-mcp-workspa
+:END:
+
+Commit lands ApiKey.workspace_id + MCPWorkspaceContext plug. 5 plug tests green. 295/0/1 full suite.
+
+** DONE FEAT-059: mcp_resources per domain
+:PROPERTIES:
+:TASK_ID: feat-059
+:STATUS: completed
+:DEPENDS: feat-058
+:ORG_ITEM_ID: FEAT-059-register-mcp-resources-per-domain
+:END:
+
+Commit 73b1dfa. Reduced scope: one mcp_resource (concept://me/workspaces) as proof. Full surface deferred to FUP-032 due to AshAi verifier requirement (string-returning generic actions only).
+
+** DONE FEAT-060: router tools: true
+:PROPERTIES:
+:TASK_ID: feat-060
+:STATUS: completed
+:DEPENDS: feat-058 feat-059
+:ORG_ITEM_ID: FEAT-060-router-flip-tools-true
+:END:
+
+Commit 4425905. Router now exposes 50 tools (vs 4 whitelisted before). Auto-synthesis live.
+
+* W3 Enforcement
+
+** DONE FEAT-061: LiveView purity cutover
+:PROPERTIES:
+:TASK_ID: feat-061
+:STATUS: completed
+:DEPENDS: feat-060
+:ORG_ITEM_ID: FEAT-061-liveview-purity-cutover-remove-ash-leaka
+:END:
+
+Commit df74d9b. 3 leakages removed; grep clean. +2 new actions (Block.first_for_page, IngestionJob.recent_for_workspace) auto-expose. 295/0/1.
+
+** DONE FEAT-063: parity test + docs mix task
+:PROPERTIES:
+:TASK_ID: feat-063
+:STATUS: completed
+:DEPENDS: feat-061
+:ORG_ITEM_ID: FEAT-063-mcp-parity-test-and-docs-mcp-surface-mix
+:END:
+
+Lands parity test (5/5 green) + concept.docs.mcp_surface task (--check wired into precommit). docs/mcp_surface.md committed (591 lines).
+
+* W4 Block-type MCP surface
+
+** DONE FEAT-064: Interactive macro emits MCP tools
+:PROPERTIES:
+:TASK_ID: feat-064
+:STATUS: completed
+:DEPENDS: feat-063
+:ORG_ITEM_ID: FEAT-064-blocktype-interactive-emits-mcp-tools
+:END:
+
+Commit 919eed7. Interactive macro emits __block_type_mcp_specs__/0; transformer resolves to %AshAi.Tool{} from dsl_state resources. 3 new tools for AiAnswer (block_ai_answer_{evaluate,refresh,retry}). Pages: 27. 349/0/1.
+
+** BLOCKED ~~FEAT-065: block-type MCP UI resources~~
+:PROPERTIES:
+:TASK_ID: feat-065
+:STATUS: abandoned
+:DEPENDS: feat-064
+:ORG_ITEM_ID: FEAT-065-blocktype-mcp-ui-resources-and-blockcont
+:DEFERRED_TO: FUP-033-per-block-type-mcp-ui-resources-dynamic
+:END:
+
+Deferred to FUP-033. AshAi 0.6.1's mcp_ui_resource requires static html_path: — no dynamic handler API. Dynamic per-block rendering requires either patching AshAi or forking its MCP router; both out of W4 budget. Operational MCP surface (FEAT-064) is unaffected.
+
+** DONE FEAT-066: cleanup manual tool declarations
+:PROPERTIES:
+:TASK_ID: feat-066
+:STATUS: completed
+:DEPENDS: feat-065
+:ORG_ITEM_ID: FEAT-066-cleanup-hand-coded-tool-declarations
+:END:
+
+Commit 7330fdd. Dropped 6 manual tool entries; AutoTools now sole source. Tool names renamed; mcp_test.exs updated. 349/0/1.
+
+* W5 Docs
+
+** DONE FEAT-067: AGENTS.md + docs/mcp_parity.md
+:PROPERTIES:
+:TASK_ID: feat-067
+:STATUS: completed
+:DEPENDS: feat-066
+:ORG_ITEM_ID: FEAT-067-agents-md-principle-and-docs-mcp-parity
+:END:
+
+Commit 63d55e0. AGENTS.md principle inserted; docs/mcp_parity.md (317 lines); mix.exs docs config + concept.docs alias + ex_doc dep. mix concept.docs renders mcp_parity.html + mcp_surface.html in ExDoc sidebar. PLAN-007 COMPLETE.

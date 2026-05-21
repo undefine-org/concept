@@ -289,4 +289,23 @@ defmodule Concept.Knowledge.LinkTest do
       assert link.workspace_id == workspace.id
     end
   end
+
+  describe "create permission probe (regression)" do
+    # AshAI builds its tool registry by calling `Ash.can?` on every action
+    # across the domain with an *empty* input. Any cross-attribute validation
+    # on this action must therefore survive being called with all attributes
+    # `nil` — otherwise the entire `:respond` pipeline blows up the moment a
+    # user submits a chat message or evaluates an AI Answer block.
+    #
+    # Symptom (pre-fix): `ArgumentError: cannot perform Ecto.Repo.get/2 because
+    # the given value is nil` raised from
+    # `Concept.Repo.get(Concept.Pages.Block, source_block_id)`.
+    test "Ash.can?/3 with empty input does not raise", %{user: user} do
+      assert Ash.can?(
+               {Concept.Knowledge.Link, :create, %{}},
+               user,
+               run_queries?: false
+             ) in [true, false]
+    end
+  end
 end

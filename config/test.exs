@@ -49,4 +49,3 @@ config :concept, Concept.AutoTools,
   exclude: [
     {Concept.AutoToolsFixtures.FixtureResource, :excluded_read}
   ]
-

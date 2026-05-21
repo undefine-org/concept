@@ -42,13 +42,14 @@ defmodule ConceptWeb.Plugs.MCPWorkspaceContext do
         |> Ash.PlugHelpers.set_tenant(ws_id)
 
       {:error, reason} ->
-        body = Jason.encode!(%{
-          error: "workspace_context_invalid",
-          reason: to_string(reason),
-          hint:
-            "Either bind the API key to a workspace at creation, or pass an " <>
-              "`mcp-workspace-id` header with a workspace you are a member of."
-        })
+        body =
+          Jason.encode!(%{
+            error: "workspace_context_invalid",
+            reason: to_string(reason),
+            hint:
+              "Either bind the API key to a workspace at creation, or pass an " <>
+                "`mcp-workspace-id` header with a workspace you are a member of."
+          })
 
         conn
         |> put_resp_content_type("application/json")

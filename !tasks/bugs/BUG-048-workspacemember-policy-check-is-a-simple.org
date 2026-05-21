@@ -1,0 +1,104 @@
+#+TITLE: WorkspaceMember policy check is a SimpleCheck — extra membership SELECT per action
+#+STATE: ITEM
+#+SESSION_ID: 14e50fb8539646b7
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-17T17-43-54-446Z_14e50fb8539646b7.jsonl]]
+#+CUSTOM_ID: BUG-048-workspacemember-policy-check-is-a-simple
+
+* Initial Message
+
+[Image #1] 
+
+UPDATE "blocks" AS b0 SET "content" = $1, "updated_at" = $2 WHERE (b0."id" = $3) AND (b0."workspace_id"::uuid = $4::uuid) RETURNING b0."id", b0."workspace_id", b0."page_id", b0."parent_block_id", b0."type", b0."position", b0."content", b0."props", b0."lock_state", b0."lock_holder_id", b0."lock_acquired_at", b0."lock_expires_at", b0."inserted_at", b0."updated_at", b0."archived_at", b0."state" [%{"root" => %{"children" => [%{"children" => [], "direction" => nil, "format" => "", "indent" => 0, "textFormat" => 0, "textStyle" => "", "type" => "paragraph", "version" => 1}], "direction" => "ltr", "format" => "", "indent" => 0, "type" => "root", "version" => 1}}, ~U[2026-05-17 17:43:36.083554Z], "696d9f57-81e8-413c-b64c-3beb460e42d6", "c1aeec0d-f47c-4852-bd25-0a8411a994b6"]
+↳ AshPostgres.DataLayer.update_query/4, at: lib/data_layer.ex:1833
+[debug] Replied in 14ms
+[debug] HANDLE EVENT "blur_block" in ConceptWeb.PageEditorLive
+  Parameters: %{"block_id" => "696d9f57-81e8-413c-b64c-3beb460e42d6"}
+[debug] QUERY OK source="memberships" db=0.8ms idle=1094.2ms
+SELECT m0."id", m0."user_id", m0."role", m0."inserted_at", m0."workspace_id" FROM "memberships" AS m0 WHERE (m0."workspace_id"::uuid = $1::uuid) AND (m0."user_id"::uuid = $2::uuid) LIMIT $3 ["c1aeec0d-f47c-4852-bd25-0a8411a994b6", "191505b2-be0b-45b7-ab5d-84938776def9", 1]
+↳ anonymous fn/3 in AshPostgres.DataLayer.run_query/2, at: lib/data_layer.ex:860
+[debug] QUERY OK source="memberships" db=0.3ms idle=1092.4ms
+SELECT m0."id", m0."user_id", m0."role", m0."inserted_at", m0."workspace_id" FROM "memberships" AS m0 WHERE (m0."workspace_id"::uuid = $1::uuid) AND (m0."user_id"::uuid = $2::uuid) LIMIT $3 ["c1aeec0d-f47c-4852-bd25-0a8411a994b6", "191505b2-be0b-45b7-ab5d-84938776def9", 1]
+↳ anonymous fn/3 in AshPostgres.DataLayer.run_query/2, at: lib/data_layer.ex:860
+[debug] QUERY OK source="blocks" db=3.2ms idle=1091.4ms
+UPDATE "blocks" AS b0 SET "lock_acquired_at" = s1."__new_lock_acquired_at", "updated_at" = s1."__new_updated_at", "lock_expires_at" = s1."__new_lock_expires_at", "state" = $1, "lock_holder_id" = $2, "lock_state" = $3 FROM (SELECT sb0."id" AS "id", (CASE WHEN NOT (sb0."state"::varchar = ANY($4::varchar[])) THEN ash_raise_error(jsonb_build_object('exception', $5::text, 'input', jsonb_build_object($6::text, $7::jsonb, $8::text, $9::jsonb, $10::text, $11::jsonb, $12::text, sb0."state"::varchar))::jsonb, NULL::timestamp) ELSE NULL::timestamp::timestamp END) AS "__new_lock_acquired_at", (CASE WHEN ((((NULL::timestamp::timestamp IS DISTINCT FROM sb0."lock_expires_at"::timestamp) OR (NULL::timestamp::timestamp IS DISTINCT FROM sb0."lock_acquired_at"::timestamp)) OR ($13::varchar != sb0."state"::varchar)) OR (NULL::uuid::uuid IS DISTINCT FROM sb0."lock_holder_id"::uuid)) OR ($14::varchar IS DISTINCT FROM sb0."lock_state"::varchar) THEN $15::timestamp ELSE sb0."updated_at"::timestamp END) AS "__new_updated_at", NULL::timestamp AS "__new_lock_expires_at" FROM "blocks" AS sb0 WHERE (sb0."id"::uuid = $16::uuid) AND (sb0."workspace_id"::uuid = $17::uuid) LIMIT $18) AS s1 WHERE (b0."id" = s1."id") RETURNING b0."id", b0."workspace_id", b0."page_id", b0."parent_block_id", b0."type", b0."position", b0."content", b0."props", b0."lock_state", b0."lock_holder_id", b0."lock_acquired_at", b0."lock_expires_at", b0."inserted_at", b0."updated_at", b0."archived_at", b0."state" [:unlocked, nil, :unlocked, [:locked], "AshStateMachine.Errors.NoMatchingTransition", "target", "unlocked", "field", "lock_acquired_at", "action", "release_lock", "old_state", :unlocked, :unlocked, ~U[2026-05-17 17:43:36.811033Z], "696d9f57-81e8-413c-b64c-3beb460e42d6", "c1aeec0d-f47c-4852-bd25-0a8411a994b6", 1]
+↳ AshPostgres.DataLayer.update_query/4, at: lib/data_layer.ex:1833
+[debug] Replied in 11ms
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "Shift"}
+[debug] Replied in 247µs
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "H"}
+[debug] Replied in 219µs
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "i"}
+[debug] Replied in 202µs
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "Meta"}
+[debug] Replied in 170µs
+[debug] QUERY OK source="knowledge_ingestion_jobs" db=1.3ms idle=1935.7ms
+SELECT count(*) FROM "knowledge_ingestion_jobs" AS k0 WHERE ((k0."state" = 'queued') AND (k0."archived_at" IS NULL)) []
+↳ Concept.Knowledge.report_ingestion_queue_depth/0, at: lib/concept/knowledge.ex:81
+[debug] QUERY OK source="pages" db=1.0ms queue=0.1ms idle=1375.3ms
+SELECT p0."id", p0."position", p0."title", p0."inserted_at", p0."workspace_id", p0."parent_page_id", p0."cover_color", p0."icon_emoji", p0."updated_at", p0."archived_at" FROM "pages" AS p0 WHERE (p0."id"::uuid = $1::uuid) AND (p0."workspace_id"::uuid = $2::uuid) ["7cd17c8d-b922-4f26-872c-c4e28b015d0a", "c1aeec0d-f47c-4852-bd25-0a8411a994b6"]
+↳ anonymous fn/3 in AshPostgres.DataLayer.run_query/2, at: lib/data_layer.ex:860
+[error] Failed to ingest page 7cd17c8d-b922-4f26-872c-c4e28b015d0a: %Ash.Error.Invalid{errors: [%Ash.Error.Query.InvalidArgument{field: :page_id, message: "is invalid", value: [page_id: "7cd17c8d-b922-4f26-872c-c4e28b015d0a", actor: %{system?: true}, tenant: "c1aeec0d-f47c-4852-bd25-0a8411a994b6"], splode: Ash.Error, bread_crumbs: [], vars: [], path: [], stacktrace: #Splode.Stacktrace<>, class: :invalid}]}
+[debug] QUERY OK source="knowledge_ingestion_jobs" db=1.5ms idle=1577.9ms
+SELECT count(*) FROM "knowledge_ingestion_jobs" AS k0 WHERE ((k0."state" = 'queued') AND (k0."archived_at" IS NULL)) []
+↳ Concept.Knowledge.report_ingestion_queue_depth/0, at: lib/concept/knowledge.ex:81
+[debug] QUERY OK source="workspaces" db=0.6ms queue=0.8ms idle=1210.5ms
+
+
+
+WHAT HAPPENED???? Please find the structural root causes and explain them to me.
+
+* Summary
+=Concept.Pages.Checks.WorkspaceMember= is implemented as an
+=Ash.Policy.SimpleCheck= that synchronously runs =Ash.read_first!= on
+=Concept.Accounts.Membership= every time the policy is evaluated. Each
+=Block= / =Page= action triggers it ≥1× (often 2× — one per policy step), so
+every lock acquire/release/refresh issues an extra
+=SELECT … FROM memberships … LIMIT 1= roundtrip on top of the main query.
+
+Observed in the production log: two identical membership selects book-end each
+=release_lock= and =update_content=.
+
+* Root cause
+=SimpleCheck= runs in-process per evaluation with no caching. Membership
+filtering belongs in the main SQL query: it can be expressed as an
+=EXISTS (SELECT 1 FROM memberships …)= predicate fused into the action's
+=WHERE= clause via =Ash.Policy.FilterCheck=.
+
+* Fix (chosen path)
+Migrate =Concept.Pages.Checks.WorkspaceMember= to =Ash.Policy.FilterCheck=
+and return:
+#+begin_src elixir
+expr(exists(workspace_memberships, user_id == ^actor(:id)))
+#+end_src
+
+To compose, add a relationship to both =Block= and =Page=:
+#+begin_src elixir
+has_many :workspace_memberships, Concept.Accounts.Membership,
+  no_attributes?: true,
+  filter: expr(workspace_id == parent(workspace_id))
+#+end_src
+
+This emits an =EXISTS= subquery that the planner can hoist into the main
+=UPDATE … WHERE= rather than a separate roundtrip.
+
+* Tests
+- Regression test that authorization still succeeds for members and fails for
+  non-members against both =Block= and =Page=.
+- Query-count assertion via =:telemetry_test.attach_event_handlers/2= on
+  =[:concept, :repo, :query]=: =release_lock= against a held block emits 0
+  separate =SELECT … FROM memberships AS m0= queries (the EXISTS is part of
+  the main UPDATE).
+
+* Acceptance
+- Passing tests above.
+- Production log no longer shows back-to-back =SELECT … memberships= queries
+  around block actions.
+
+* Related
+- =Concept.Accounts.Membership='s own policies already use the =FilterCheck=
+  pattern via inline =expr/1= — this aligns the cross-domain check with that
+  convention.

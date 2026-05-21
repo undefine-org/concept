@@ -1,0 +1,75 @@
+#+TITLE: Per-block-type MCP UI resources (dynamic HTML rendering)
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+CUSTOM_ID: FUP-033-per-block-type-mcp-ui-resources-dynamic
+#+LAYER: platform
+#+PARENT: FEAT-065-blocktype-mcp-ui-resources-and-blockcont
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:FEAT-065-blocktype-mcp-ui-resources-and-blockcont][FEAT-065]] — deferred
+
+* Intent
+
+For each BlockType (Static + Interactive) register an MCP UI resource at
+~ui://blocks/{type}/{block_id}~ that returns server-rendered HTML for the
+specific block instance \u2014 the same Phoenix component the LiveView uses.
+
+This makes MCP clients that support MCP Apps render Concept blocks
+visually identically to the human-facing dispatcher.
+
+* Why deferred
+
+AshAi 0.6.1's ~mcp_ui_resource~ entity requires ~html_path:~ (a file on
+disk read at request time). It doesn't support a dispatch handler or
+URI templates that vary by request parameters.
+
+To implement dynamic rendering we'd need one of:
+
+  - Patch AshAi to support an MFA-based ~html_provider:~ option (upstream).
+  - Intercept ~resources/read~ in a custom MCP router before forwarding
+    to AshAi.Mcp.Router (forking AshAi).
+  - Pre-render each block to HTML on every mutation (storage overhead +
+    cache invalidation complexity).
+
+None of these fit PLAN-007's W4 budget. The MCP TOOL surface from
+FEAT-064 already gives LLMs operational power over interactive blocks;
+visual parity is a quality-of-life improvement.
+
+* Spec for the FUP
+
+1. Define a controller-like handler:
+
+   #+begin_src elixir
+   defmodule ConceptWeb.MCP.BlockController do
+     def render_block(%{"type" => type_str, "block_id" => block_id, "tenant" => ws_id, "actor" => actor}) do
+       with {:ok, type} <- BlockTypes.resolve(type_str),
+            {:ok, mod} <- BlockTypes.lookup_safe(type),
+            {:ok, block} <- Ash.get(Pages.Block, block_id, actor: actor, tenant: ws_id) do
+         render_html(mod, block, actor)
+       end
+     end
+   end
+   #+end_src
+
+2. Either patch AshAi or fork ~AshAi.Mcp.Router~ to delegate ~resources/read~
+   for URIs matching ~ui://blocks/*~ to the controller.
+
+3. Register one ~mcp_ui_resource~ entry per block-type module via the
+   ~BlockType.{Static,Interactive}~ macros' \`@before_compile\` hooks.
+
+4. Append a "MCP UI resource" section to ~docs/blocks/ADDING_A_BLOCK.md~.
+
+5. Tests: ~resources/read~ on each block-type URI returns HTML byte-identical
+   to the dispatcher's rendering of the same block.
+
+* Acceptance
+
+- All registered block types appear in ~resources/list~
+- Adding a new ~Static~ block type auto-registers a resource (no
+  ~block_render.ex~ / router edits)
+- Cross-workspace: API key bound to A cannot read B's block via UI URI

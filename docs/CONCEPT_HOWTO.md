@@ -137,4 +137,5 @@ A: Implement `Concept.Pages.BlockType` behaviour and register the type in
 - Check `lib/concept/knowledge.ex` for the domain API.
 - Look at `lib/concept/pages/block_types/ai_answer.ex` for how blocks declare
   their default props and validation.
+- Adding a new block type? See [`docs/blocks/ADDING_A_BLOCK.md`](blocks/ADDING_A_BLOCK.md).
 - File a FUP (Follow-Up) in the org tracker for anything that feels missing.

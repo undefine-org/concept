@@ -12,12 +12,28 @@ defmodule ConceptWeb.PageEditorLive do
     page_id = session["page_id"]
     user_id = session["user_id"]
 
+    # Nested live_render does not propagate the parent's `current_user` assign,
+    # so resolve the actual `Concept.Accounts.User` struct from the session
+    # `user_id`. Several downstream Ash actions (e.g. `relate_actor(:user)` on
+    # `Concept.Knowledge.Chat.Conversation`) refuse to accept bare maps.
     user =
-      socket.assigns[:current_user] || %{id: user_id, email: session["user_email"] || "unknown"}
+      cond do
+        match?(%Concept.Accounts.User{}, socket.assigns[:current_user]) ->
+          socket.assigns.current_user
+
+        is_binary(user_id) ->
+          case Ash.get(Concept.Accounts.User, user_id, authorize?: false) do
+            {:ok, u} -> u
+            _ -> %{id: user_id, email: session["user_email"] || "unknown"}
+          end
+
+        true ->
+          %{id: user_id, email: session["user_email"] || "unknown"}
+      end
 
     ws = %{id: ws_id}
 
-    Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws_id}:page:#{page_id}:blocks")
+    ConceptWeb.Endpoint.subscribe("workspace:#{ws_id}:page:#{page_id}:blocks")
     Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws_id}:page:#{page_id}:presence")
 
     ConceptWeb.Presence.track(self(), "workspace:#{ws_id}:page:#{page_id}:presence", user.id, %{
@@ -56,6 +72,7 @@ defmodule ConceptWeb.PageEditorLive do
               block={b}
               locked_by={@locked_blocks[b.id]}
               locked_blocks={@locked_blocks}
+              current_user={@current_user}
             />
           </li>
         </ul>

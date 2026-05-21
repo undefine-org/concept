@@ -126,6 +126,78 @@ defmodule Concept.Knowledge.Chat.RespondChangeTest do
     end
   end
 
+  describe "ReqLLMTap.collected_grounding_score/0" do
+    setup do
+      Application.put_env(:concept, :req_llm_module, MockReqLLM)
+      MockReqLLM.reset()
+
+      on_exit(fn ->
+        Application.delete_env(:concept, :req_llm_module)
+        ReqLLMTap.reset()
+      end)
+
+      :ok = ReqLLMTap.register()
+      :ok
+    end
+
+    test "returns nil when no grounding metadata was observed" do
+      MockReqLLM.set_reply(text: "x")
+      {:ok, sr} = ReqLLMTap.stream_text("m", [], [])
+      _ = Enum.to_list(sr.stream)
+
+      assert ReqLLMTap.collected_grounding_score() == nil
+    end
+
+    test "averages confidenceScores from a flat list" do
+      MockReqLLM.set_reply(text: "x", grounding_confidences: [0.6, 0.8, 1.0])
+      {:ok, sr} = ReqLLMTap.stream_text("m", [], [])
+      _ = Enum.to_list(sr.stream)
+
+      assert_in_delta ReqLLMTap.collected_grounding_score(), 0.8, 1.0e-9
+    end
+
+    test "flattens nested groundingSupports[] confidenceScores arrays" do
+      MockReqLLM.set_reply(text: "x", grounding_confidences: [[0.4, 0.6], [0.8]])
+      {:ok, sr} = ReqLLMTap.stream_text("m", [], [])
+      _ = Enum.to_list(sr.stream)
+
+      # (0.4 + 0.6 + 0.8) / 3
+      assert_in_delta ReqLLMTap.collected_grounding_score(), 0.6, 1.0e-9
+    end
+  end
+
+  describe "ReqLLMTap contract — stream consumed in caller pid" do
+    setup do
+      Application.put_env(:concept, :req_llm_module, MockReqLLM)
+      MockReqLLM.reset()
+      MockReqLLM.set_reply(text: "ok", input_tokens: 1, output_tokens: 1)
+      on_exit(fn -> Application.delete_env(:concept, :req_llm_module) end)
+      :ok
+    end
+
+    test "AshAi.ToolLoop.stream invokes req_llm.stream_text in the consumer pid" do
+      caller = self()
+
+      _ =
+        [ReqLLM.Context.user("hi")]
+        |> AshAi.ToolLoop.stream(
+          otp_app: :concept,
+          tools: false,
+          model: "google:gemini-2.5-flash",
+          req_llm: ReqLLMTap
+        )
+        |> Enum.to_list()
+
+      assert MockReqLLM.stream_text_pid() == caller,
+             """
+             ReqLLMTap depends on the underlying ReqLLM call running in the
+             consumer pid (so Process.dict-based stash survives across the
+             stream lifecycle). If this assertion fails, ash_ai has changed
+             its stream consumption model — see Concept.LLM.ReqLLMTap docs.
+             """
+    end
+  end
+
   # ──────────────────────────────────────────────────────────────────────
   # Integration tests — DB + mocked LLM
   # ──────────────────────────────────────────────────────────────────────
@@ -196,6 +268,27 @@ defmodule Concept.Knowledge.Chat.RespondChangeTest do
       assert agent.prompt_tokens == 21
       assert agent.completion_tokens == 9
       assert is_integer(agent.latency_ms) and agent.latency_ms >= 0
+    end
+
+    test "BUG-046 extension: persists grounding_score when Google provider_meta is present",
+         %{user_message: msg, user: user} do
+      MockReqLLM.set_reply(
+        text: "Grounded reply.",
+        input_tokens: 5,
+        output_tokens: 3,
+        grounding_confidences: [0.5, 1.0]
+      )
+
+      {:ok, _} =
+        msg
+        |> Ash.Changeset.for_update(:respond, %{}, actor: user)
+        |> Ash.update()
+
+      [agent] =
+        Ash.read!(Chat.Message, actor: user, authorize?: false)
+        |> Enum.filter(&(&1.source == :agent))
+
+      assert_in_delta agent.grounding_score, 0.75, 1.0e-9
     end
 
     test "FUP-028: second invocation does not re-call the LLM",

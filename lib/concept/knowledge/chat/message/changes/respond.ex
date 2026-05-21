@@ -178,7 +178,17 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
       latency_ms = System.monotonic_time(:millisecond) - start_time
 
       tap_usage = ReqLLMTap.aggregate(ReqLLMTap.collected_usage())
-      merged_metadata = Map.merge(final_state.metadata, tap_usage)
+
+      tap_extras =
+        case ReqLLMTap.collected_grounding_score() do
+          nil -> %{}
+          score -> %{grounding_score: score}
+        end
+
+      merged_metadata =
+        final_state.metadata
+        |> Map.merge(tap_usage)
+        |> Map.merge(tap_extras)
 
       maybe_persist_final(
         final_state,

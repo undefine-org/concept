@@ -1,0 +1,111 @@
+#+TITLE: release_lock action is non-idempotent — explodes on state drift between socket and DB
+#+STATE: ITEM
+#+SESSION_ID: 14e50fb8539646b7
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-17T17-43-54-446Z_14e50fb8539646b7.jsonl]]
+#+CUSTOM_ID: BUG-047-release-lock-action-is-non-idempotent-ex
+
+* Initial Message
+
+[Image #1] 
+
+UPDATE "blocks" AS b0 SET "content" = $1, "updated_at" = $2 WHERE (b0."id" = $3) AND (b0."workspace_id"::uuid = $4::uuid) RETURNING b0."id", b0."workspace_id", b0."page_id", b0."parent_block_id", b0."type", b0."position", b0."content", b0."props", b0."lock_state", b0."lock_holder_id", b0."lock_acquired_at", b0."lock_expires_at", b0."inserted_at", b0."updated_at", b0."archived_at", b0."state" [%{"root" => %{"children" => [%{"children" => [], "direction" => nil, "format" => "", "indent" => 0, "textFormat" => 0, "textStyle" => "", "type" => "paragraph", "version" => 1}], "direction" => "ltr", "format" => "", "indent" => 0, "type" => "root", "version" => 1}}, ~U[2026-05-17 17:43:36.083554Z], "696d9f57-81e8-413c-b64c-3beb460e42d6", "c1aeec0d-f47c-4852-bd25-0a8411a994b6"]
+↳ AshPostgres.DataLayer.update_query/4, at: lib/data_layer.ex:1833
+[debug] Replied in 14ms
+[debug] HANDLE EVENT "blur_block" in ConceptWeb.PageEditorLive
+  Parameters: %{"block_id" => "696d9f57-81e8-413c-b64c-3beb460e42d6"}
+[debug] QUERY OK source="memberships" db=0.8ms idle=1094.2ms
+SELECT m0."id", m0."user_id", m0."role", m0."inserted_at", m0."workspace_id" FROM "memberships" AS m0 WHERE (m0."workspace_id"::uuid = $1::uuid) AND (m0."user_id"::uuid = $2::uuid) LIMIT $3 ["c1aeec0d-f47c-4852-bd25-0a8411a994b6", "191505b2-be0b-45b7-ab5d-84938776def9", 1]
+↳ anonymous fn/3 in AshPostgres.DataLayer.run_query/2, at: lib/data_layer.ex:860
+[debug] QUERY OK source="memberships" db=0.3ms idle=1092.4ms
+SELECT m0."id", m0."user_id", m0."role", m0."inserted_at", m0."workspace_id" FROM "memberships" AS m0 WHERE (m0."workspace_id"::uuid = $1::uuid) AND (m0."user_id"::uuid = $2::uuid) LIMIT $3 ["c1aeec0d-f47c-4852-bd25-0a8411a994b6", "191505b2-be0b-45b7-ab5d-84938776def9", 1]
+↳ anonymous fn/3 in AshPostgres.DataLayer.run_query/2, at: lib/data_layer.ex:860
+[debug] QUERY OK source="blocks" db=3.2ms idle=1091.4ms
+UPDATE "blocks" AS b0 SET "lock_acquired_at" = s1."__new_lock_acquired_at", "updated_at" = s1."__new_updated_at", "lock_expires_at" = s1."__new_lock_expires_at", "state" = $1, "lock_holder_id" = $2, "lock_state" = $3 FROM (SELECT sb0."id" AS "id", (CASE WHEN NOT (sb0."state"::varchar = ANY($4::varchar[])) THEN ash_raise_error(jsonb_build_object('exception', $5::text, 'input', jsonb_build_object($6::text, $7::jsonb, $8::text, $9::jsonb, $10::text, $11::jsonb, $12::text, sb0."state"::varchar))::jsonb, NULL::timestamp) ELSE NULL::timestamp::timestamp END) AS "__new_lock_acquired_at", (CASE WHEN ((((NULL::timestamp::timestamp IS DISTINCT FROM sb0."lock_expires_at"::timestamp) OR (NULL::timestamp::timestamp IS DISTINCT FROM sb0."lock_acquired_at"::timestamp)) OR ($13::varchar != sb0."state"::varchar)) OR (NULL::uuid::uuid IS DISTINCT FROM sb0."lock_holder_id"::uuid)) OR ($14::varchar IS DISTINCT FROM sb0."lock_state"::varchar) THEN $15::timestamp ELSE sb0."updated_at"::timestamp END) AS "__new_updated_at", NULL::timestamp AS "__new_lock_expires_at" FROM "blocks" AS sb0 WHERE (sb0."id"::uuid = $16::uuid) AND (sb0."workspace_id"::uuid = $17::uuid) LIMIT $18) AS s1 WHERE (b0."id" = s1."id") RETURNING b0."id", b0."workspace_id", b0."page_id", b0."parent_block_id", b0."type", b0."position", b0."content", b0."props", b0."lock_state", b0."lock_holder_id", b0."lock_acquired_at", b0."lock_expires_at", b0."inserted_at", b0."updated_at", b0."archived_at", b0."state" [:unlocked, nil, :unlocked, [:locked], "AshStateMachine.Errors.NoMatchingTransition", "target", "unlocked", "field", "lock_acquired_at", "action", "release_lock", "old_state", :unlocked, :unlocked, ~U[2026-05-17 17:43:36.811033Z], "696d9f57-81e8-413c-b64c-3beb460e42d6", "c1aeec0d-f47c-4852-bd25-0a8411a994b6", 1]
+↳ AshPostgres.DataLayer.update_query/4, at: lib/data_layer.ex:1833
+[debug] Replied in 11ms
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "Shift"}
+[debug] Replied in 247µs
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "H"}
+[debug] Replied in 219µs
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "i"}
+[debug] Replied in 202µs
+[debug] HANDLE EVENT "global_key" in ConceptWeb.WorkspaceLive
+  Parameters: %{"key" => "Meta"}
+[debug] Replied in 170µs
+[debug] QUERY OK source="knowledge_ingestion_jobs" db=1.3ms idle=1935.7ms
+SELECT count(*) FROM "knowledge_ingestion_jobs" AS k0 WHERE ((k0."state" = 'queued') AND (k0."archived_at" IS NULL)) []
+↳ Concept.Knowledge.report_ingestion_queue_depth/0, at: lib/concept/knowledge.ex:81
+[debug] QUERY OK source="pages" db=1.0ms queue=0.1ms idle=1375.3ms
+SELECT p0."id", p0."position", p0."title", p0."inserted_at", p0."workspace_id", p0."parent_page_id", p0."cover_color", p0."icon_emoji", p0."updated_at", p0."archived_at" FROM "pages" AS p0 WHERE (p0."id"::uuid = $1::uuid) AND (p0."workspace_id"::uuid = $2::uuid) ["7cd17c8d-b922-4f26-872c-c4e28b015d0a", "c1aeec0d-f47c-4852-bd25-0a8411a994b6"]
+↳ anonymous fn/3 in AshPostgres.DataLayer.run_query/2, at: lib/data_layer.ex:860
+[error] Failed to ingest page 7cd17c8d-b922-4f26-872c-c4e28b015d0a: %Ash.Error.Invalid{errors: [%Ash.Error.Query.InvalidArgument{field: :page_id, message: "is invalid", value: [page_id: "7cd17c8d-b922-4f26-872c-c4e28b015d0a", actor: %{system?: true}, tenant: "c1aeec0d-f47c-4852-bd25-0a8411a994b6"], splode: Ash.Error, bread_crumbs: [], vars: [], path: [], stacktrace: #Splode.Stacktrace<>, class: :invalid}]}
+[debug] QUERY OK source="knowledge_ingestion_jobs" db=1.5ms idle=1577.9ms
+SELECT count(*) FROM "knowledge_ingestion_jobs" AS k0 WHERE ((k0."state" = 'queued') AND (k0."archived_at" IS NULL)) []
+↳ Concept.Knowledge.report_ingestion_queue_depth/0, at: lib/concept/knowledge.ex:81
+[debug] QUERY OK source="workspaces" db=0.6ms queue=0.8ms idle=1210.5ms
+
+
+
+WHAT HAPPENED???? Please find the structural root causes and explain them to me.
+
+* Summary
+The =:release_lock= AshStateMachine transition on =Concept.Pages.Block= declares
+=from: :locked=. When the underlying =state= column has already drifted to
+=:unlocked= (e.g. via the =release_expired_locks= AshOban cron, a sibling tab,
+or a previous release attempt), invoking =:release_lock= raises
+=AshStateMachine.Errors.NoMatchingTransition=.
+
+* Reproduction
+1. Acquire a block lock from =PageEditorLive=.
+2. Externally release it (cron / direct SQL / second tab).
+3. Blur the block in the original LV. The =release_if_held/2= helper still sees
+   =held_locks[id] == true= and fires =Pages.release_lock/2= → server logs the
+   =NoMatchingTransition= error from =update_query/4= at =lib/data_layer.ex:1833=.
+
+Observed in production log slice 2026-05-17:
+#+begin_example
+[:unlocked, nil, :unlocked, [:locked], "AshStateMachine.Errors.NoMatchingTransition",
+ "target", "unlocked", "field", "lock_acquired_at", "action", "release_lock",
+ "old_state", :unlocked, …]
+#+end_example
+
+* Root cause
+Two sources of truth for "is this block locked?":
+- =Concept.Pages.Block.state= (state machine column, mutable by cron/admin)
+- =PageEditorLive.assigns.held_locks= (in-memory map, mutated only on focus/blur)
+
+The transition is closed (=from: :locked=), so any drift turns =:release_lock=
+into a hard error. =release_if_held= silently swallows the error
+(=_ -> socket=), keeping the poisoned =held_locks= entry alive for the rest
+of the session.
+
+* Fix (chosen path)
+Make =:release_lock= idempotent at the resource level:
+#+begin_src elixir
+transition :release_lock, from: [:locked, :unlocked], to: :unlocked
+#+end_src
+
+The remaining changes in the action (=set_attribute(:lock_state, :unlocked)=,
+clearing holder/timestamps) are already idempotent.
+
+Also clear =held_locks[id]= on the LV side regardless of the action result
+(after the resource-level fix, any non-:ok result is a real bug worth surfacing).
+
+* Tests
+- Resource test: acquire → release → release again should both succeed and
+  leave =lock_state == :unlocked= with =lock_holder_id == nil=.
+- Regression test: simulate the cron path (release_lock as system actor) then
+  user re-release should not error.
+
+* Acceptance
+- =mix test test/concept/pages/block_lock_idempotency_test.exs= passes.
+- Server log no longer contains =NoMatchingTransition= entries for
+  =release_lock=.
+
+* Related
+- Adjacent code smell: client-side TTL refresh is missing — the 30 s lock
+  outlives every focus event without a keepalive. Track separately as a FUP if
+  desired; not required to close this bug.

@@ -4,58 +4,58 @@
 
 * Contract
 
-** DOING Add pid-consistency contract test for ReqLLMTap
+** DONE Add pid-consistency contract test for ReqLLMTap
 :PROPERTIES:
 :TASK_ID: ct1
-:STATUS: in_progress
+:STATUS: completed
 :END:
 
 Prove AshAi.ToolLoop consumes stream in caller pid; expose stream_text_pid/0 from MockReqLLM
 
 * Grounding
 
-** ITEM Extend ReqLLMTap to capture :meta chunks' provider_meta
+** DONE Extend ReqLLMTap to capture :meta chunks' provider_meta
 :PROPERTIES:
 :TASK_ID: g-tap
-:STATUS: pending
+:STATUS: completed
 :END:
 
 Stream.transform wraps stream; push_meta accumulates metadata
 
-** ITEM Add collected_grounding_score/0 averaging Google confidenceScores
+** DONE Add collected_grounding_score/0 averaging Google confidenceScores
 :PROPERTIES:
 :TASK_ID: g-score
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: g-tap
 :END:
 
-** ITEM Wire grounding into Respond.do_stream merge
+** DONE Wire grounding into Respond.do_stream merge
 :PROPERTIES:
 :TASK_ID: g-wire
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: g-score
 :END:
 
-** ITEM Extend MockReqLLM to emit grounding-bearing meta
+** DONE Extend MockReqLLM to emit grounding-bearing meta
 :PROPERTIES:
 :TASK_ID: g-mock
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: g-tap
 :END:
 
-** ITEM Tests for grounding capture + persistence
+** DONE Tests for grounding capture + persistence
 :PROPERTIES:
 :TASK_ID: g-test
-:STATUS: pending
+:STATUS: completed
 :DEPENDS: g-wire g-mock
 :END:
 
 * Verify
 
-** ITEM mix test respond suite + mix precommit
+** DONE mix test respond suite + mix precommit
 :PROPERTIES:
 :TASK_ID: v
-:STATUS: pending
+:STATUS: completed
 :GATE_CMD: mix precommit
 :DEPENDS: ct1 g-test
 :END:

@@ -52,8 +52,10 @@ defmodule ConceptWeb.AiBlockRenderTest do
 
       {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
-      # Should render ora-ai-block with state="empty"
-      assert has_element?(view, "ora-ai-block#ai-#{block.id}[state=\"empty\"]")
+      # Wrapper carries the LiveComponent wiring; the Lit element is its child.
+      assert has_element?(view, "div#ai-#{block.id}[phx-hook=\"OraBlock\"]")
+      assert has_element?(view, "div#ai-#{block.id}[data-events=\"evaluate refresh retry\"]")
+      assert has_element?(view, "ora-ai-block#ora-ai-#{block.id}[state=\"empty\"]")
     end
   end
 
@@ -118,13 +120,12 @@ defmodule ConceptWeb.AiBlockRenderTest do
 
       {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
-      # Should render ora-ai-block with state="answered"
-      assert has_element?(view, "ora-ai-block#ai-#{block.id}[state=\"answered\"]")
+      assert has_element?(view, "div#ai-#{block.id}[phx-hook=\"OraBlock\"]")
+      assert has_element?(view, "ora-ai-block#ora-ai-#{block.id}[state=\"answered\"]")
 
-      # Should include message-id attribute
       assert has_element?(
                view,
-               "ora-ai-block#ai-#{block.id}[message-id=\"#{assistant_message.id}\"]"
+               "ora-ai-block#ora-ai-#{block.id}[message-id=\"#{assistant_message.id}\"]"
              )
     end
   end
@@ -190,8 +191,7 @@ defmodule ConceptWeb.AiBlockRenderTest do
 
       {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
-      # Should render ora-ai-block with state="streaming"
-      assert has_element?(view, "ora-ai-block#ai-#{block.id}[state=\"streaming\"]")
+      assert has_element?(view, "ora-ai-block#ora-ai-#{block.id}[state=\"streaming\"]")
     end
   end
 end

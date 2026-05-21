@@ -34,68 +34,72 @@ defmodule Concept.Pages.Page do
     defaults [:read]
 
     create :create_page do
-          description "Create a new page in the workspace"
+      description "Create a new page in the workspace"
       accept [:title, :icon_emoji, :parent_page_id]
-      argument :workspace_id, :uuid, allow_nil?: false, description: "Workspace where the page will be created"
+
+      argument :workspace_id, :uuid,
+        allow_nil?: false,
+        description: "Workspace where the page will be created"
+
       change set_attribute(:workspace_id, arg(:workspace_id))
       change Concept.Pages.Changes.TrimTitle
       change Concept.Pages.Changes.AssignAfterLastSibling
     end
 
     update :rename do
-          description "Rename the page title"
+      description "Rename the page title"
       accept [:title]
       require_atomic? false
       change Concept.Pages.Changes.TrimTitle
     end
 
     update :set_icon do
-          description "Change the page emoji icon"
+      description "Change the page emoji icon"
       accept [:icon_emoji]
     end
 
     update :set_cover_color do
-          description "Set the page cover color"
+      description "Set the page cover color"
       accept [:cover_color]
     end
 
     update :reorder do
-          description "Change the page order among siblings"
+      description "Change the page order among siblings"
       accept [:position]
     end
 
     update :reparent do
-          description "Move page to a new parent"
+      description "Move page to a new parent"
       accept [:parent_page_id, :position]
       require_atomic? false
       change Concept.Pages.Changes.PreventCycles
     end
 
     update :archive do
-          description "Archive the page"
+      description "Archive the page"
       accept []
       require_atomic? false
       change Concept.Pages.Changes.CascadeArchive
     end
 
     update :restore do
-          description "Restore an archived page"
+      description "Restore an archived page"
       accept []
       change set_attribute(:archived_at, nil)
     end
 
     read :list_tree do
-          description "List the page hierarchy tree"
+      description "List the page hierarchy tree"
       prepare build(sort: [parent_page_id: :asc, position: :asc])
     end
 
     read :recent_pages do
-          description "Get recently updated pages"
+      description "Get recently updated pages"
       prepare build(sort: [updated_at: :desc], limit: 10)
     end
 
     read :search_titles do
-          description "Search pages by title"
+      description "Search pages by title"
       argument :query, :string, allow_nil?: false, description: "Search term for page titles"
       filter expr(ilike(title, fragment("concat('%', ?::text, '%')", ^arg(:query))))
       prepare build(sort: [updated_at: :desc], limit: 20)

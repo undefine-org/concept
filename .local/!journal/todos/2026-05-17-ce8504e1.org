@@ -1,0 +1,50 @@
+#+TITLE: Session 14e50fb8539646b7 Todos
+#+DATE: 2026-05-17
+#+TODO: ITEM DOING BLOCKED | DONE
+
+* Extension scaffold
+
+** DONE Audit the 6 resources for exact policy/relationship shape
+:PROPERTIES:
+:TASK_ID: audit
+:STATUS: completed
+:END:
+
+** DONE Create Concept.Resources.WorkspaceTenanted __using__ macro
+:PROPERTIES:
+:TASK_ID: macro
+:STATUS: completed
+:DEPENDS: audit
+:END:
+
+* Migrate resources
+
+** DONE Migrate Block + Page
+:PROPERTIES:
+:TASK_ID: mig-pages
+:STATUS: completed
+:DEPENDS: macro
+:END:
+
+** DONE Migrate Link + Citation + TokenLedger + IngestionJob
+:PROPERTIES:
+:TASK_ID: mig-knowledge
+:STATUS: completed
+:DEPENDS: macro
+:END:
+
+* Verify
+
+** DONE Smoke test: 6 resources expose workspace_memberships rel
+:PROPERTIES:
+:TASK_ID: smoke
+:STATUS: completed
+:DEPENDS: mig-pages mig-knowledge
+:END:
+
+** DONE mix precommit
+:PROPERTIES:
+:TASK_ID: precommit2
+:STATUS: completed
+:DEPENDS: smoke
+:END:

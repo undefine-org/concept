@@ -1,0 +1,48 @@
+#+TITLE: Expand mcp_resources to cover workspace tree, page blocks, chat history, citations, search
+#+STATE: ITEM
+#+SESSION_ID: 14e5f88670bddeda
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
+#+CUSTOM_ID: FUP-032-expand-mcp-resources-to-cover-workspace
+#+LAYER: platform
+#+PARENT: FEAT-059-register-mcp-resources-per-domain
+
+* Initial Message
+
+think deeply, deeply. How would you make it so that any feature we develop on the frontend is readily accessible (for free) to LLMs via the MCP? Maximally use Ash. Ideally, frontends are just the 'human connection' layer and Ash and its ecosystem lets us have the MCP 'for free' that lets you use Concept as easily as a human would
+
+* Parent
+[[id:FEAT-059-register-mcp-resources-per-domain][FEAT-059]] (reduced scope)
+
+* Intent
+
+FEAT-059 landed only the proof-of-pattern (~concept://me/workspaces~).
+The full browse surface from the original spec needs:
+
+- ~concept://workspaces/{ws}/tree~  → Page tree
+- ~concept://pages/{page_id}~       → Page record
+- ~concept://pages/{page_id}/blocks~ → Blocks for a page
+- ~concept://workspaces/{ws}/recent~ → Recent pages
+- ~concept://chat/{conversation_id}~ → Conversation messages
+- ~concept://chat/recent~            → My conversations
+- ~concept://workspaces/{ws}/search~ → Hybrid search
+- ~concept://blocks/{block_id}/citations~ → Citations
+
+* Required pattern
+
+AshAi's ~mcp_resource~ verifier requires the underlying action to be a
+~generic action :foo, :string~ returning serialized JSON/text. Read
+actions like ~list_tree~, ~for_message~ etc. don't qualify directly.
+
+For each resource above, add a per-resource generic action that:
+  1. Reads the underlying records via ~Ash.read~ with the actor + tenant
+     from the MCP connection.
+  2. Maps to a stable JSON shape.
+  3. Returns ~Jason.encode(payload)~.
+
+Then register the ~mcp_resource~ entry pointing at it.
+
+* Acceptance
+
+- ~resources/list~ over MCP returns ≥ 8 entries
+- ~resources/read~ on each returns the expected JSON
+- Cross-workspace isolation tests green

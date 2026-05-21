@@ -1,5 +1,5 @@
 #+TITLE: ApiKey workspace binding and MCP WorkspaceContext plug
-#+STATE: ITEM
+#+STATE: DOING
 #+SESSION_ID: 14e5f88670bddeda
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
 #+BLOCKERS: FEAT-054-describe-pages-domain-actions FEAT-055-describe-knowledge-domain-actions FEAT-056-describe-chat-domain-actions FEAT-057-describe-accounts-domain-actions

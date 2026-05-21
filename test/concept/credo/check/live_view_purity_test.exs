@@ -8,6 +8,9 @@ defmodule Concept.Credo.Check.LiveViewPurityTest do
   """
   use ExUnit.Case, async: false
 
+  # Shells out to `mix credo --strict` which can take >60s on cold caches
+  # or when the precommit suite is hammering the box. Bump to 180s.
+  @tag timeout: 180_000
   test "the check is loaded and Credo runs cleanly on the codebase" do
     {output, exit_code} =
       System.cmd(

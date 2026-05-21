@@ -1,5 +1,5 @@
 #+TITLE: Router flip — tools: true
-#+STATE: ITEM
+#+STATE: DOING
 #+SESSION_ID: 14e5f88670bddeda
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-18T10-41-02-914Z_14e5f88670bddeda.jsonl]]
 #+BLOCKERS: FEAT-058-apikey-workspace-binding-and-mcp-workspa FEAT-059-register-mcp-resources-per-domain

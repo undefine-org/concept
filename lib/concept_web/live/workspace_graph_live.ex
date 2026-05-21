@@ -13,7 +13,7 @@ defmodule ConceptWeb.WorkspaceGraphLive do
 
     case Accounts.Workspace.by_slug(slug, actor: user) do
       {:ok, ws} when not is_nil(ws) ->
-        Phoenix.PubSub.subscribe(Concept.PubSub, "workspace:#{ws.id}:pages")
+        ConceptWeb.Endpoint.subscribe("workspace:#{ws.id}:pages")
         {:ok, pages} = Pages.list_tree(actor: user, tenant: ws.id)
 
         {:ok,

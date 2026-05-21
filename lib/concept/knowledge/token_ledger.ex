@@ -4,7 +4,7 @@ defmodule Concept.Knowledge.TokenLedger do
   and embedding tokens consumed through knowledge ingestion and answer pipelines.
   Populated by `Concept.Knowledge.Workers.AggregateTokens` from telemetry accumulator.
   """
-  use Ash.Resource,
+  use Concept.Resources.WorkspaceTenanted,
     otp_app: :concept,
     domain: Concept.Knowledge,
     data_layer: AshPostgres.DataLayer,
@@ -38,21 +38,9 @@ defmodule Concept.Knowledge.TokenLedger do
     end
   end
 
-  policies do
-    bypass actor_attribute_equals(:system?, true) do
-      authorize_if always()
-    end
-
-    policy action_type(:read) do
-      authorize_if Concept.Pages.Checks.WorkspaceMember
-    end
-  end
-
-  multitenancy do
-    strategy :attribute
-    attribute :workspace_id
-    global? false
-  end
+  # Read floor (members) + system bypass come from
+  # `Concept.Resources.WorkspaceTenanted`. Writes are system-only via that
+  # bypass; no additional policies needed.
 
   attributes do
     uuid_primary_key :id
