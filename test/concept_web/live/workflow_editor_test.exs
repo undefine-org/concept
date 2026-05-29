@@ -49,7 +49,10 @@ defmodule ConceptWeb.WorkflowEditorTest do
   describe "with a workflow" do
     setup ctx do
       {:ok, wf} = Objects.create_workflow("WF", actor: ctx.user, tenant: ctx.ws.id)
-      {:ok, type} = Objects.set_object_type_workflow(ctx.type, wf.id, actor: ctx.user, tenant: ctx.ws.id)
+
+      {:ok, type} =
+        Objects.set_object_type_workflow(ctx.type, wf.id, actor: ctx.user, tenant: ctx.ws.id)
+
       %{type: type, workflow_id: wf.id}
     end
 
@@ -97,10 +100,16 @@ defmodule ConceptWeb.WorkflowEditorTest do
 
     test "adds a transition between two states", ctx do
       {:ok, a} =
-        Objects.create_workflow_state(ctx.workflow_id, "Lead", :backlog, actor: ctx.user, tenant: ctx.ws.id)
+        Objects.create_workflow_state(ctx.workflow_id, "Lead", :backlog,
+          actor: ctx.user,
+          tenant: ctx.ws.id
+        )
 
       {:ok, b} =
-        Objects.create_workflow_state(ctx.workflow_id, "Active", :doing, actor: ctx.user, tenant: ctx.ws.id)
+        Objects.create_workflow_state(ctx.workflow_id, "Active", :doing,
+          actor: ctx.user,
+          tenant: ctx.ws.id
+        )
 
       {:ok, view, _} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/types/#{ctx.type.id}")
 
@@ -116,10 +125,16 @@ defmodule ConceptWeb.WorkflowEditorTest do
 
     test "adds, configures, and removes a guard on a transition", ctx do
       {:ok, a} =
-        Objects.create_workflow_state(ctx.workflow_id, "Doing", :doing, actor: ctx.user, tenant: ctx.ws.id)
+        Objects.create_workflow_state(ctx.workflow_id, "Doing", :doing,
+          actor: ctx.user,
+          tenant: ctx.ws.id
+        )
 
       {:ok, b} =
-        Objects.create_workflow_state(ctx.workflow_id, "Review", :review, actor: ctx.user, tenant: ctx.ws.id)
+        Objects.create_workflow_state(ctx.workflow_id, "Review", :review,
+          actor: ctx.user,
+          tenant: ctx.ws.id
+        )
 
       {:ok, t} =
         Objects.create_transition(ctx.workflow_id, a.id, b.id, actor: ctx.user, tenant: ctx.ws.id)
@@ -153,12 +168,18 @@ defmodule ConceptWeb.WorkflowEditorTest do
 
     test "setting a new initial state clears the previous one", ctx do
       {:ok, a} =
-        Objects.create_workflow_state(ctx.workflow_id, "Lead", :backlog, actor: ctx.user, tenant: ctx.ws.id)
+        Objects.create_workflow_state(ctx.workflow_id, "Lead", :backlog,
+          actor: ctx.user,
+          tenant: ctx.ws.id
+        )
 
       {:ok, _} = Objects.mark_workflow_state_initial(a, actor: ctx.user, tenant: ctx.ws.id)
 
       {:ok, b} =
-        Objects.create_workflow_state(ctx.workflow_id, "Active", :doing, actor: ctx.user, tenant: ctx.ws.id)
+        Objects.create_workflow_state(ctx.workflow_id, "Active", :doing,
+          actor: ctx.user,
+          tenant: ctx.ws.id
+        )
 
       {:ok, view, _} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/types/#{ctx.type.id}")
 
@@ -176,10 +197,16 @@ defmodule ConceptWeb.WorkflowEditorTest do
 
     test "a requires_fields guard stores a list and renders without crashing", ctx do
       {:ok, a} =
-        Objects.create_workflow_state(ctx.workflow_id, "Doing", :doing, actor: ctx.user, tenant: ctx.ws.id)
+        Objects.create_workflow_state(ctx.workflow_id, "Doing", :doing,
+          actor: ctx.user,
+          tenant: ctx.ws.id
+        )
 
       {:ok, b} =
-        Objects.create_workflow_state(ctx.workflow_id, "Done", :done, actor: ctx.user, tenant: ctx.ws.id)
+        Objects.create_workflow_state(ctx.workflow_id, "Done", :done,
+          actor: ctx.user,
+          tenant: ctx.ws.id
+        )
 
       {:ok, t} =
         Objects.create_transition(ctx.workflow_id, a.id, b.id, actor: ctx.user, tenant: ctx.ws.id)
@@ -196,7 +223,9 @@ defmodule ConceptWeb.WorkflowEditorTest do
       |> render_change(%{"transition_id" => t.id, "index" => "0", "fields" => "owner, due_date"})
 
       {:ok, [t1]} = filter_transitions(ctx, a.id, b.id)
-      assert [%{"kind" => "requires_fields", "config" => %{"fields" => ["owner", "due_date"]}}] = t1.guards
+
+      assert [%{"kind" => "requires_fields", "config" => %{"fields" => ["owner", "due_date"]}}] =
+               t1.guards
 
       # re-render must succeed (describe over a list, not a string)
       assert render(view) =~ "requires fields: owner, due_date"
@@ -204,10 +233,16 @@ defmodule ConceptWeb.WorkflowEditorTest do
 
     test "a crafted guard event with a non-integer index does not crash", ctx do
       {:ok, a} =
-        Objects.create_workflow_state(ctx.workflow_id, "S1", :todo, actor: ctx.user, tenant: ctx.ws.id)
+        Objects.create_workflow_state(ctx.workflow_id, "S1", :todo,
+          actor: ctx.user,
+          tenant: ctx.ws.id
+        )
 
       {:ok, b} =
-        Objects.create_workflow_state(ctx.workflow_id, "S2", :doing, actor: ctx.user, tenant: ctx.ws.id)
+        Objects.create_workflow_state(ctx.workflow_id, "S2", :doing,
+          actor: ctx.user,
+          tenant: ctx.ws.id
+        )
 
       {:ok, t} =
         Objects.create_transition(ctx.workflow_id, a.id, b.id, actor: ctx.user, tenant: ctx.ws.id)

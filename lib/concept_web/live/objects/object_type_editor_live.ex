@@ -104,7 +104,11 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
 
   # ── events: fields ───────────────────────────────────────────────────
 
-  def handle_event("add_field", %{"name" => name, "field_type" => ft}, %{assigns: %{type: type}} = socket)
+  def handle_event(
+        "add_field",
+        %{"name" => name, "field_type" => ft},
+        %{assigns: %{type: type}} = socket
+      )
       when not is_nil(type) do
     name = String.trim(name)
     %{workspace: ws} = socket.assigns
@@ -126,7 +130,11 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
     end
   end
 
-  def handle_event("update_field", %{"field_id" => id} = params, %{assigns: %{fields: fields}} = socket)
+  def handle_event(
+        "update_field",
+        %{"field_id" => id} = params,
+        %{assigns: %{fields: fields}} = socket
+      )
       when is_list(fields) do
     %{workspace: ws} = socket.assigns
     user = socket.assigns.current_user
@@ -147,7 +155,11 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
     end
   end
 
-  def handle_event("reorder_field", %{"id" => id, "dir" => dir}, %{assigns: %{fields: fields}} = socket)
+  def handle_event(
+        "reorder_field",
+        %{"id" => id, "dir" => dir},
+        %{assigns: %{fields: fields}} = socket
+      )
       when is_list(fields) do
     %{workspace: ws} = socket.assigns
     user = socket.assigns.current_user
@@ -318,7 +330,10 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
             <span class="inline-flex items-center gap-2">
               <span class="text-lg">{type.icon}</span>
               <span class="text-sm font-medium text-notion-text">{type.name}</span>
-              <span :if={type.is_system?} class="rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text-light">
+              <span
+                :if={type.is_system?}
+                class="rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text-light"
+              >
                 system
               </span>
             </span>
@@ -346,7 +361,10 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
           <span class="inline-flex items-center gap-2">
             <span class="text-2xl">{@type.icon}</span>
             <h1 class="text-2xl font-bold text-notion-text">{@type.name}</h1>
-            <span :if={@type.is_system?} class="rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text-light">
+            <span
+              :if={@type.is_system?}
+              class="rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text-light"
+            >
               system
             </span>
           </span>
@@ -390,7 +408,10 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
                 <span class="rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text-light">
                   {fd.field_type}
                 </span>
-                <span :if={fd.is_title?} class="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-800">
+                <span
+                  :if={fd.is_title?}
+                  class="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-800"
+                >
                   title
                 </span>
                 <button
@@ -428,7 +449,8 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
                     <%!-- hidden fallback so unchecking submits "false" (an
                     unchecked checkbox sends no param) --%>
                     <input type="hidden" name="required" value="false" />
-                    <input type="checkbox" name="required" value="true" checked={fd.required?} /> required
+                    <input type="checkbox" name="required" value="true" checked={fd.required?} />
+                    required
                   </label>
                 </div>
                 <div class="pl-6">
@@ -454,7 +476,11 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
               name="field_type"
               class="rounded-md border border-notion-divider px-2 py-1.5 text-sm"
             >
-              <option :for={{val, label} <- type_options()} value={val} selected={val == @new_field_type}>
+              <option
+                :for={{val, label} <- type_options()}
+                value={val}
+                selected={val == @new_field_type}
+              >
                 {label}
               </option>
             </select>
