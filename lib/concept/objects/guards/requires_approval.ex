@@ -28,7 +28,10 @@ defmodule Concept.Objects.Guards.RequiresApproval do
 
     ~H"""
     <label class="text-xs text-notion-text-light">Approver</label>
-    <select name={@form[:by].name} class="w-full rounded-md border border-notion-divider px-2 py-1 text-sm">
+    <select
+      name={@form[:by].name}
+      class="w-full rounded-md border border-notion-divider px-2 py-1 text-sm"
+    >
       <option value="creator" selected={@by == "creator"}>The creator</option>
       <option value="anyone" selected={@by == "anyone"}>Any member</option>
     </select>

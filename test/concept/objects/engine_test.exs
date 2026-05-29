@@ -230,7 +230,12 @@ defmodule Concept.Objects.EngineTest do
     test "linking to a record in another workspace is rejected", ctx do
       type = new_type(ctx)
       {:ok, _} = add_field(ctx, type, "Name", :text, %{is_title?: true})
-      {:ok, a} = Objects.create_record(type.id, %{fields: %{"name" => "A"}}, actor: ctx.user, tenant: ctx.ws)
+
+      {:ok, a} =
+        Objects.create_record(type.id, %{fields: %{"name" => "A"}},
+          actor: ctx.user,
+          tenant: ctx.ws
+        )
 
       # a foreign record in another user's auto-seeded workspace
       {:ok, other_user} =
@@ -247,7 +252,10 @@ defmodule Concept.Objects.EngineTest do
       task2 = Enum.find(types2, &(&1.key == "task"))
 
       {:ok, foreign} =
-        Objects.create_record(task2.id, %{fields: %{"title" => "Foreign"}}, actor: other_user, tenant: ws2.id)
+        Objects.create_record(task2.id, %{fields: %{"title" => "Foreign"}},
+          actor: other_user,
+          tenant: ws2.id
+        )
 
       # attempt to link a (ws) -> foreign (ws2) under tenant ws → rejected
       assert {:error, _} =

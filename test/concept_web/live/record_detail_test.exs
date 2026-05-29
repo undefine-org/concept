@@ -18,7 +18,8 @@ defmodule ConceptWeb.Objects.RecordDetailTest do
     task = Enum.find(types, &(&1.key == "task"))
 
     conn =
-      conn |> Plug.Test.init_test_session(%{})
+      conn
+      |> Plug.Test.init_test_session(%{})
       |> AshAuthentication.Plug.Helpers.store_in_session(user)
 
     %{conn: conn, user: user, ws: ws, task: task}
@@ -27,7 +28,9 @@ defmodule ConceptWeb.Objects.RecordDetailTest do
   test "clicking a card opens the slide-over with the record title", ctx do
     {:ok, rec} =
       Objects.create_record(ctx.task.id, %{fields: %{"title" => "Open me"}},
-        actor: ctx.user, tenant: ctx.ws.id)
+        actor: ctx.user,
+        tenant: ctx.ws.id
+      )
 
     {:ok, view, _} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/tasks")
 
@@ -40,7 +43,9 @@ defmodule ConceptWeb.Objects.RecordDetailTest do
   test "editing a field autosaves and re-syncs the title", ctx do
     {:ok, rec} =
       Objects.create_record(ctx.task.id, %{fields: %{"title" => "Before"}},
-        actor: ctx.user, tenant: ctx.ws.id)
+        actor: ctx.user,
+        tenant: ctx.ws.id
+      )
 
     {:ok, view, _} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/tasks")
     view |> element("#task-#{rec.id}") |> render_click()
@@ -55,12 +60,16 @@ defmodule ConceptWeb.Objects.RecordDetailTest do
   end
 
   test "moving from the slide-over transitions the record", ctx do
-    {:ok, states} = Objects.list_workflow_states(ctx.task.workflow_id, actor: ctx.user, tenant: ctx.ws.id)
+    {:ok, states} =
+      Objects.list_workflow_states(ctx.task.workflow_id, actor: ctx.user, tenant: ctx.ws.id)
+
     todo = Enum.find(states, &(&1.category == :todo))
 
     {:ok, rec} =
       Objects.create_record(ctx.task.id, %{fields: %{"title" => "Mover"}},
-        actor: ctx.user, tenant: ctx.ws.id)
+        actor: ctx.user,
+        tenant: ctx.ws.id
+      )
 
     {:ok, view, _} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/tasks")
     view |> element("#task-#{rec.id}") |> render_click()

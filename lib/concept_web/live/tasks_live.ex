@@ -13,7 +13,6 @@ defmodule ConceptWeb.TasksLive do
   alias Concept.Objects
   alias ConceptWeb.Objects.FieldTypeComponent
 
-
   @impl true
   def mount(%{"workspace_slug" => slug}, _session, socket) do
     user = socket.assigns.current_user
@@ -246,7 +245,10 @@ defmodule ConceptWeb.TasksLive do
                       onclick="event.stopPropagation()"
                       class="inline-flex items-center gap-1 rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text transition hover:bg-notion-divider"
                     >
-                      → {move.to_state.name}<span :if={move.requirements != []} class="text-notion-text-light">🔒</span>
+                      → {move.to_state.name}<span
+                        :if={move.requirements != []}
+                        class="text-notion-text-light"
+                      >🔒</span>
                     </button>
                   </div>
                 </div>

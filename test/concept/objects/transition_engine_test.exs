@@ -128,7 +128,10 @@ defmodule Concept.Objects.TransitionEngineTest do
     rec = new_record(ctx)
     # starts in backlog; no backlog -> doing edge defined
     assert {:error, _} =
-             Objects.transition_record(rec, ctx.states[:doing].id, actor: ctx.user, tenant: ctx.ws)
+             Objects.transition_record(rec, ctx.states[:doing].id,
+               actor: ctx.user,
+               tenant: ctx.ws
+             )
   end
 
   test "follows defined transitions and rejects undefined ones", ctx do
