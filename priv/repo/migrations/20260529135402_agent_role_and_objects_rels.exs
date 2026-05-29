@@ -17,13 +17,9 @@ defmodule Concept.Repo.Migrations.AgentRoleAndObjectsRels do
                prefix: "public"
              )
     end
-
-    create index(:records, [:workspace_id, :state_id])
   end
 
   def down do
-    drop_if_exists index(:records, [:workspace_id, :state_id])
-
     drop constraint(:records, "records_state_id_fkey")
 
     alter table(:records) do
