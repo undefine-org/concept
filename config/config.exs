@@ -148,7 +148,8 @@ config :concept, :block_types, [
   Concept.Pages.BlockTypes.TableCell,
   Concept.Pages.BlockTypes.Columns,
   Concept.Pages.BlockTypes.Column,
-  Concept.Pages.BlockTypes.AiAnswer
+  Concept.Pages.BlockTypes.AiAnswer,
+  Concept.Pages.BlockTypes.RecordRef
 ]
 
 config :concept, :field_types, [
