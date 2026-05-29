@@ -104,32 +104,33 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
 
   # ── events: fields ───────────────────────────────────────────────────
 
-  def handle_event("add_field", %{"name" => name, "field_type" => ft}, socket) do
+  def handle_event("add_field", %{"name" => name, "field_type" => ft}, %{assigns: %{type: type}} = socket)
+      when not is_nil(type) do
     name = String.trim(name)
-    %{workspace: ws, type: type} = socket.assigns
+    %{workspace: ws} = socket.assigns
     user = socket.assigns.current_user
 
-    if name == "" do
-      {:noreply, socket}
+    # Resolve the client-supplied field_type via the registry's safe resolver
+    # (never String.to_existing_atom on raw input — a crafted websocket event
+    # would raise ArgumentError and crash the LiveView).
+    with false <- name == "",
+         {:ok, ft_atom} <- FieldTypes.resolve(ft),
+         {:ok, _} <-
+           Objects.create_field_def(type.id, name, ft_atom, actor: user, tenant: ws.id) do
+      {:noreply,
+       socket |> assign(:new_field_name, "") |> assign(:new_field_type, "text") |> load_fields()}
     else
-      case Objects.create_field_def(type.id, name, String.to_existing_atom(ft),
-             actor: user,
-             tenant: ws.id
-           ) do
-        {:ok, _} ->
-          {:noreply,
-           socket |> assign(:new_field_name, "") |> assign(:new_field_type, "text") |> load_fields()}
-
-        {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Could not add field")}
-      end
+      true -> {:noreply, socket}
+      {:error, :unknown_type} -> {:noreply, put_flash(socket, :error, "Unknown field type")}
+      {:error, _} -> {:noreply, put_flash(socket, :error, "Could not add field")}
     end
   end
 
-  def handle_event("update_field", %{"field_id" => id} = params, socket) do
+  def handle_event("update_field", %{"field_id" => id} = params, %{assigns: %{fields: fields}} = socket)
+      when is_list(fields) do
     %{workspace: ws} = socket.assigns
     user = socket.assigns.current_user
-    fd = Enum.find(socket.assigns.fields, &(&1.id == id))
+    fd = Enum.find(fields, &(&1.id == id))
 
     if fd do
       attrs = field_update_attrs(fd, params)
@@ -146,8 +147,9 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
     end
   end
 
-  def handle_event("reorder_field", %{"id" => id, "dir" => dir}, socket) do
-    %{workspace: ws, fields: fields} = socket.assigns
+  def handle_event("reorder_field", %{"id" => id, "dir" => dir}, %{assigns: %{fields: fields}} = socket)
+      when is_list(fields) do
+    %{workspace: ws} = socket.assigns
     user = socket.assigns.current_user
     i = Enum.find_index(fields, &(&1.id == id))
 
@@ -163,6 +165,13 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
     else
       _ -> {:noreply, socket}
     end
+  end
+
+  # Field events pushed while on the :index view (no type/fields loaded) are
+  # ignored rather than crashing the process.
+  def handle_event(event, _params, socket)
+      when event in ["add_field", "update_field", "reorder_field"] do
+    {:noreply, socket}
   end
 
   # ── data loading (code-interface only) ───────────────────────────────

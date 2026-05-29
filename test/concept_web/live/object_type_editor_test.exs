@@ -169,6 +169,33 @@ defmodule ConceptWeb.ObjectTypeEditorTest do
       {:ok, after_fields} = Objects.list_field_defs(type.id, actor: user, tenant: ws.id)
       assert Enum.map(before, & &1.id) == Enum.map(after_fields, & &1.id)
     end
+
+    test "an invalid field_type does not crash the LiveView", %{
+      conn: conn,
+      ws: ws,
+      type: type
+    } do
+      {:ok, view, _} = live(conn, ~p"/w/#{ws.slug}/types/#{type.id}")
+
+      # crafted event with a bogus field type — must flash, not crash
+      html =
+        view
+        |> form("#add-field-form", %{"name" => "X", "field_type" => "text"})
+        |> render_submit(%{"name" => "X", "field_type" => "not_a_real_type"})
+
+      assert html =~ "Unknown field type"
+      assert Process.alive?(view.pid)
+    end
+  end
+
+  describe "index crash-safety" do
+    test "field events pushed on the index view are ignored", %{conn: conn, ws: ws} do
+      {:ok, view, _} = live(conn, ~p"/w/#{ws.slug}/types")
+
+      # a crafted reorder_field event while on :index (no type/fields loaded)
+      render_hook(view, "reorder_field", %{"id" => Ecto.UUID.generate(), "dir" => "up"})
+      assert Process.alive?(view.pid)
+    end
   end
 
   defp filter_fields(type, user, ws, name) do
