@@ -1,8 +1,9 @@
 #+TITLE: Command palette select crashes — dispatch_selected reads async wrapper map, not inner list
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14f440a2f4a99f1d
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-54-50-578Z_14f440a2f4a99f1d.jsonl]]
 #+CUSTOM_ID: BUG-058-command-palette-select-crashes-dispatch
+#+COMPLETION_HASH: 59b7c174317555fd
 
 * Initial Message
 
@@ -52,3 +53,5 @@ Inconsistent access between =render/1= (correct, =.result.title_results=) and =d
 - Regression test green; =mix precommit= green.
 
 NOTE [2026-05-29]: CORRECTION (2026-05-29, empirical): initial diagnosis was inverted. assign_async(:title_results, fn -> {:ok, %{title_results: pages}}) makes AsyncResult.result the BARE LIST (LiveView unwraps the value of the key via `for {k,v} <- assigns -> AsyncResult.ok(cur, v)`). So dispatch_selected reading `.result` was CORRECT; it was render/1 + title_count/1 + semantic_count/1 reading `.result.title_results` (a map shape that never matches a list) that was broken → Pages/Semantic buckets NEVER rendered → palette search totally non-functional (only actions + ask_answer showed). Existing palette tests were false-greens: they asserted `html =~ page.title`, satisfied by the always-present sidebar page tree, and clicked positional index "2" which was actually the ask_answer row. Fix: shared accessors title_pages/1 + semantic_hits/1 reading `.result` (list), used by render + counts + dispatch. New test command_palette_results_test.exs asserts palette-scoped DOM (button[data-type=title][data-page-id]); hardened 3 false-greens in command_palette_test.exs. 17 tests green.
+
+NOTE [2026-05-29]: Fixed in 1b6e84e. Shared accessors title_pages/1 + semantic_hits/1; palette-scoped regression test; hardened 3 false-greens. 17 palette tests green; full precommit 375 tests green.

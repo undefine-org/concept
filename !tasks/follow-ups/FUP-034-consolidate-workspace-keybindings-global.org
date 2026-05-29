@@ -1,0 +1,34 @@
+#+TITLE: Consolidate workspace keybindings — GlobalKeys hook and phx-window-keydown both bound, window path dead
+#+STATE: ITEM
+#+SESSION_ID: 14f440a2f4a99f1d
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-54-50-578Z_14f440a2f4a99f1d.jsonl]]
+#+CUSTOM_ID: FUP-034-consolidate-workspace-keybindings-global
+
+* Initial Message
+
+Please dude, please. do a deep review of Concept, especially of its user-friendliness. It still has some QoL issues that render it basically unusable for humans. Do a first pass and show it to me
+
+* Observation (2026-05-29)
+
+=#workspace-root= carries BOTH key mechanisms:
+- =phx-hook="GlobalKeys"= → =global_keys.js= binds a *document* keydown listener, calls =e.preventDefault(); e.stopPropagation()= for Cmd-K/Cmd-J, and =pushEvent("open_command_palette" | "toggle_chat")=.
+- =phx-window-keydown="global_key"= → server =handle_event("global_key", ...)= with clauses for k/j/Escape.
+
+Because the hook's document listener calls =stopPropagation= during the bubble phase, the event never reaches the *window* listener that backs =phx-window-keydown=. So the =global_key= clauses for ="k"= and ="j"= are **dead code** — the hook's pushes are what fire. Two mechanisms, one silently wins.
+
+Not a crash (both ultimately call the same =open_palette= / chat-toggle logic), but confusing, duplicated, fragile. A future edit to the =global_key= k/j clauses would have no effect. Escape is split: hook pushes =close_command_palette= only when =_paletteOpen=; otherwise =global_key "Escape"= handles chat close — so Escape genuinely needs the window path, but k/j do not.
+
+* Decision
+
+Option A (prefer): drop the dead =global_key= k/j clauses; keep =phx-hook="GlobalKeys"= sole owner of Cmd-K/Cmd-J; keep =phx-window-keydown="global_key"= only for Escape (or fold Escape into the hook and drop window-keydown). GlobalKeys can't be fully removed (it also does =palette_state= + =ora-link-this=), so A beats "window-keydown only".
+
+* Scope
+
+- =lib/concept_web/live/workspace_live.ex= — remove dead =global_key= k/j clauses; keep one Escape path; keep open_command_palette/toggle_chat/close_command_palette.
+- =assets/js/hooks/global_keys.js= — ensure Escape complete if window-keydown dropped.
+- Tests: palette/chat toggle coverage stays green via hook events.
+
+* Acceptance
+
+- One mechanism for Cmd-K/Cmd-J; no dead clauses; palette+chat+Escape work (tests + manual).
+- Sequence after BUG-059 to avoid churn.

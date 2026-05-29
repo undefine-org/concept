@@ -1,8 +1,9 @@
 #+TITLE: Cmd-J on landing page crashes HomeLive — no toggle_chat handler
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14f440a2f4a99f1d
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-54-50-578Z_14f440a2f4a99f1d.jsonl]]
 #+CUSTOM_ID: BUG-059-cmd-j-on-landing-page-crashes-homelive-n
+#+COMPLETION_HASH: e04c8af7faa8780d
 
 * Initial Message
 
@@ -39,3 +40,5 @@ NB structural: the hook's event set is an implicit contract. Consider a follow-u
 
 - Cmd-J on landing is a silent no-op; no crash.
 - Test green; =mix precommit= green.
+
+NOTE [2026-05-29]: Fixed in c9f8995. toggle_chat no-op handler on HomeLive; regression test asserts no crash. precommit green.
