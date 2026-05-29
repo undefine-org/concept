@@ -21,6 +21,7 @@ defmodule Concept.Objects do
     resource Concept.Objects.ObjectType do
       define :create_object_type, action: :create, args: [:name]
       define :rename_object_type, args: [:name], action: :rename
+      define :set_object_type_workflow, action: :set_workflow, args: [:workflow_id]
       define :list_object_types, action: :list
       define :get_object_type, action: :read, get_by: :id
     end
