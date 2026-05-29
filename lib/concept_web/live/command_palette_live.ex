@@ -124,16 +124,14 @@ defmodule ConceptWeb.CommandPaletteLive do
                 <% end %>
 
                 <%!-- Title results bucket --%>
-                <%= if match?(%{ok?: true, result: %{title_results: results}} when results != [], @title_results) do %>
+                <% title_pages = title_pages(@title_results) %>
+                <%= if title_pages != [] do %>
                   <div class="px-4 pt-3 pb-1 text-xs font-medium text-notion-text-light uppercase tracking-wide">
                     Pages
                   </div>
                   <div>
                     <.page_item
-                      :for={
-                        {page, idx} <-
-                          Enum.with_index(@title_results.result.title_results |> Enum.take(4))
-                      }
+                      :for={{page, idx} <- Enum.with_index(title_pages)}
                       index={length(@actions) + idx}
                       selected_index={@selected_index}
                       icon_emoji={page.icon_emoji}
@@ -147,17 +145,8 @@ defmodule ConceptWeb.CommandPaletteLive do
                 <% end %>
 
                 <%!-- Semantic results bucket --%>
-                <%= if match?(%{ok?: true, result: %{semantic_results: results}} when results != [], @semantic_results) do %>
-                  <% title_page_ids =
-                    if match?(%{ok?: true, result: %{title_results: _pages}}, @title_results),
-                      do: Enum.map(@title_results.result.title_results, & &1.id),
-                      else: [] %>
-                  <% semantic_hits =
-                    @semantic_results.result.semantic_results
-                    |> Enum.uniq_by(& &1.page_id)
-                    |> Enum.reject(&(&1.page_id in title_page_ids))
-                    |> Enum.take(6) %>
-                  <%= if semantic_hits != [] do %>
+                <% semantic_hits = semantic_hits(assigns) %>
+                <%= if semantic_hits != [] do %>
                     <div class="px-4 pt-3 pb-1 text-xs font-medium text-notion-text-light uppercase tracking-wide">
                       Semantic matches
                     </div>
@@ -170,7 +159,6 @@ defmodule ConceptWeb.CommandPaletteLive do
                         myself={@myself}
                       />
                     </div>
-                  <% end %>
                 <% end %>
 
                 <%!-- Ask answer row --%>
@@ -348,23 +336,34 @@ defmodule ConceptWeb.CommandPaletteLive do
     {:noreply, socket}
   end
 
-  defp title_count(%{ok?: true, result: %{title_results: pages}}), do: min(length(pages), 4)
-  defp title_count(_), do: 0
+  # Accessors — single source of truth for the async result shapes. The
+  # assign_async/3 fn returns {:ok, %{title_results: pages}}; LiveView unwraps
+  # the *value* of that key, so AsyncResult.result is the bare list (not the
+  # wrapping map). render/1, the *_count/1 helpers, and dispatch_selected/1 all
+  # read through these so they can never diverge again (BUG-058).
+  defp title_pages(%Phoenix.LiveView.AsyncResult{ok?: true, result: pages}) when is_list(pages),
+    do: Enum.take(pages, 4)
 
-  defp semantic_count(assigns) do
-    with %{ok?: true, result: %{semantic_results: hits}} <- assigns.semantic_results,
-         %{ok?: true, result: %{title_results: pages}} <- assigns.title_results do
-      title_page_ids = Enum.map(pages, & &1.id)
+  defp title_pages(_), do: []
 
-      hits
-      |> Enum.uniq_by(& &1.page_id)
-      |> Enum.reject(&(&1.page_id in title_page_ids))
-      |> Enum.take(6)
-      |> length()
-    else
-      _ -> 0
+  defp semantic_hits(assigns) do
+    case assigns.semantic_results do
+      %Phoenix.LiveView.AsyncResult{ok?: true, result: hits} when is_list(hits) ->
+        title_page_ids = title_pages(assigns.title_results) |> Enum.map(& &1.id)
+
+        hits
+        |> Enum.uniq_by(& &1.page_id)
+        |> Enum.reject(&(&1.page_id in title_page_ids))
+        |> Enum.take(6)
+
+      _ ->
+        []
     end
   end
+
+  defp title_count(async), do: length(title_pages(async))
+
+  defp semantic_count(assigns), do: length(semantic_hits(assigns))
 
   defp ask_count(assigns) do
     if assigns.query != "", do: 1, else: 0
@@ -419,8 +418,10 @@ defmodule ConceptWeb.CommandPaletteLive do
   defp dispatch_selected(socket) do
     index = socket.assigns.selected_index
     action_count = length(@actions)
-    title_ct = title_count(socket.assigns.title_results)
-    semantic_ct = semantic_count(socket.assigns)
+    title_pages = title_pages(socket.assigns.title_results)
+    semantic_hits = semantic_hits(socket.assigns)
+    title_ct = length(title_pages)
+    semantic_ct = length(semantic_hits)
 
     cond do
       # Action selected
@@ -431,38 +432,23 @@ defmodule ConceptWeb.CommandPaletteLive do
 
       # Title result selected
       index < action_count + title_ct ->
-        page_idx = index - action_count
-        page = socket.assigns.title_results.result |> Enum.take(4) |> Enum.at(page_idx)
+        page = Enum.at(title_pages, index - action_count)
 
         if page do
           send(self(), {:palette_navigate, page.id})
-          socket
-        else
-          socket
         end
+
+        socket
 
       # Semantic result selected
       index < action_count + title_ct + semantic_ct ->
-        semantic_idx = index - action_count - title_ct
-
-        title_page_ids =
-          if match?(%{ok?: true, result: _pages}, socket.assigns.title_results),
-            do: Enum.map(socket.assigns.title_results.result, & &1.id),
-            else: []
-
-        hit =
-          socket.assigns.semantic_results.result
-          |> Enum.uniq_by(& &1.page_id)
-          |> Enum.reject(&(&1.page_id in title_page_ids))
-          |> Enum.take(6)
-          |> Enum.at(semantic_idx)
+        hit = Enum.at(semantic_hits, index - action_count - title_ct)
 
         if hit do
           send(self(), {:palette_navigate, hit.page_id, hit.block_id})
-          socket
-        else
-          socket
         end
+
+        socket
 
       # Ask answer selected
       true ->

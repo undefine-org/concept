@@ -1,0 +1,54 @@
+#+TITLE: Command palette select crashes — dispatch_selected reads async wrapper map, not inner list
+#+STATE: ITEM
+#+SESSION_ID: 14f440a2f4a99f1d
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-54-50-578Z_14f440a2f4a99f1d.jsonl]]
+#+CUSTOM_ID: BUG-058-command-palette-select-crashes-dispatch
+
+* Initial Message
+
+Please dude, please. do a deep review of Concept, especially of its user-friendliness. It still has some QoL issues that render it basically unusable for humans. Do a first pass and show it to me
+
+* Intention & Purpose
+
+Selecting a search result in the Cmd-K palette (click or Enter) navigates to that page/block. This is the single most-used palette action; it must never crash.
+
+* Symptom (confirmed live, 2026-05-29)
+
+In =lib/concept_web/live/command_palette_live.ex=, =dispatch_selected/1= and the semantic =title_page_ids= read =assign_async= results one level too shallow. The async assigns wrap their payload in a named map:
+
+- =title_results.result= = =%{title_results: [%Page{}, ...]}=
+- =semantic_results.result= = =%{semantic_results: [%Hit{}, ...]}=
+
+=render/1= reads them correctly (=@title_results.result.title_results=). But =dispatch_selected/1= reads =.result= directly:
+
+- Title branch: =socket.assigns.title_results.result |> Enum.take(4) |> Enum.at(page_idx)= → enumerating a 1-key map yields ={:title_results, [...]}= (a tuple) → =page.id= raises =KeyError= (tuple has no =.id=).
+- Semantic =title_page_ids=: =Enum.map(socket.assigns.title_results.result, & &1.id)= → same tuple → KeyError.
+- Semantic hits: =socket.assigns.semantic_results.result |> Enum.uniq_by(& &1.page_id)= → KeyError.
+
+Actions (New page / Sign out) sit below =action_count= and don't touch =.result=, so they work — masking the bug. Any Pages or Semantic selection crashes the LiveComponent → palette dies, reconnect flicker.
+
+* Root cause
+
+Inconsistent access between =render/1= (correct, =.result.title_results=) and =dispatch_selected/1= (wrong, =.result=). The fix is to read =.result.title_results= / =.result.semantic_results= in dispatch, mirroring render. Prefer extracting a private accessor (e.g. =title_pages(assigns)= / =semantic_pages(assigns)=) used by BOTH render and dispatch so they can never diverge again.
+
+* Scope
+
+- IN: =command_palette_live.ex= — fix the 3 mis-reads in =dispatch_selected/1= (title nav, semantic title_page_ids, semantic hits).
+- IN: extract shared accessors so render + dispatch use one source.
+- IN: ExUnit regression: select a title result → asserts ={:palette_navigate, page_id}= sent; select a semantic result → ={:palette_navigate, page_id, block_id}=.
+- OUT: palette visual redesign, a11y (separate).
+
+* Existing Patterns
+
+- =title_count/1=, =semantic_count/1= already pattern-match =%{ok?: true, result: %{title_results: ...}}= correctly — mirror that shape in the accessors.
+
+* Tests (TDD — write first, must fail on current code)
+
+- =test/concept_web/live/command_palette_test.exs= (new): mount the LC with stub async results; drive =select_item= at a title index, assert parent receives ={:palette_navigate, id}=; at a semantic index, assert ={:palette_navigate, id, block_id}=. A current-code run must raise KeyError (red), proving the fix.
+
+* Acceptance
+
+- Clicking/Entering a Pages or Semantic result navigates; no crash.
+- Regression test green; =mix precommit= green.
+
+NOTE [2026-05-29]: CORRECTION (2026-05-29, empirical): initial diagnosis was inverted. assign_async(:title_results, fn -> {:ok, %{title_results: pages}}) makes AsyncResult.result the BARE LIST (LiveView unwraps the value of the key via `for {k,v} <- assigns -> AsyncResult.ok(cur, v)`). So dispatch_selected reading `.result` was CORRECT; it was render/1 + title_count/1 + semantic_count/1 reading `.result.title_results` (a map shape that never matches a list) that was broken → Pages/Semantic buckets NEVER rendered → palette search totally non-functional (only actions + ask_answer showed). Existing palette tests were false-greens: they asserted `html =~ page.title`, satisfied by the always-present sidebar page tree, and clicked positional index "2" which was actually the ask_answer row. Fix: shared accessors title_pages/1 + semantic_hits/1 reading `.result` (list), used by render + counts + dispatch. New test command_palette_results_test.exs asserts palette-scoped DOM (button[data-type=title][data-page-id]); hardened 3 false-greens in command_palette_test.exs. 17 tests green.

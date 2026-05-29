@@ -71,18 +71,19 @@ defmodule ConceptWeb.CommandPaletteTest do
     |> element("#workspace-root")
     |> render_hook("open_command_palette", %{})
 
-    # Type search query
     view
     |> element("#command-palette input[type='text']")
     |> render_keyup(%{key: "", value: "oad"})
 
-    # Click the page result (first action = index 0, second = index 1, first page = index 2)
-    html =
-      view
-      |> element("#command-palette button[phx-value-index='2']")
-      |> render_click()
+    render_async(view)
 
-    assert html =~ page.title
+    # Palette-scoped: click the actual title row (not a positional index, which
+    # silently pointed at the ask_answer row when buckets failed to render).
+    view
+    |> element(~s{#command-palette button[data-type="title"][data-page-id="#{page.id}"]})
+    |> render_click()
+
+    assert_redirect(view, ~p"/w/#{ws.slug}/p/#{page.id}")
   end
 
   test "Escape closes palette", %{conn: conn, ws: ws} do
@@ -141,11 +142,12 @@ defmodule ConceptWeb.CommandPaletteTest do
       |> element("#command-palette input[type='text']")
       |> render_keyup(%{key: "", value: "oad"})
 
-    # Title results render synchronously; assign_async dispatches the semantic
-    # branch but doesn't block. We assert the title row is present and the
-    # semantic-results section is absent (no blocks ingested).
-    assert html =~ page.title
-    refute html =~ "Semantic matches"
+    # Palette-scoped: assert the real title row exists (not sidebar leak), and
+    # the semantic section is absent (no blocks ingested).
+    _ = html
+    render_async(view)
+    assert has_element?(view, ~s{#command-palette button[data-type="title"][data-page-id="#{page.id}"]})
+    refute render(view) =~ "Semantic matches"
   end
 
   test "query matching block content shows semantic results", %{conn: conn, ws: ws, user: user} do
@@ -178,16 +180,17 @@ defmodule ConceptWeb.CommandPaletteTest do
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}")
 
-    html =
-      view
-      |> element("#workspace-root")
-      |> render_hook("open_command_palette", %{})
+    view
+    |> element("#workspace-root")
+    |> render_hook("open_command_palette", %{})
 
-    # Should show recent pages
-    assert html =~ recent1.title
-    assert html =~ recent2.title
+    render_async(view)
+
+    # Palette-scoped: recent pages render as real title rows.
+    assert has_element?(view, ~s{#command-palette button[data-type="title"][data-page-id="#{recent1.id}"]})
+    assert has_element?(view, ~s{#command-palette button[data-type="title"][data-page-id="#{recent2.id}"]})
     # Should not show ask answer row when query is empty
-    refute html =~ "Ask answer for"
+    refute render(view) =~ "Ask answer for"
   end
 
   test "ask answer row appears when query is non-empty", %{conn: conn, ws: ws} do
