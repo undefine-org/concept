@@ -112,9 +112,35 @@ defmodule Concept.Knowledge.IngestionJob.Changes.PerformIngest do
     end
   end
 
-  defp perform_delete(_workspace_id, page_id, _actor) do
-    # Arcana 2.0 doesn't expose delete_by_source_id; deferring to FEAT-035 Reactor
-    Logger.warning("Delete for page:#{page_id} not yet implemented; skipping")
-    {:ok, 0}
+  defp perform_delete(workspace_id, page_id, _actor) do
+    import Ecto.Query
+
+    collection_name = Config.collection_for(workspace_id)
+    source_id = "page:#{page_id}"
+    arcana_module = Application.get_env(:concept, :arcana_module, Arcana)
+
+    # Arcana exposes delete/2 by document id but no delete-by-source helper.
+    # Resolve the page's documents within this workspace's collection, then
+    # delete each. Removing the documents cascades to their chunks, evicting
+    # the page from retrieval (BUG-055). A missing collection means nothing
+    # was ever ingested — treat as a no-op success.
+    docs =
+      from(d in Arcana.Document,
+        join: c in Arcana.Collection,
+        on: d.collection_id == c.id,
+        where: c.name == ^collection_name and d.source_id == ^source_id,
+        select: d.id
+      )
+      |> Concept.Repo.all()
+
+    results = Enum.map(docs, fn id -> arcana_module.delete(id, repo: Concept.Repo) end)
+
+    case Enum.find(results, &(&1 != :ok)) do
+      nil -> {:ok, length(docs)}
+      {:error, reason} -> {:error, :delete_failed, "Arcana delete failed: #{inspect(reason)}"}
+      other -> {:error, :delete_failed, "Arcana delete failed: #{inspect(other)}"}
+    end
+  rescue
+    e -> {:error, :unknown, "Delete for page:#{page_id} raised: #{Exception.message(e)}"}
   end
 end

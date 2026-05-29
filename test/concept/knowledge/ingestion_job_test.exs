@@ -96,6 +96,23 @@ defmodule Concept.Knowledge.IngestionJobTest do
       assert reloaded.attempt == 1
     end
 
+    test "op: :delete succeeds as a no-op when nothing was ingested (BUG-055)" do
+      %{workspace: workspace, page: page} = create_fixtures()
+      job = Knowledge.enqueue_ingest!(workspace.id, page.id, :delete)
+
+      {:ok, updated_job} =
+        job
+        |> Ash.Changeset.for_update(:run, %{}, actor: %SystemActor{}, tenant: workspace.id)
+        |> Ash.update()
+
+      reloaded =
+        Ash.get!(IngestionJob, updated_job.id, actor: %SystemActor{}, tenant: workspace.id)
+
+      # No documents for this page in the (empty) collection -> 0 deleted, success.
+      assert reloaded.state == :succeeded
+      assert reloaded.chunk_count == 0
+    end
+
     test "handles page not found gracefully" do
       %{workspace: workspace} = create_fixtures()
       fake_page_id = Ash.UUID.generate()
@@ -329,4 +346,7 @@ defmodule MockArcana do
   def ingest(_text, _opts) do
     {:ok, %{chunks: 3}}
   end
+
+  # Track delete calls so tests can assert eviction (BUG-055).
+  def delete(_document_id, _opts), do: :ok
 end

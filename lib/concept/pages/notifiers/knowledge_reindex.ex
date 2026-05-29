@@ -60,7 +60,8 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindex do
   defp op_for_page(:archive), do: :delete
   defp op_for_page(_), do: :upsert
 
-  # block-archive still ingests; only page-archive deletes
-  defp op_for_block(:archive), do: :upsert
+  # Block mutations (incl. archive) re-upsert the page: archived blocks are
+  # excluded by Block's archival base_filter, so a fresh page ingest drops them.
+  # Page-level deletion is handled by op_for_page(:archive) -> :delete.
   defp op_for_block(_), do: :upsert
 end
