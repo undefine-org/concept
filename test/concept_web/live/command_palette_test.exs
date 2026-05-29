@@ -146,7 +146,12 @@ defmodule ConceptWeb.CommandPaletteTest do
     # the semantic section is absent (no blocks ingested).
     _ = html
     render_async(view)
-    assert has_element?(view, ~s{#command-palette button[data-type="title"][data-page-id="#{page.id}"]})
+
+    assert has_element?(
+             view,
+             ~s{#command-palette button[data-type="title"][data-page-id="#{page.id}"]}
+           )
+
     refute render(view) =~ "Semantic matches"
   end
 
@@ -187,8 +192,16 @@ defmodule ConceptWeb.CommandPaletteTest do
     render_async(view)
 
     # Palette-scoped: recent pages render as real title rows.
-    assert has_element?(view, ~s{#command-palette button[data-type="title"][data-page-id="#{recent1.id}"]})
-    assert has_element?(view, ~s{#command-palette button[data-type="title"][data-page-id="#{recent2.id}"]})
+    assert has_element?(
+             view,
+             ~s{#command-palette button[data-type="title"][data-page-id="#{recent1.id}"]}
+           )
+
+    assert has_element?(
+             view,
+             ~s{#command-palette button[data-type="title"][data-page-id="#{recent2.id}"]}
+           )
+
     # Should not show ask answer row when query is empty
     refute render(view) =~ "Ask answer for"
   end

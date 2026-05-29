@@ -147,18 +147,18 @@ defmodule ConceptWeb.CommandPaletteLive do
                 <%!-- Semantic results bucket --%>
                 <% semantic_hits = semantic_hits(assigns) %>
                 <%= if semantic_hits != [] do %>
-                    <div class="px-4 pt-3 pb-1 text-xs font-medium text-notion-text-light uppercase tracking-wide">
-                      Semantic matches
-                    </div>
-                    <div>
-                      <.semantic_item
-                        :for={{hit, idx} <- Enum.with_index(semantic_hits)}
-                        index={length(@actions) + title_count(@title_results) + idx}
-                        selected_index={@selected_index}
-                        hit={hit}
-                        myself={@myself}
-                      />
-                    </div>
+                  <div class="px-4 pt-3 pb-1 text-xs font-medium text-notion-text-light uppercase tracking-wide">
+                    Semantic matches
+                  </div>
+                  <div>
+                    <.semantic_item
+                      :for={{hit, idx} <- Enum.with_index(semantic_hits)}
+                      index={length(@actions) + title_count(@title_results) + idx}
+                      selected_index={@selected_index}
+                      hit={hit}
+                      myself={@myself}
+                    />
+                  </div>
                 <% end %>
 
                 <%!-- Ask answer row --%>
