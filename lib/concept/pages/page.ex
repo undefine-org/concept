@@ -42,6 +42,7 @@ defmodule Concept.Pages.Page do
         description: "Workspace where the page will be created"
 
       change set_attribute(:workspace_id, arg(:workspace_id))
+      change Concept.Pages.Changes.AssertWorkspaceMatchesTenant
       change Concept.Pages.Changes.TrimTitle
       change Concept.Pages.Changes.AssignAfterLastSibling
     end

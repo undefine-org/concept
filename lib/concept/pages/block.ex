@@ -77,6 +77,7 @@ defmodule Concept.Pages.Block do
         description: "Workspace the block belongs to. Actor must be a member."
 
       change set_attribute(:workspace_id, arg(:workspace_id))
+      change Concept.Pages.Changes.AssertWorkspaceMatchesTenant
       change Concept.Pages.Block.Changes.AssignDefaults
       change Concept.Pages.Block.Changes.AssignAfterLastSibling
     end
