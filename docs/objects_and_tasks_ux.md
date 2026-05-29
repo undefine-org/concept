@@ -211,6 +211,15 @@ UI, **F** seeder atomicity, **G** trade-offs, EAV.
 
 ---
 
+## 5b. Confirmed decisions (2026-05-29)
+
+- **DnD intra-column = no-op** for now; `move` fires only on cross-state
+  drop. Manual priority reorder within a column is a later FUP (the
+  `Record.reorder` action + fractional index already exist).
+- **RecordDetail = Linear-style slide-over** (right drawer) over the board,
+  not a route or modal — stays in context. Deep-linkable route is a later
+  option if needed.
+
 ## 6. Build order (thread 2), TDD + browser per the §13 process
 
 Each wave: red→green tests, then browser pass, then a short report.

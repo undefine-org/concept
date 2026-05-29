@@ -38,3 +38,37 @@ immediately. Begin templates with <Layouts.app flash={@flash} ...>.
   live/), Layouts.app usage, accessibility of drag interactions.
 - Mid-flight report: work done (+tests) · process learnings · follow-ups filed.
 - Gate: mix precommit green + R6 sign-off + final report.
+
+NOTE [2026-05-29]: WAVE 6 MID-FLIGHT REPORT (UI — Tasks board).
+
+WORK DONE:
+- Record :board read (loads :state) + board_records define. Concept.Objects.task_board/1 (states + records
+  grouped by category) and available_moves/2 (transitions from current state) — pure orchestration over
+  code-interface fns so the LiveView stays EX9001-clean.
+- get_workflow_state define added.
+- ConceptWeb.TasksLive: board with 6 category columns, create-task form (into Backlog flow), per-card move
+  buttons rendering each available guarded transition; guard rejections surface as flash. Route
+  /w/:workspace_slug/tasks in authenticated live_session. Layouts.app wrapper. EX9001: credo clean.
+- Tests: TasksLive 3 (columns render, create adds to board via form submit, move Backlog→Todo through the
+  guarded graph and asserts persisted state). Objects+blocks+http+tasks 70 GREEN. full_flow updated to 21
+  block modules. Full suite: 456 tests, only pre-existing non-Objects failures remain (chat LLM-mock x4,
+  HomeLive toggle_chat x1 — all untouched by this work, fail in isolation).
+
+WORK TO BE DONE (deferred, file as FUPs):
+- ObjectType/FieldDef editor UI and Workflow editor (states + drag transitions + guard palette) — domain
+  surface exists (create_object_type/create_field_def/create_workflow_state/create_transition/
+  set_transition_guards all live + MCP-exposed); only the LiveView editors remain. Board is the
+  highest-value slice and is done.
+- record_ref picker UI (set record_id from the page editor) — block renders live already.
+- "create into Backlog" auto-transition: new records start state nil; board create leaves them stateless
+  until first move. Consider auto-entering the workflow initial state on create for Task type.
+- Browser screenshot blocked by a stale external dev server on :4000 owned by another process (404 on new
+  route until it reloads); LiveViewTest covers the same mount/render/create/move cycle end-to-end.
+
+PROCESS LEARNINGS:
+- code_interface define args: a map-valued attribute (fields) must NOT be a positional arg. With
+  args: [:object_type_id] the trailing %{fields: %{...}} is the params map (correct). Adding
+  {:optional, :fields} makes Ash bind the whole map as the positional → "unknown field(s): fields".
+  Canonical create form: create_record(type_id, %{fields: %{...}}, actor:, tenant:).
+- Rewriting an Ash.Domain file: keep ALL resource blocks inside `resources do ... end`; helper fns go after.
+  A stray early `end` orphans later resources with a confusing "undefined function resource/2".

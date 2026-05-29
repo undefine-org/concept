@@ -21,12 +21,6 @@ defmodule Concept.Knowledge.Chat.Message do
     end
   end
 
-  multitenancy do
-    strategy :attribute
-    attribute :workspace_id
-    global? false
-  end
-
   postgres do
     table "messages"
     repo Concept.Repo
@@ -187,6 +181,12 @@ defmodule Concept.Knowledge.Chat.Message do
         }
       end
     end
+  end
+
+  multitenancy do
+    strategy :attribute
+    attribute :workspace_id
+    global? false
   end
 
   attributes do

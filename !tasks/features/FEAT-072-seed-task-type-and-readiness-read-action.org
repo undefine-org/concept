@@ -38,3 +38,35 @@ my_records (assignee == actor) described read actions. Membership.role gains
   reconciliation (Scope :admin vs Membership).
 - Mid-flight report: work done (+tests) · next-wave assumptions · learnings.
 - Gate: mix precommit green + R3 sign-off + report.
+
+NOTE [2026-05-29]: WAVE 3 MID-FLIGHT REPORT (Task seed + readiness).
+
+WORK DONE:
+- Concept.Objects.Seeder.seed_task_type/1: idempotent; seeds Task ObjectType (is_system?, key "task")
+  + Default workflow (Backlog initial/Todo/Doing/Review/Done/Canceled) + linear+cancel transitions
+  + review->done requires_approval{by:creator} + fields (Title title/required, Priority select, Blocked by relation many).
+- Onboarding seeds via RunOnboarding after_action AFTER reactor success (NOT a reactor step — see learning).
+- Membership.role gained :agent (app-level atom; no DB migration).
+- Record: belongs_to :state, has_many :outgoing_links. ready_records now real: exists(state, category==:todo)
+  + after_action prune of records with incomplete blocked_by (RecordLink whose field_def.key=="blocked_by"
+  pointing to a record whose state.category not in [done,canceled]). my_records by assignee.
+- Migration 20260529135402 (records.state_id FK) + index snapshot reconcile.
+- Tests: 10 (seed idempotency, workflow/fields shape, readiness: todo+unassigned+unblocked, doing excluded,
+  assigned excluded, blocked->unblocked-on-done). Objects suite 51 GREEN. Auth/home 18 GREEN. No drift.
+
+WORK TO BE DONE (Wave 4 — MCP, highest risk):
+- ToolProjector.project/3 pure fn: ObjectType+FieldDefs+Workflow -> [%AshAi.Tool{}] (create_<key>, <key>_transition
+  with state names, list_<key>); pin object_type_id via action_parameters/arguments; Guard.describe in descriptions.
+- Custom MCP router/server wrapper injecting projected tools at tools/0 for list+call, tenant-keyed.
+- Schema introspection MCP resource. Extend mcp_parity_test.
+
+PROCESS LEARNINGS:
+- Ash.Reactor plain `step` with side-effecting Ash.create writes did NOT persist during register_with_password's
+  after_action (writes lost, reactor still returned ok). FIX: run idempotent side-effects (seeding) from the
+  after_action AFTER Reactor.run succeeds, not as a reactor step. Seeder works standalone + from RunOnboarding.
+- Generated migrations re-create custom indexes already present from a prior migration if snapshot history drops
+  them -> duplicate_table. Reconcile by dropping the physical index and letting the sync migration recreate, so
+  DB+migrations+snapshots align; confirm with `mix ash.codegen --check` (exit 0).
+- For multi-state test fixtures, drive records through the REAL seeded transition graph (resume from current
+  category) rather than force_change(:state_id) on an unrelated action — tests the true path and avoids
+  action-accept surprises.

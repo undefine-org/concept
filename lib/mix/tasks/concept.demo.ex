@@ -353,7 +353,8 @@ defmodule Mix.Tasks.Concept.Demo do
 
   defp seed_conversation!(user, ws) do
     {:ok, conv} =
-      Concept.Knowledge.Chat.create_conversation(%{title: "Demo Conversation", workspace_id: ws.id},
+      Concept.Knowledge.Chat.create_conversation(
+        %{title: "Demo Conversation", workspace_id: ws.id},
         actor: user,
         tenant: ws.id,
         authorize?: false

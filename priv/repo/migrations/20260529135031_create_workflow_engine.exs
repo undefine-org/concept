@@ -35,7 +35,8 @@ defmodule Concept.Repo.Migrations.CreateWorkflowEngine do
             type: :uuid,
             prefix: "public",
             on_delete: :delete_all
-          ), null: false
+          ),
+          null: false
 
       add :name, :text, null: false
       add :category, :text, null: false
@@ -66,7 +67,8 @@ defmodule Concept.Repo.Migrations.CreateWorkflowEngine do
             type: :uuid,
             prefix: "public",
             on_delete: :delete_all
-          ), null: false
+          ),
+          null: false
 
       add :from_state_id,
           references(:workflow_states,
@@ -75,7 +77,8 @@ defmodule Concept.Repo.Migrations.CreateWorkflowEngine do
             type: :uuid,
             prefix: "public",
             on_delete: :delete_all
-          ), null: false
+          ),
+          null: false
 
       add :to_state_id,
           references(:workflow_states,
@@ -84,7 +87,8 @@ defmodule Concept.Repo.Migrations.CreateWorkflowEngine do
             type: :uuid,
             prefix: "public",
             on_delete: :delete_all
-          ), null: false
+          ),
+          null: false
 
       add :guards, {:array, :map}, default: []
 

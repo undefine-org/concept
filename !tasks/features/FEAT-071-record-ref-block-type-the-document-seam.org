@@ -38,3 +38,28 @@ the structural redundancy-killer.
   ADDING_A_BLOCK anti-patterns), live update path.
 - Mid-flight report: work done (+tests) · next-wave assumptions · learnings.
 - Gate: mix precommit green + R5 sign-off + report.
+
+NOTE [2026-05-29]: WAVE 5 MID-FLIGHT REPORT (record_ref — the seam).
+
+WORK DONE:
+- Concept.Pages.BlockTypes.RecordRef (use BlockType.Static): props %{record_id}; renders the referenced
+  Record's LIVE title + workflow state (category-colored badge) + unlinked placeholder fallback. Reads via
+  system actor scoped to block.workspace_id with load: [:state]. Registered in config :block_types
+  (one line, zero dispatcher edits per ADDING_A_BLOCK).
+- Category color map (backlog/todo/doing/review/done/canceled). Slash menu entry ("Task / record", group :media).
+- Tests: 14 GREEN — registry contract (render_kind, props validation, slash feed, create on page) + render
+  (title, live state after transition, nil placeholder, missing-record placeholder).
+
+WORK TO BE DONE (Wave 6 — UI):
+- Tasks list + board-by-category LiveView (code-interface only, EX9001).
+- ObjectType/field editor + workflow editor (states + transitions + guard palette).
+- A picker to set record_ref.record_id from the editor (currently props set programmatically/via MCP).
+  Manual browser test REQUIRED this wave.
+
+PROCESS LEARNINGS:
+- Static block render/1 is called by the dispatcher with full assigns; unit-testing it standalone needs an
+  assigns map carrying change-tracking (%{__changed__: nil} + :block), else Phoenix raises bad_socket_or_assign.
+- record_ref reads the record at render time (no stored copy) — live updates fall out for free; PubSub-driven
+  re-render will refresh it when the page editor re-renders blocks.
+- Pre-existing flake: test/concept/pages/staleness_test.exs:193 depends on evaluate_ai (Gemini/external),
+  last touched by another agent's wave-4.5; fails without live API. NOT an Objects regression.

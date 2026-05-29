@@ -50,7 +50,8 @@ defmodule Concept.Repo.Migrations.CreateObjectsEngine do
             type: :uuid,
             prefix: "public",
             on_delete: :delete_all
-          ), null: false
+          ),
+          null: false
 
       add :to_record_id,
           references(:records,
@@ -59,7 +60,8 @@ defmodule Concept.Repo.Migrations.CreateObjectsEngine do
             type: :uuid,
             prefix: "public",
             on_delete: :delete_all
-          ), null: false
+          ),
+          null: false
 
       add :field_def_id, :uuid
 
@@ -159,7 +161,8 @@ defmodule Concept.Repo.Migrations.CreateObjectsEngine do
             type: :uuid,
             prefix: "public",
             on_delete: :delete_all
-          ), null: false
+          ),
+          null: false
 
       add :name, :text, null: false
       add :key, :text, null: false

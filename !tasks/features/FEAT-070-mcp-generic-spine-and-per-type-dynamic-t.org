@@ -41,3 +41,39 @@ resource list_object_types. Extend test/integration/mcp_parity_test.exs.
   tool leakage), parity contract intact, no compile-time codegen introduced.
 - Mid-flight report: work done (+tests) · next-wave assumptions · learnings.
 - Gate: mix precommit green + R4 sign-off + report.
+
+NOTE [2026-05-29]: WAVE 4 MID-FLIGHT REPORT (MCP — highest risk, LANDED).
+
+WORK DONE:
+- Generic spine: 31 Objects actions auto-exposed via AutoTools (record_create/transition/ready/...,
+  object_type_*, workflow_*, transition_*) — free, in docs/mcp_surface.md.
+- ToolProjector.project/1 (PURE): ObjectType+FieldDefs+WorkflowStates+Transitions -> [%AshAi.Tool{}]
+  for create_<key>, list_<key>, <key>_transition. Points at REAL generic Record actions (action structs,
+  not atoms — AshAi reads action.type/description). _meta carries object_type_id. Descriptions list
+  non-relational fields (+required) and state names + Guard.describe prose. NO codegen.
+- SchemaLoader: per-tenant bundles (system actor reads).
+- Concept.Objects.Mcp: list_entries (AshAi.Tools.build → name/description/inputSchema), call/4 (routes to
+  AshAi.Tools.execute, pins object_type_id into create input), projected_names. :not_projected → delegate.
+- ConceptWeb.Plugs.ProjectedMcpTools: intercepts tools/list (standard ++ projected) and tools/call
+  (projected handled here, else pass-through to AshAi.Mcp.Router). Wired into :mcp pipeline after
+  MCPWorkspaceContext; tenant via Ash.PlugHelpers.get_tenant || assigns[:mcp_tenant].
+- Tests: ToolProjector 5 (pure), Mcp module 5, HTTP end-to-end 3 (workspace-bound key → create_task in
+  list, tools/call create_task makes a real record, custom type → create_customer appears). Objects+HTTP
+  60 GREEN. mcp_parity 6 GREEN after surface regen.
+
+WORK TO BE DONE:
+- Wave 5: record_ref block type (live render of a Record from inside a page) — the document seam.
+- Deferred: schema-introspection MCP *resource* (list_object_types) — tools already cover discovery via
+  list_*; resource is a nice-to-have, file as FUP if time-boxed.
+- Per-type transition tool currently documents target states in description; the agent passes to_state_id.
+  A future refinement: accept state NAME and resolve to id in Mcp.call (more ergonomic for agents).
+
+PROCESS LEARNINGS:
+- %AshAi.Tool{}.action must be an ACTION STRUCT (Ash.Resource.Info.action/2), not an atom — AutoTools sets
+  atoms but AshAi.exposed_tools later resolves them; bypassing that path means we resolve ourselves.
+- ash_ai MCP server resolves tools/list AND tools/call from compile-time DSL only (confirmed); the plug
+  wrapper at the JSON-RPC layer is the correct seam. Endpoint Plug.Parsers already parsed body → conn.params
+  holds the envelope; AshAi's downstream parser is a no-op when body_params set, so pass-through is safe.
+- Pinning object_type_id: create input arrives as %{"input" => %{...}}; inject into the inner "input" map.
+- Per-type projected tools are runtime/per-workspace → correctly absent from the static mcp_surface.md;
+  only the generic spine is in the committed surface. Parity contract intact.

@@ -24,12 +24,6 @@ defmodule Concept.Knowledge.Chat.Conversation do
     end
   end
 
-  multitenancy do
-    strategy :attribute
-    attribute :workspace_id
-    global? false
-  end
-
   postgres do
     table "conversations"
     repo Concept.Repo
@@ -74,6 +68,12 @@ defmodule Concept.Knowledge.Chat.Conversation do
     publish_all :update, ["conversations", :user_id] do
       transform & &1.data
     end
+  end
+
+  multitenancy do
+    strategy :attribute
+    attribute :workspace_id
+    global? false
   end
 
   attributes do

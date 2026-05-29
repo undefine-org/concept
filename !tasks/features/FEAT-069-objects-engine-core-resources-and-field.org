@@ -35,3 +35,33 @@ designated display FieldDef. JSONB+GIN indexes for field filter/sort.
   registry parity with block_types idiom.
 - Mid-flight report: work done (+tests) · next-wave assumptions · learnings.
 - Gate: mix precommit green + R1 sign-off + report.
+
+NOTE [2026-05-29]: WAVE 1 MID-FLIGHT REPORT (engine core).
+
+WORK DONE (commits e4c23a4 + ancestors):
+- FieldType behaviour + FieldTypes registry + FieldTypeAttr (block_type pattern, lifted).
+- 8 built-in field types: text, number, select, date, user, url, checklist, relation.
+- Resources: ObjectType, FieldDef, Record, RecordLink (WorkspaceTenanted + archival).
+- Changes: SetWorkspaceFromTenant (tenant-derived workspace_id, dropped redundant arg),
+  SlugifyKey, AssignDefaults (defaults + title derivation), ValidateFieldsForType
+  (generalized ValidatePropsForType: required + type + unknown-key + relation skip),
+  per-resource AssignAfterLastSibling, RunTransition (Wave 1 stub).
+- Migration 20260529133156 (single-col GIN on fields); snapshots; domain registered.
+- Tests: 26 (field types unit + engine integration) GREEN. No drift. No regressions (33 w/ block contract).
+
+WORK TO BE DONE (next: Wave 2):
+- Workflow/WorkflowState(category invariant)/Transition resources.
+- Guard behaviour + registry + 4 built-ins; full RunTransition (graph + guards + error agg).
+- Then Wave 3 wires ObjectType.workflow_id -> Workflow relationship + readiness by category.
+
+PROCESS LEARNINGS:
+- Concurrent agents run `git clean`/revert on the worktree: untracked files vanished mid-wave
+  and config/config.exs got reverted twice. MITIGATION: commit immediately after each cohesive
+  unit, not at wave end. Restoring own committed paths via `git checkout HEAD -- <mypaths>` is safe.
+- Composite GIN [workspace_id, fields] fails (uuid has no gin opclass). FIX: index [:fields],
+  using: "gin", all_tenants?: true to avoid tenant-attr prepend.
+- Ash code_interface: a trailing map arg is treated as params only if the action arg is passed
+  via params map (define args list maps positionals). For map-valued attrs (fields), define with
+  args: [:object_type_id] and pass %{fields: ...} as the params map — cleaner than optional positional.
+- A duplicate stale migration (132930 + 133156) caused "relation records already exists"; the first
+  deleted file resurfaced via FS flakiness. Verify `ls priv/repo/migrations | grep` after deletes.

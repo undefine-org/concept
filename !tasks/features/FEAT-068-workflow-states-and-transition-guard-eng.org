@@ -37,3 +37,35 @@ graph, run all guards, aggregate errors, set state_id. Mirrors RequireOwnLock.
   no Ash.Query leakage outside domain.
 - Mid-flight report: work done (+tests) · next-wave assumptions · learnings.
 - Gate: mix precommit green + R2 sign-off + report.
+
+NOTE [2026-05-29]: WAVE 2 MID-FLIGHT REPORT (workflow + guards).
+
+WORK DONE:
+- Guard behaviour (kind/label/check/3/describe/1) + Guards registry (config :record_guards)
+  + describe_all for UI/MCP legibility.
+- 4 built-in guards: RequiresApproval (by creator|anyone), RequiresProof (field present),
+  RequiresChecklistComplete (uses Checklist.complete?), RequiresFields (list present).
+- Resources: Workflow, WorkflowState (fixed category enum backlog|todo|doing|review|done|canceled,
+  is_initial?), Transition (guards as {:array,:map}).
+- RunTransition engine (real): fetch target state, resolve graph edge (nil->initial only; else a
+  Transition row from->to must exist), run all guards with error aggregation, set state_id. Reads
+  workflow_id via object_type. Mirrors RequireOwnLock gate pattern.
+- ObjectType gained belongs_to :workflow. Migration 20260529135031 (workflows/workflow_states/transitions).
+- Tests: 15 (guards unit + transition engine integration incl. multi-guard aggregation, creator-approval
+  with 2nd member, undefined-edge rejection). Objects suite total 41 GREEN. No drift.
+
+WORK TO BE DONE (Wave 3):
+- Seed Task ObjectType + Default workflow (the 5 states + Canceled) + built-in fields
+  (priority select, blocked_by relation) + ->Done requires_approval{by: creator}, in onboarding (idempotent).
+- ready_records: category==:todo AND no incomplete blocked_by (RecordLink) AND unassigned.
+  Requires joining WorkflowState.category + RecordLink. my_records already works.
+- Membership.role gains :agent.
+
+PROCESS LEARNINGS:
+- Guards-as-data ({:array,:map}) keeps the user plane runtime-composable while the developer plane
+  (modules) stays type-safe + unit-testable in isolation — the split works cleanly.
+- RunTransition reads object_type.workflow_id per call; acceptable now, could preload via the action
+  to avoid an extra get. Noted for perf pass.
+- Ash multitenant get/read inside a Change needs explicit tenant + authorize?: false; the changeset
+  carries tenant so thread cs.tenant.
+- Two waves in, no concurrent-deletion incidents since committing after every cohesive unit.

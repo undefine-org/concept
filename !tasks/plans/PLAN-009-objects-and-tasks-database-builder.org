@@ -158,3 +158,37 @@ name/description, pins object_type_id via action_parameters/arguments — NO
 per-type action) + thin MCP Server/Router wrapper injecting projected tools at
 the single tools/0 chokepoint (list + call), keyed on the resolved tenant. Whole
 dynamic surface is pure-function/action testable without an LLM.
+
+NOTE [2026-05-29]: REVIEWER WAVES (run retroactively — they had been skipped during implementation; gap acknowledged).
+
+4 parallel `reviewer` agents over the committed Objects surface (88f9c2e..HEAD). Findings + resolution:
+
+P1 (merge-blockers) — FIXED + regression-tested:
+- RecordLink cross-workspace leak: create set workspace_id from tenant but never validated that
+  from_record/to_record/field_def belong to it (FKs are global). A dual-workspace member could forge a
+  cross-tenant edge, also corrupting FilterReady (foreign blocker → empty set → falsely "ready"). FIX:
+  RecordLink.Changes.ValidateSameWorkspace (mirrors Knowledge.Link). Test: "linking to a record in another
+  workspace is rejected".
+- Transition graph-escape: nil-state resolve checked is_initial? but not that to_state belongs to the
+  record's OWN workflow → a record could jump into another workflow's initial state in-tenant. FIX:
+  compare to_state.workflow_id == workflow_id_for(record). Test: "cannot enter initial state of a DIFFERENT
+  workflow".
+
+P2 — FIXED:
+- list_<type> projected tool required an unknowable object_type_id (pin handled only :create). FIX: pin
+  object_type_id for :list_for_type too (top-level arg from _meta).
+- New tasks had nil state → unmovable on the board (dead-end). FIX: AssignDefaults now sets the workflow's
+  initial state on create. Updated transition_engine_test to the new reality (records start in backlog).
+
+P3 — FIXED: task_board non-:no_task_type error → CaseClauseError crash; added catch-all in load_board.
+
+P3 — DEFERRED (FUPs): FilterReady N+1 (per-record link + per-link FieldDef get); available_moves N+1
+  (get_workflow_state per transition — use to_state relationship); Seeder non-atomic check-then-create +
+  post-reactor after_action could orphan a workspace if seeding raises.
+
+MCP tenant-isolation verdict (reviewer): SOUND — workspace_id is always the authenticated tenant, never
+from JSON-RPC params; SchemaLoader reads tenant-scoped; pass-through doesn't corrupt conn. record_ref
+cross-workspace verdict: SOUND — tenant-scoped Ash.get misses foreign record_id → Unlinked placeholder.
+LiveView purity (EX9001): clean.
+
+Result: 82 Objects tests green (incl. 2 new P1 regression tests), drift clean, surface up to date.
