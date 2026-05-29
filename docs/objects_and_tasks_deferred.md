@@ -11,14 +11,22 @@
 
 Last audited: 2026-05-29 (post Wave 6, post reviewer waves R1–R6 retroactive).
 
-**Thread (2) progress (W1–W2 done):**
-- ✓ FieldType render contract + `FieldTypeComponent` dispatcher (W1) — folds the
-  structural basis for A, B-fields, C-picker.
-- ✓ Board v2 (W2): columns-from-states (fixes B "Canceled noise" + any-workflow),
-  generic card fields via dispatcher, assignee avatars (B), preloaded transition
-  graph kills `available_moves` N+1 (F), guard-requirement tooltips (B).
-- Remaining in thread (2): W3 DnD, W4 RecordDetail slide-over + seam picker,
-  W5 Guard contract + nav.
+**Thread (2) COMPLETE (W1–W5, 2026-05-29):**
+- ✓ W1 FieldType render contract + `FieldTypeComponent` dispatcher.
+- ✓ W2 Board v2: columns-from-states, generic card fields, assignee avatars,
+  preloaded graph (N+1 killed), guard-requirement tooltips.
+- ✓ W3 DnD: SortableJS shared-group; cross-column drop reuses the `move` event
+  + guard engine; spring-back on rejection.
+- ✓ W4 RecordDetail slide-over (Linear-style): generic per-field autosave,
+  assignee combobox, guarded moves — closes the proof→review→done loop in-UI;
+  record_ref now actor-scoped (C authorize bypass folded).
+- ✓ W5 Guard render contract (icon + render_config_form across 4 guards) +
+  Tasks nav entry (H folded).
+- 511 tests / 0 failures; browser-verified end to end.
+- **Remaining (tracked below, NOT in thread 2):** D agent pull-model UI,
+  F seeder atomicity, G trade-offs, the record_ref *picker* in the page editor,
+  and the full Type/Workflow editor LiveViews (thread 1 — now trivial: compose
+  the W1/W5 config-form components).
 
 ---
 
@@ -49,11 +57,11 @@ then compose those same components. Do not hand-roll per-type widgets.
 
 | Item | Status | Note |
 |---|---|---|
-| Assignee shown on cards + assign control | ◐ | W2: avatar shown; assign *control* lands in W4 detail |
-| Field rendering on cards (priority pill, blocked badge) | ◐ | W2: priority pill via dispatcher; blocked badge still TODO |
-| Drag-and-drop moves (not text buttons) | ☐ | W3 — SortableJS shared-group hook |
-| Record detail view (open card → edit fields/guards/history) | ☐ | no way to fill `pr_url` to satisfy a `requires_proof` guard from UI |
-| Guard-aware move affordance (why a move is blocked) | ◐ | guard rejection surfaces as flash only, after the attempt |
+| Assignee shown on cards + assign control | ✓ | W2 avatar + W4 assign combobox |
+| Field rendering on cards (priority pill, blocked badge) | ◐ | W2 priority pill via dispatcher; blocked badge still TODO |
+| Drag-and-drop moves (not text buttons) | ✓ | W3: SortableJS shared-group; same move action + guard engine |
+| Record detail view (open card → edit fields) | ✓ | W4: slide-over; pr_url editable → satisfies requires_proof in-UI |
+| Guard-aware move affordance (why a move is blocked) | ✓ | W2/W4: requirements shown inline before the click |
 | Empty / loading / error states polish | ◐ | bare empty columns; plain `board_error` sentence; no skeleton |
 | `my_records` / `ready_records` views (pull model) | ☐ | actions exist; no UI consumes them |
 | Filtering / grouping / sorting | ☐ | board is single fixed grouping (category) |
@@ -66,10 +74,10 @@ then compose those same components. Do not hand-roll per-type widgets.
 
 | Item | Status | Note |
 |---|---|---|
-| record_ref **picker** (set record_id from page editor) | ☐ | slash-menu entry exists; no way to choose the record |
-| Inline edit (transition/assignee from inside the doc) | ☐ | §8 promises bidirectional; render is read-only badge |
-| Assignee shown in the badge | ☐ | shows state + title only |
-| `load_record` bypasses policy (`authorize?: false`) | ◐ | tenant pinned; sidesteps record-level authz — revisit |
+| record_ref **picker** (set record_id from page editor) | ☐ | structural seam ready (relation render_input); page-editor wiring is a FUP |
+| Inline edit (transition/assignee from inside the doc) | ☐ | RecordDetail is the reusable surface; doc-embed is a FUP |
+| Assignee shown in the badge | ☐ | badge shows state + title; FUP |
+| `load_record` bypasses policy (`authorize?: false`) | ✓ | W4.2: actor-scoped read when current_user present |
 
 ---
 
@@ -115,6 +123,6 @@ then compose those same components. Do not hand-roll per-type widgets.
 
 | Item | Status | Note |
 |---|---|---|
-| **No nav entry to `/tasks`** | ☐ | zero links in workspace shell; URL-only access |
+| **No nav entry to `/tasks`** | ✓ | W5: Tasks link in workspace sidebar |
 | Reviewer waves were retroactive, not interleaved | n/a | §13 contract violated this build; note for future waves |
 | Committed with failing tests mid-build | ✓ fixed | now 471/0 |
