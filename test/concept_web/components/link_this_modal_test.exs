@@ -114,6 +114,41 @@ defmodule ConceptWeb.Components.LinkThisModalTest do
       assert html =~ "disabled"
       assert html =~ "Create Link"
     end
+
+    # BUG-060: the dialog must NOT be a descendant of the element carrying
+    # phx-click="close_link_modal". When it is, clicks inside the dialog bubble
+    # to the backdrop and close the modal mid-interaction (JS.dispatch("click-stop")
+    # is a dead no-op — it dispatches a custom event, it does not stop
+    # propagation). The fix mirrors the command palette: backdrop and dialog are
+    # sibling layers so inner clicks never reach the close handler.
+    test "dialog is not nested inside the close-on-click backdrop (BUG-060)", %{
+      block1: block1,
+      block2: block2
+    } do
+      html =
+        render_component(&LinkThisModal.link_this_modal/1,
+          show: true,
+          source_block_id: block1.id,
+          target_block_id: block2.id,
+          error: nil
+        )
+
+      doc = LazyHTML.from_fragment(html)
+
+      # A descendant selector: any dialog/form that lives *inside* a
+      # close-on-click element. Must be empty after the fix.
+      nested = LazyHTML.filter(doc, ~s([phx-click="close_link_modal"] dialog))
+      nested_form = LazyHTML.filter(doc, ~s([phx-click="close_link_modal"] form#link-form))
+
+      assert Enum.count(nested) == 0,
+             "the dialog must not live inside a close_link_modal click target"
+
+      assert Enum.count(nested_form) == 0,
+             "the form must not live inside a close_link_modal click target"
+
+      # And the dead click-stop handler must be gone.
+      refute html =~ "click-stop"
+    end
   end
 
   describe "Link creation" do

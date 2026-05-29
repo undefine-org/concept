@@ -1,0 +1,56 @@
+#+TITLE: Link-this modal closes when clicking inside it — JS.dispatch does not stop propagation
+#+STATE: ITEM
+#+SESSION_ID: 14f440a2f4a99f1d
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-54-50-578Z_14f440a2f4a99f1d.jsonl]]
+#+CUSTOM_ID: BUG-060-link-this-modal-closes-when-clicking-ins
+
+* Initial Message
+
+Please dude, please. do a deep review of Concept, especially of its user-friendliness. It still has some QoL issues that render it basically unusable for humans. Do a first pass and show it to me
+
+* Intention & Purpose
+
+The "Link this block" modal must stay open while the user interacts with its contents (kind select, note textarea, Create button). It should close only on: backdrop click, the X / Cancel buttons, Escape, or successful submit.
+
+* Symptom (confirmed live, 2026-05-29)
+
+=lib/concept_web/components/link_this_modal.ex=: the backdrop div has =phx-click="close_link_modal"=. The inner =<dialog>= tries to stop the click bubbling with =phx-click={JS.dispatch("click-stop")}=. But:
+
+- =JS.dispatch/1= dispatches a *new* DOM CustomEvent named "click-stop"; it does **not** call =stopPropagation= on the originating click.
+- grep confirms there is **no listener** for "click-stop" anywhere (=assets/=, =lib/=). It is a dead no-op.
+
+So any click inside the dialog (textarea, select, Create) bubbles up to the backdrop's =phx-click= → =close_link_modal= fires → modal closes mid-interaction. Linking is effectively unusable in a real browser.
+
+* Root cause
+
+Misuse of =JS.dispatch= as if it were =stopPropagation=. The correct primitive is =Phoenix.LiveView.JS.exec=-free: bind the inner click to a JS command that halts propagation. In LiveView, =JS= has no public "stopPropagation" verb, so the idiom is one of:
+
+- (A) Put =phx-click={JS.exec(...)}=? — no. Use the documented pattern: backdrop-only close via a dedicated element that fills the background, with the dialog as a SIBLING (not child) of the click-catcher, so inner clicks never bubble through the backdrop.
+- (B) Add a tiny hook / =onclick="event.stopPropagation()"= is forbidden (no inline JS). Instead, attach =phx-click={JS.dispatch("click-stop")}= AND register a one-line client handler that calls =e.stopPropagation()= — but that's fragile.
+- (C) Cleanest: restructure so the backdrop is a separate absolutely-positioned layer with =phx-click="close_link_modal"=, and the dialog is a following sibling at a higher z-index. Clicks on the dialog never reach the backdrop. This is the same pattern the command palette uses successfully (=fixed inset-0 bg-black/40= backdrop as its own element, dialog in a separate =fixed inset-0 flex= layer).
+
+Prefer (C) — matches an existing working pattern in =command_palette_live.ex= and needs no JS.
+
+* Scope
+
+- IN: =lib/concept_web/components/link_this_modal.ex= — restructure backdrop + dialog into sibling layers (palette pattern); remove the dead =JS.dispatch("click-stop")=.
+- IN: keep X, Cancel, Escape, submit close paths working.
+- OUT: redesign of the form/fields.
+
+* Existing Patterns
+
+- =lib/concept_web/live/command_palette_live.ex= render/1 — backdrop is a standalone =fixed inset-0 bg-black/40 z-40= with =phx-click="close_command_palette"=; content sits in a separate =fixed inset-0 flex ... z-50= layer. Mirror exactly.
+
+* Tests (TDD)
+
+- =test/concept_web/components/link_this_modal_test.exs= already exists — extend. Pure-component render assertions can't fully exercise click bubbling, so add a LiveView-level test in the page editor (or a host LV) that: opens the modal, simulates a click on =#link-note= / =#link-kind=, asserts the modal is still present (=has_element?(view, "#link-this-modal-backdrop")=). With current structure the inner-click path can't be unit-simulated via bubbling in LiveViewTest, so the regression guard is: assert the backdrop and dialog are SIBLINGS (structure assertion) — i.e. dialog is not a descendant of the element carrying =phx-click="close_link_modal"=.
+- Verify backdrop click still closes (=render_click= the backdrop element → modal gone).
+
+* Manual UX verification (required — real browser)
+
+- Open Link-this modal; click inside textarea, type, change select, click Create → modal stays open through all; submit creates link; backdrop click and Esc close it.
+
+* Acceptance
+
+- Clicking inside the modal never closes it; backdrop/X/Cancel/Esc/submit do.
+- Tests green; manual browser check passes; =mix precommit= green.

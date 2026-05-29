@@ -8,8 +8,6 @@ defmodule ConceptWeb.Components.LinkThisModal do
   use Phoenix.Component
   import ConceptWeb.CoreComponents
 
-  alias Phoenix.LiveView.JS
-
   @doc """
   Renders a modal for creating a block-to-block link.
 
@@ -30,18 +28,22 @@ defmodule ConceptWeb.Components.LinkThisModal do
 
   def link_this_modal(assigns) do
     ~H"""
-    <div
-      :if={@show}
-      id="link-this-modal-backdrop"
-      class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
-      phx-click="close_link_modal"
-    >
-      <dialog
-        open
-        class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md"
-        phx-click={JS.dispatch("click-stop")}
-        {@rest}
+    <div :if={@show} id="link-this-modal">
+      <%!-- Backdrop: standalone layer; clicking it closes. The dialog is a
+           SIBLING (next layer), never a child, so inner clicks never bubble
+           into this close handler (BUG-060; mirrors the command palette). --%>
+      <div
+        id="link-this-modal-backdrop"
+        class="fixed inset-0 z-40 bg-black/50"
+        phx-click="close_link_modal"
       >
+      </div>
+      <div class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+        <dialog
+          open
+          class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md pointer-events-auto"
+          {@rest}
+        >
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
             🔗 Link this block
@@ -123,7 +125,8 @@ defmodule ConceptWeb.Components.LinkThisModal do
             </div>
           </div>
         </form>
-      </dialog>
+        </dialog>
+      </div>
     </div>
     """
   end
