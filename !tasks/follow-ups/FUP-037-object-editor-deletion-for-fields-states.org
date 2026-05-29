@@ -1,0 +1,20 @@
+#+TITLE: Object editor: deletion for fields, states, transitions, types
+#+STATE: ITEM
+#+SESSION_ID: 14f437a4d57957b7
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-15-33-205Z_14f437a4d57957b7.jsonl]]
+#+CUSTOM_ID: FUP-037-object-editor-deletion-for-fields-states
+
+* Initial Message
+
+please go review in the mean thread with puppeteer and tell me what you were able to do
+
+Deferred from the Objects editor thread (E1/E2). The type/field/workflow editors are **additive** (create + edit + reorder). Deletion is not wired because the domain has no destroy code-interface for FieldDef / WorkflowState / Transition / ObjectType, and deletion has real semantics to design:
+
+- **FieldDef delete**: orphans the key in existing records' `fields` JSONB bags — need a cleanup/migration story or soft-archive (AshArchival is already an extension on these resources).
+- **WorkflowState delete**: records may be in that state; transitions reference it (FK on_delete is :delete for transitions, but records' `state_id` would dangle). Need a guard (refuse if records present) or a reassignment flow.
+- **Transition delete**: safe (no dependents); just needs a destroy action + define + UI button.
+- **ObjectType delete**: system types must stay protected; user types orphan all their records.
+
+Scope: add the destroy actions (with the safety rules above) + code-interface defines (described → MCP parity) + UI affordances (with confirmation). Transition delete is the cheap first slice.
+
+Source: `lib/concept/objects/{field_def,workflow_state,transition,object_type}.ex`, `lib/concept_web/live/objects/`.

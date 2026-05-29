@@ -1,0 +1,17 @@
+#+TITLE: Workflow editor: drag-to-connect transition canvas
+#+STATE: ITEM
+#+SESSION_ID: 14f437a4d57957b7
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-15-33-205Z_14f437a4d57957b7.jsonl]]
+#+CUSTOM_ID: FUP-036-workflow-editor-drag-to-connect-transiti
+
+* Initial Message
+
+please go review in the mean thread with puppeteer and tell me what you were able to do
+
+Deferred from the Objects editor thread (E2). The workflow editor ships a **list-first** transition editor (from→to selects + guard palette). The original UX vision (docs/objects_and_tasks_ux.md §3) imagined a visual graph canvas where states are nodes and transitions are drawn by dragging between them.
+
+Scope: a node/edge canvas (states as draggable nodes, drag-from-handle-to-node to create a transition), replacing or augmenting the list view. Likely a JS hook (e.g. a lightweight graph lib or hand-rolled SVG) pushing the same `add_transition` event the list form pushes — zero new server authority, same `create_transition` code-interface.
+
+Non-goal: changing the domain. The list editor already exercises 100% of the capability; this is pure UX polish.
+
+Source: `lib/concept_web/live/objects/workflow_editor_component.ex`.

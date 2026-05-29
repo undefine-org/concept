@@ -44,11 +44,16 @@ missing.
 
 | Item | Status | Note |
 |---|---|---|
-| ObjectType editor (create/rename, icon/color) | ☐ | `create_object_type`, `rename_object_type` exist |
-| FieldDef editor (add/reorder/configure fields) | ☐ | `create_field_def`, `update_field_def`, `reorder_field_def` exist |
-| Workflow editor (states + drag transitions + guard palette) | ☐ | full action surface exists incl. `set_transition_guards` |
-| Scenario S4 (custom object+workflow) reachable by humans | ☐ | only via MCP / raw Ash today |
-| Scenario S5 (custom validation) reachable by humans | ☐ | only via MCP / raw Ash today |
+| ObjectType editor (create/rename, icon/color) | ◐ | DONE create/rename at `/w/:slug/types`; icon/color picker is a FUP |
+| FieldDef editor (add/reorder/configure fields) | ✓ | `ObjectTypeEditorLive` — add via type picker, configure via FieldTypeComponent.config_form, reorder, required toggle |
+| Workflow editor (states + transitions + guard palette) | ✓ | `WorkflowEditorComponent` — states+categories, list-first transitions, guard palette via Guards.palette()+render_config_form. Drag canvas → FUP |
+| Scenario S4 (custom object+workflow) reachable by humans | ✓ | build a Customer type + workflow entirely in the UI |
+| Scenario S5 (custom validation) reachable by humans | ✓ | attach/configure guards on transitions in the UI |
+
+**Editors shipped 2026-05-29** (E1+E2, reviewer waves R1+R2): `/w/:slug/types`
+(list/create/rename), `/types/:id` (fields + embedded workflow editor). Nav
+link added. Deletion + icon/color + drag-canvas filed as FUPs. The
+database-builder thesis is now reachable by humans, not just MCP.
 
 **Structural fold into (2):** the editors are *generic projectors over the
 FieldType / Guard registries* (see design doc §"UI as registry projection").
