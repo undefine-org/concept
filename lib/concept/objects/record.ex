@@ -46,11 +46,7 @@ defmodule Concept.Objects.Record do
       description "Create a record of a given object type with an optional initial field map."
       accept [:object_type_id, :fields, :state_id, :assignee_id, :page_id]
 
-      argument :workspace_id, :uuid,
-        allow_nil?: false,
-        description: "Workspace the record belongs to. Actor must be a member."
-
-      change set_attribute(:workspace_id, arg(:workspace_id))
+      change Concept.Objects.Changes.SetWorkspaceFromTenant
       change relate_actor(:created_by, allow_nil?: true)
       change Concept.Objects.Record.Changes.AssignDefaults
       change Concept.Objects.Record.Changes.ValidateFieldsForType

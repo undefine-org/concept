@@ -37,11 +37,7 @@ defmodule Concept.Objects.FieldDef do
       description "Add a field to an object type."
       accept [:object_type_id, :name, :key, :field_type, :required?, :config, :is_title?, :position]
 
-      argument :workspace_id, :uuid,
-        allow_nil?: false,
-        description: "Workspace the field belongs to. Actor must be a member."
-
-      change set_attribute(:workspace_id, arg(:workspace_id))
+      change Concept.Objects.Changes.SetWorkspaceFromTenant
       change Concept.Objects.Changes.SlugifyKey
       change Concept.Objects.FieldDef.Changes.AssignAfterLastSibling
     end

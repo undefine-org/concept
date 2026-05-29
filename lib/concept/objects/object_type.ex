@@ -33,11 +33,7 @@ defmodule Concept.Objects.ObjectType do
       description "Create a new object type (a kind of record) in the workspace."
       accept [:name, :key, :icon, :color, :workflow_id, :is_system?]
 
-      argument :workspace_id, :uuid,
-        allow_nil?: false,
-        description: "Workspace the object type belongs to. Actor must be a member."
-
-      change set_attribute(:workspace_id, arg(:workspace_id))
+      change Concept.Objects.Changes.SetWorkspaceFromTenant
       change Concept.Objects.Changes.SlugifyKey
     end
 

@@ -34,11 +34,7 @@ defmodule Concept.Objects.RecordLink do
       description "Link one record to another along a relation field."
       accept [:from_record_id, :to_record_id, :field_def_id]
 
-      argument :workspace_id, :uuid,
-        allow_nil?: false,
-        description: "Workspace the link belongs to. Actor must be a member."
-
-      change set_attribute(:workspace_id, arg(:workspace_id))
+      change Concept.Objects.Changes.SetWorkspaceFromTenant
     end
 
     destroy :destroy do

@@ -24,7 +24,7 @@ defmodule Concept.Objects.EngineTest do
 
   defp new_type(ctx, name \\ "Customer") do
     {:ok, type} =
-      Objects.create_object_type(ctx.ws, name, actor: ctx.user, tenant: ctx.ws)
+      Objects.create_object_type(name, actor: ctx.user, tenant: ctx.ws)
 
     type
   end
@@ -35,8 +35,7 @@ defmodule Concept.Objects.EngineTest do
         %{
           object_type_id: type.id,
           name: name,
-          field_type: field_type,
-          workspace_id: ctx.ws
+          field_type: field_type
         },
         opts
       )
@@ -55,7 +54,7 @@ defmodule Concept.Objects.EngineTest do
 
     test "key is unique per workspace", ctx do
       _ = new_type(ctx, "Customer")
-      assert {:error, _} = Objects.create_object_type(ctx.ws, "Customer", actor: ctx.user, tenant: ctx.ws)
+      assert {:error, _} = Objects.create_object_type("Customer", actor: ctx.user, tenant: ctx.ws)
     end
 
     test "list returns workspace types", ctx do

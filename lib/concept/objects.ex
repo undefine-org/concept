@@ -19,7 +19,7 @@ defmodule Concept.Objects do
 
   resources do
     resource Concept.Objects.ObjectType do
-      define :create_object_type, action: :create, args: [:workspace_id, :name]
+      define :create_object_type, action: :create, args: [:name]
       define :rename_object_type, args: [:name], action: :rename
       define :list_object_types, action: :list
       define :get_object_type, action: :read, get_by: :id
@@ -36,7 +36,7 @@ defmodule Concept.Objects do
     end
 
     resource Concept.Objects.Record do
-      define :create_record, action: :create, args: [:object_type_id]
+      define :create_record, action: :create, args: [:object_type_id, {:optional, :fields}]
       define :update_record_fields, args: [:fields], action: :update_fields
       define :transition_record, args: [:to_state_id], action: :transition
       define :assign_record, args: [:assignee_id], action: :assign
