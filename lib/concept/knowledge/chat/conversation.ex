@@ -12,11 +12,22 @@ defmodule Concept.Knowledge.Chat.Conversation do
         action :generate_name
         queue :conversations
         lock_for_update? false
+        # global? false multitenancy: the cron scheduler must enumerate tenants
+        # and run the worker under each record's tenant (BUG-043 pattern).
+        use_tenant_from_record? true
+        list_tenants Concept.AshOban.WorkspaceTenants
+        actor_persister Concept.AshOban.SystemActorPersister
         worker_module_name Concept.Knowledge.Chat.Message.Workers.NameConversation
         scheduler_module_name Concept.Knowledge.Chat.Message.Schedulers.NameConversation
         where expr(needs_title)
       end
     end
+  end
+
+  multitenancy do
+    strategy :attribute
+    attribute :workspace_id
+    global? false
   end
 
   postgres do
@@ -30,6 +41,12 @@ defmodule Concept.Knowledge.Chat.Conversation do
     create :create do
       description "Start a new chat conversation in the workspace."
       accept [:title]
+
+      argument :workspace_id, :uuid,
+        allow_nil?: false,
+        description: "Workspace the conversation belongs to."
+
+      change set_attribute(:workspace_id, arg(:workspace_id))
       change relate_actor(:user)
     end
 
@@ -65,6 +82,8 @@ defmodule Concept.Knowledge.Chat.Conversation do
     attribute :title, :string do
       public? true
     end
+
+    attribute :workspace_id, :uuid, allow_nil?: false, public?: true
 
     timestamps()
   end

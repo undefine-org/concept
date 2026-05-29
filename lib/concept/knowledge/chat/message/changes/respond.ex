@@ -98,12 +98,12 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
   Public for unit testability.
   """
   @spec existing_response_decision(map()) :: :stream | :noop | {:finalize, map()}
-  def existing_response_decision(%{id: message_id}) do
+  def existing_response_decision(%{id: message_id} = message) do
     response =
       Concept.Knowledge.Chat.Message
       |> Ash.Query.filter(response_to_id == ^message_id)
       |> Ash.Query.limit(1)
-      |> Ash.read_one(authorize?: false)
+      |> Ash.read_one(authorize?: false, tenant: Map.get(message, :workspace_id))
 
     case response do
       {:ok, nil} -> :stream
@@ -255,6 +255,7 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
       %{rewritten_prompt: nil, hits: [], search_trace: []}
     end
   end
+
   defp maybe_rewrite(_query, %{rewrite?: false}), do: nil
   defp maybe_rewrite("", _profile), do: nil
 
@@ -362,6 +363,7 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
 
   defp clamp_score(score) when is_number(score), do: score |> max(0.0) |> min(1.0)
   defp clamp_score(_), do: nil
+
   defp initial_state do
     %{
       text: "",
@@ -383,7 +385,8 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
           conversation_id: message.conversation_id,
           text: content
         },
-        actor: %AshAi{}
+        actor: %AshAi{},
+        tenant: message.workspace_id
       )
       |> Ash.create!()
     end
@@ -444,7 +447,8 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
           tool_results: final_state.tool_results,
           text: final_text
         },
-        actor: %AshAi{}
+        actor: %AshAi{},
+        tenant: message.workspace_id
       )
       |> force_audit_attributes(metadata, latency_ms, retrieval)
       |> Ash.create!()
@@ -477,7 +481,8 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
         complete: true,
         text: interrupted_text(partial.text)
       },
-      actor: %AshAi{}
+      actor: %AshAi{},
+      tenant: partial.workspace_id
     )
     |> Ash.create!()
   end

@@ -11,7 +11,16 @@ defmodule Concept.Knowledge.Chat.Message.Changes.CreateConversationIfNotProvided
       )
     else
       Ash.Changeset.before_action(changeset, fn changeset ->
-        conversation = Concept.Knowledge.Chat.create_conversation!(Ash.Context.to_opts(context))
+        # Conversation is workspace-tenanted: forward the message's tenant as the
+        # conversation's workspace_id argument (BUG-061).
+        opts = Ash.Context.to_opts(context)
+        workspace_id = Ash.ToTenant.to_tenant(changeset.tenant, Concept.Knowledge.Chat.Conversation)
+
+        conversation =
+          Concept.Knowledge.Chat.create_conversation!(
+            %{workspace_id: workspace_id},
+            opts
+          )
 
         Ash.Changeset.force_change_attribute(changeset, :conversation_id, conversation.id)
       end)

@@ -21,6 +21,12 @@ defmodule Concept.Knowledge.Chat.Message do
     end
   end
 
+  multitenancy do
+    strategy :attribute
+    attribute :workspace_id
+    global? false
+  end
+
   postgres do
     table "messages"
     repo Concept.Repo
@@ -206,6 +212,8 @@ defmodule Concept.Knowledge.Chat.Message do
       allow_nil? false
       default true
     end
+
+    attribute :workspace_id, :uuid, allow_nil?: false, public?: true
 
     attribute :scope, :atom do
       constraints one_of: [:workspace, :page, :subtree]
