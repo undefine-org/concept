@@ -152,6 +152,74 @@ defmodule ConceptWeb.WorkflowEditorTest do
     end
   end
 
+    test "setting a new initial state clears the previous one", ctx do
+      {:ok, a} =
+        Objects.create_workflow_state(ctx.workflow_id, "Lead", :backlog, actor: ctx.user, tenant: ctx.ws.id)
+
+      {:ok, _} = Objects.mark_workflow_state_initial(a, actor: ctx.user, tenant: ctx.ws.id)
+
+      {:ok, b} =
+        Objects.create_workflow_state(ctx.workflow_id, "Active", :doing, actor: ctx.user, tenant: ctx.ws.id)
+
+      {:ok, view, _} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/types/#{ctx.type.id}")
+
+      view
+      |> element("#state-#{b.id} button[phx-click=make_initial]")
+      |> render_click()
+
+      {:ok, states} =
+        Objects.list_workflow_states(ctx.workflow_id, actor: ctx.user, tenant: ctx.ws.id)
+
+      initials = Enum.filter(states, & &1.is_initial?)
+      assert length(initials) == 1
+      assert hd(initials).id == b.id
+    end
+
+    test "a requires_fields guard stores a list and renders without crashing", ctx do
+      {:ok, a} =
+        Objects.create_workflow_state(ctx.workflow_id, "Doing", :doing, actor: ctx.user, tenant: ctx.ws.id)
+
+      {:ok, b} =
+        Objects.create_workflow_state(ctx.workflow_id, "Done", :done, actor: ctx.user, tenant: ctx.ws.id)
+
+      {:ok, t} =
+        Objects.create_transition(ctx.workflow_id, a.id, b.id, actor: ctx.user, tenant: ctx.ws.id)
+
+      {:ok, view, _} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/types/#{ctx.type.id}")
+
+      view
+      |> element("#transition-#{t.id} form[phx-submit=add_guard]")
+      |> render_submit(%{"transition_id" => t.id, "kind" => "requires_fields"})
+
+      # submit a comma-string; it must be normalized to a list and not crash
+      view
+      |> element("#transition-#{t.id} form[phx-change=update_guard]")
+      |> render_change(%{"transition_id" => t.id, "index" => "0", "fields" => "owner, due_date"})
+
+      {:ok, [t1]} = filter_transitions(ctx, a.id, b.id)
+      assert [%{"kind" => "requires_fields", "config" => %{"fields" => ["owner", "due_date"]}}] = t1.guards
+
+      # re-render must succeed (describe over a list, not a string)
+      assert render(view) =~ "requires fields: owner, due_date"
+    end
+
+    test "a crafted guard event with a non-integer index does not crash", ctx do
+      {:ok, a} =
+        Objects.create_workflow_state(ctx.workflow_id, "S1", :todo, actor: ctx.user, tenant: ctx.ws.id)
+
+      {:ok, b} =
+        Objects.create_workflow_state(ctx.workflow_id, "S2", :doing, actor: ctx.user, tenant: ctx.ws.id)
+
+      {:ok, t} =
+        Objects.create_transition(ctx.workflow_id, a.id, b.id, actor: ctx.user, tenant: ctx.ws.id)
+
+      {:ok, view, _} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/types/#{ctx.type.id}")
+
+      render_hook(view, "remove_guard", %{"transition_id" => t.id, "index" => "not_an_int"})
+      assert Process.alive?(view.pid)
+    end
+  end
+
   defp filter_states(ctx, name) do
     {:ok, states} =
       Objects.list_workflow_states(ctx.workflow_id, actor: ctx.user, tenant: ctx.ws.id)

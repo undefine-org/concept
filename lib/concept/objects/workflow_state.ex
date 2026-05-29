@@ -50,6 +50,14 @@ defmodule Concept.Objects.WorkflowState do
       accept [:name, :category, :is_initial?]
     end
 
+    update :mark_initial do
+      description "Mark this state as the workflow's initial state (clears the others)."
+      accept []
+      require_atomic? false
+      change set_attribute(:is_initial?, true)
+      change Concept.Objects.WorkflowState.Changes.ClearSiblingInitials
+    end
+
     update :reorder do
       description "Reorder a state within its workflow."
       accept [:position]

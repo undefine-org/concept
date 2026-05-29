@@ -63,6 +63,7 @@ defmodule Concept.Objects do
     resource Concept.Objects.WorkflowState do
       define :create_workflow_state, action: :create, args: [:workflow_id, :name, :category]
       define :update_workflow_state, action: :update_state, args: [:name, :category]
+      define :mark_workflow_state_initial, action: :mark_initial
       define :reorder_workflow_state, action: :reorder, args: [:position]
       define :list_workflow_states, action: :list_for_workflow, args: [:workflow_id]
       define :get_workflow_state, action: :read, get_by: :id

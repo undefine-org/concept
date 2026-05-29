@@ -33,8 +33,13 @@ defmodule Concept.Objects.Guards.RequiresFields do
   end
 
   @impl true
+  def normalize_config(raw) do
+    Map.put(raw, "fields", field_list(Map.get(raw, "fields")))
+  end
+
+  @impl true
   def check(record, config, _ctx) do
-    fields = Map.get(config, "fields", [])
+    fields = field_list(Map.get(config, "fields"))
     bag = record.fields || %{}
 
     missing = Enum.reject(fields, fn f -> present?(Map.get(bag, f)) end)
@@ -47,8 +52,21 @@ defmodule Concept.Objects.Guards.RequiresFields do
 
   @impl true
   def describe(config) do
-    "requires fields: #{Enum.join(Map.get(config, "fields", []), ", ")}"
+    "requires fields: #{Enum.join(field_list(Map.get(config, "fields")), ", ")}"
   end
+
+  # Accept both the stored list and a raw comma/newline string (from the
+  # config form), so check/describe never crash on either shape.
+  defp field_list(list) when is_list(list), do: list
+
+  defp field_list(str) when is_binary(str) do
+    str
+    |> String.split([",", "\n"], trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp field_list(_), do: []
 
   defp present?(nil), do: false
   defp present?(""), do: false

@@ -60,5 +60,13 @@ defmodule Concept.Objects.Guard do
   @callback render_config_form(config :: map, form :: Phoenix.HTML.Form.t()) ::
               Phoenix.LiveView.Rendered.t()
 
-  @optional_callbacks render_config_form: 2
+  @doc """
+  Normalize raw config params (as submitted by `render_config_form/2`) into
+  the stored/queried shape (as consumed by `check/3` and `describe/1`).
+  E.g. `requires_fields` turns a comma-string into a list. Optional — defaults
+  to identity. The guard owns its config shape end to end.
+  """
+  @callback normalize_config(raw :: map) :: map
+
+  @optional_callbacks render_config_form: 2, normalize_config: 1
 end

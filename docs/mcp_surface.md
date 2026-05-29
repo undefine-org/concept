@@ -310,7 +310,7 @@ List messages in a chat conversation, most recent first by default.
 
 ---
 ## Concept.Objects
-### Tools (32)
+### Tools (33)
 
 #### `field_def_create`
 
@@ -586,6 +586,14 @@ List a workflow's states in order.
 **Arguments:**
 
   - `workflow_id` (`UUID`, required) — Workflow whose states to list.
+
+
+#### `workflow_state_mark_initial`
+
+Mark this state as the workflow's initial state (clears the others).
+
+- **Resource**: `Concept.Objects.WorkflowState`
+- **Action**: `:mark_initial` (update)
 
 
 #### `workflow_state_reorder`

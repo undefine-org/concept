@@ -71,8 +71,9 @@ defmodule ConceptWeb.Objects.WorkflowEditorComponent do
 
     with false <- name == "" or is_nil(wf_id),
          {:ok, cat} <- parse_category(category),
-         is_initial? <- states == [],
-         {:ok, _} <- create_state(wf_id, name, cat, is_initial?, user, ws.id) do
+         {:ok, state} <-
+           Objects.create_workflow_state(wf_id, name, cat, actor: user, tenant: ws.id),
+         :ok <- maybe_mark_first_initial(state, states, user, ws.id) do
       {:noreply, socket |> assign(:new_state_name, "") |> load()}
     else
       _ -> {:noreply, socket}
@@ -100,7 +101,8 @@ defmodule ConceptWeb.Objects.WorkflowEditorComponent do
     state = Enum.find(states, &(&1.id == id))
 
     with %{} <- state,
-         {:ok, _} <- set_initial(state, user, ws.id) do
+         {:ok, _} <-
+           Objects.mark_workflow_state_initial(state, actor: user, tenant: ws.id) do
       {:noreply, load(socket)}
     else
       _ -> {:noreply, socket}
@@ -140,12 +142,13 @@ defmodule ConceptWeb.Objects.WorkflowEditorComponent do
     %{workspace: ws, transitions: transitions} = socket.assigns
     user = socket.assigns.current_user
     transition = Enum.find(transitions, &(&1.id == tid))
-    i = String.to_integer(idx)
 
     with %{} <- transition,
+         {i, ""} <- Integer.parse(idx),
          guards when is_list(guards) <- transition.guards,
          guard when not is_nil(guard) <- Enum.at(guards, i),
-         config <- Map.drop(params, ["transition_id", "index", "_target"]),
+         raw <- Map.drop(params, ["transition_id", "index", "_target"]),
+         config <- normalize_guard_config(guard["kind"], raw),
          updated <- List.replace_at(guards, i, Map.put(guard, "config", config)),
          {:ok, _} <-
            Objects.set_transition_guards(transition, updated, actor: user, tenant: ws.id) do
@@ -159,9 +162,9 @@ defmodule ConceptWeb.Objects.WorkflowEditorComponent do
     %{workspace: ws, transitions: transitions} = socket.assigns
     user = socket.assigns.current_user
     transition = Enum.find(transitions, &(&1.id == tid))
-    i = String.to_integer(idx)
 
     with %{} <- transition,
+         {i, ""} <- Integer.parse(idx),
          guards when is_list(guards) <- transition.guards,
          updated <- List.delete_at(guards, i),
          {:ok, _} <-
@@ -174,28 +177,30 @@ defmodule ConceptWeb.Objects.WorkflowEditorComponent do
 
   # ── helpers ──────────────────────────────────────────────────────────
 
-  # is_initial? isn't in the create code-interface arg list, so write it via
-  # the create action's changeset directly.
-  defp create_state(wf_id, name, cat, is_initial?, user, tenant) do
-    Concept.Objects.WorkflowState
-    |> Ash.Changeset.for_create(
-      :create,
-      %{workflow_id: wf_id, name: name, category: cat, is_initial?: is_initial?},
-      actor: user,
-      tenant: tenant
-    )
-    |> Ash.create()
+  # The first state of a fresh workflow becomes its initial state. Pure: both
+  # calls go through the Objects code-interface (EX9001).
+  defp maybe_mark_first_initial(state, existing_states, user, tenant) do
+    if existing_states == [] do
+      case Objects.mark_workflow_state_initial(state, actor: user, tenant: tenant) do
+        {:ok, _} -> :ok
+        err -> err
+      end
+    else
+      :ok
+    end
   end
 
-  defp set_initial(state, user, tenant) do
-    state
-    |> Ash.Changeset.for_update(
-      :update_state,
-      %{name: state.name, category: state.category, is_initial?: true},
-      actor: user,
-      tenant: tenant
-    )
-    |> Ash.update()
+  # Let each guard normalize its raw form config into the stored shape
+  # (e.g. requires_fields: comma-string → list). Identity when the guard
+  # doesn't implement the optional callback.
+  defp normalize_guard_config(kind, raw) do
+    case Guards.lookup(kind) do
+      {:ok, mod} ->
+        if function_exported?(mod, :normalize_config, 1), do: mod.normalize_config(raw), else: raw
+
+      _ ->
+        raw
+    end
   end
 
   defp parse_category(str) do
