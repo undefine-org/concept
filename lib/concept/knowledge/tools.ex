@@ -14,14 +14,15 @@ defmodule Concept.Knowledge.Tools do
   `Concept.Knowledge.Ask`, which returned an async handle and broadcast the
   answer on a PubSub topic no MCP caller subscribes to.
   """
-  @spec answer_question(String.t(), binary()) :: {:ok, map()} | {:error, term()}
-  def answer_question(question, workspace_id) do
+  @spec answer_question(String.t(), binary(), keyword()) :: {:ok, map()} | {:error, term()}
+  def answer_question(question, workspace_id, llm_opts \\ []) do
     case Concept.Knowledge.Search.search(question, workspace_id, mode: :hybrid, limit: 10) do
       {:ok, hits} ->
         prompt = Concept.Knowledge.Prompts.answer_prompt(to_chunks(hits), question)
         model = Concept.Knowledge.Profiles.route_model(Concept.Knowledge.Config.llm_model())
 
-        case ReqLLM.generate_text(model, [ReqLLM.Context.user(prompt)]) do
+        # llm_opts carries req_http_options for Req.Test routing in tests (LLMStub).
+        case ReqLLM.generate_text(model, [ReqLLM.Context.user(prompt)], llm_opts) do
           {:ok, response} ->
             {:ok, %{answer: ReqLLM.Response.text(response), sources: hits}}
 
