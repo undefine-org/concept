@@ -46,7 +46,16 @@ defmodule Concept.Pages.Block.Changes.EvaluateAi do
         :workspace -> nil
       end
 
-    # 3. Create message (triggers AshAI respond pipeline).
+    # 3. Subscribe to chat-message PubSub BEFORE creating the message.
+    # `Message.create` enqueues the `:respond` Oban job; if that job lands the
+    # completion broadcast before we subscribe, the message is missed and we
+    # block until the 5-minute timeout (TOCTOU). Subscribing first closes the
+    # window. Messages broadcast via `ConceptWeb.Endpoint` (see Message's
+    # `pub_sub do module …` block), NOT `Concept.PubSub`.
+    topic = "chat:messages:" <> conversation_id
+    ConceptWeb.Endpoint.subscribe(topic)
+
+    # 4. Create message (triggers AshAI respond pipeline).
     # Ash 3.x rejects `set_argument/3` after `for_create/3` (the changeset is
     # already validated). Set the argument first, then build the action.
     {:ok, message} =
@@ -61,15 +70,26 @@ defmodule Concept.Pages.Block.Changes.EvaluateAi do
       })
       |> Ash.create(actor: actor, authorize?: false)
 
-    # 4. Subscribe to the chat-message PubSub. `Concept.Knowledge.Chat.Message`
-    # broadcasts via `ConceptWeb.Endpoint` (see its `pub_sub do module …` block),
-    # NOT via `Concept.PubSub`. The previous `Concept.PubSub` subscription
-    # silently received nothing.
-    topic = "chat:messages:" <> conversation_id
-    ConceptWeb.Endpoint.subscribe(topic)
+    # 5. Belt-and-suspenders: a fast respond job may have completed before the
+    # broadcast was wired (or between create and now). Poll once for an
+    # already-complete response before entering the receive loop.
+    case poll_complete_response(message, tenant) do
+      {:complete, response_id} -> finalize_completion(block, response_id, profile, tenant)
+      :none -> wait_for_completion(block, message, profile, tenant)
+    end
+  end
 
-    # Wait for the assistant response to complete
-    wait_for_completion(block, message, profile, tenant)
+  # One-shot check for an already-complete assistant response to a user message.
+  # Guards against the create→subscribe race when the respond job is fast.
+  defp poll_complete_response(user_message, tenant) do
+    Concept.Knowledge.Chat.Message
+    |> Ash.Query.filter(response_to_id == ^user_message.id and complete == true)
+    |> Ash.Query.limit(1)
+    |> Ash.read(actor: %{system?: true}, tenant: tenant, authorize?: false)
+    |> case do
+      {:ok, [%{id: response_id} | _]} -> {:complete, response_id}
+      _ -> :none
+    end
   end
 
   defp get_or_create_conversation(block, actor, tenant) do
