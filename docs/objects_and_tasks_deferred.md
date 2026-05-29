@@ -9,7 +9,9 @@
 > lands; thread (1) (full type/workflow editor UI) is tracked here too so it
 > is not lost.
 
-Last audited: 2026-05-29 (post Wave 6, post reviewer waves R1–R6 retroactive).
+Last audited: 2026-05-29 (post Wave 6, post reviewer waves R1–R6 retroactive;
+thread (2) W1–W5 shipped + reviewer wave + cast-fix; `mix precommit` green,
+512 tests / 0 failures).
 
 **Thread (2) COMPLETE (W1–W5, 2026-05-29):**
 - ✓ W1 FieldType render contract + `FieldTypeComponent` dispatcher.
