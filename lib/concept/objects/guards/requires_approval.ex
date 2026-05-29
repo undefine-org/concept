@@ -11,12 +11,29 @@ defmodule Concept.Objects.Guards.RequiresApproval do
   the `→ done` transition.
   """
   @behaviour Concept.Objects.Guard
+  use Phoenix.Component
 
   @impl true
   def kind, do: :requires_approval
 
   @impl true
   def label, do: "Requires approval"
+
+  @impl true
+  def icon, do: "✓"
+
+  @impl true
+  def render_config_form(config, form) do
+    assigns = %{form: form, by: Map.get(config, "by", "creator")}
+
+    ~H"""
+    <label class="text-xs text-notion-text-light">Approver</label>
+    <select name={@form[:by].name} class="w-full rounded-md border border-notion-divider px-2 py-1 text-sm">
+      <option value="creator" selected={@by == "creator"}>The creator</option>
+      <option value="anyone" selected={@by == "anyone"}>Any member</option>
+    </select>
+    """
+  end
 
   @impl true
   def check(record, config, ctx) do

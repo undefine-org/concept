@@ -53,6 +53,14 @@ defmodule ConceptWeb.Components.Sidebar do
         <span class="flex-1 text-left">Graph view</span>
       </.link>
 
+      <.link
+        navigate={~p"/w/#{@workspace.slug}/tasks"}
+        class="ora-sidebar-row mb-2 text-notion-text-light flex items-center gap-2 no-underline"
+      >
+        <.icon name="hero-check-circle-micro" class="size-4" />
+        <span class="flex-1 text-left">Tasks</span>
+      </.link>
+
       <div class="flex-1 overflow-y-auto">
         <.live_component
           module={ConceptWeb.Components.PageTree}

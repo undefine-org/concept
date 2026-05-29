@@ -47,4 +47,18 @@ defmodule Concept.Objects.Guard do
 
   @doc "A one-line description of this guard instance, given its config."
   @callback describe(config :: map) :: String.t()
+
+  @doc "Emoji/icon for the workflow-editor guard palette."
+  @callback icon() :: String.t()
+
+  @doc """
+  The guard's config-editing UI in the workflow editor's guard palette
+  (e.g. `requires_proof` picks which field is the proof). Optional — a guard
+  with no config (none currently) may omit it. Mirrors
+  `FieldType.render_config_form/2`.
+  """
+  @callback render_config_form(config :: map, form :: Phoenix.HTML.Form.t()) ::
+              Phoenix.LiveView.Rendered.t()
+
+  @optional_callbacks render_config_form: 2
 end
