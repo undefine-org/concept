@@ -104,6 +104,7 @@ defmodule ConceptWeb.WorkspaceLive.ChatPanel do
             module={ConceptWeb.ChatComponent}
             id={"chat-component-#{@workspace.id}"}
             current_user={@current_user}
+            workspace_id={@workspace.id}
             hide_sidebar={true}
             message_scope={@message_scope}
             message_profile={@message_profile}

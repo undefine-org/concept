@@ -133,7 +133,7 @@ defmodule Mix.Tasks.Concept.Demo do
     ds_blocks = blocks_by_title["Distributed Systems Notes"] || []
     roadmap_blocks = blocks_by_title["Roadmap"] || []
 
-    {_conv, _user_msg, agent_msg} = seed_conversation!(user)
+    {_conv, _user_msg, agent_msg} = seed_conversation!(user, ws)
 
     seed_citations!(agent_msg, ds_blocks, pages, ws)
     seed_links!(ds_blocks, ws, user)
@@ -351,10 +351,11 @@ defmodule Mix.Tasks.Concept.Demo do
     }
   end
 
-  defp seed_conversation!(user) do
+  defp seed_conversation!(user, ws) do
     {:ok, conv} =
-      Concept.Knowledge.Chat.create_conversation(%{title: "Demo Conversation"},
+      Concept.Knowledge.Chat.create_conversation(%{title: "Demo Conversation", workspace_id: ws.id},
         actor: user,
+        tenant: ws.id,
         authorize?: false
       )
 
@@ -365,7 +366,7 @@ defmodule Mix.Tasks.Concept.Demo do
       |> Ash.Changeset.for_create(:create, %{
         text: "What is the relationship between the CAP theorem and consensus algorithms?"
       })
-      |> Ash.create(actor: user, authorize?: false)
+      |> Ash.create(actor: user, tenant: ws.id, authorize?: false)
 
     agent_msg =
       Concept.Knowledge.Chat.Message
@@ -380,7 +381,7 @@ defmodule Mix.Tasks.Concept.Demo do
         """,
         complete: true
       })
-      |> Ash.create!(actor: %SystemActor{}, authorize?: false)
+      |> Ash.create!(actor: %SystemActor{}, tenant: ws.id, authorize?: false)
 
     {conv, user_msg, agent_msg}
   end

@@ -267,15 +267,15 @@ defmodule Concept.Knowledge.Chat.RespondChangeTest do
     end
 
     test "BUG-045 regression: completes without UndefinedFunctionError",
-         %{user_message: msg, user: user} do
+         %{user_message: msg, user: user, workspace: workspace} do
       assert {:ok, _} =
                msg
-               |> Ash.Changeset.for_update(:respond, %{}, actor: user)
+               |> Ash.Changeset.for_update(:respond, %{}, actor: user, tenant: workspace.id)
                |> Ash.update()
 
       # And the agent reply row exists and is complete.
       assert [agent] =
-               Ash.read!(Chat.Message, actor: user, authorize?: false)
+               Ash.read!(Chat.Message, actor: user, tenant: workspace.id, authorize?: false)
                |> Enum.filter(&(&1.source == :agent))
 
       assert agent.complete
@@ -283,16 +283,16 @@ defmodule Concept.Knowledge.Chat.RespondChangeTest do
     end
 
     test "BUG-046: persists prompt_tokens and completion_tokens on the reply",
-         %{user_message: msg, user: user} do
+         %{user_message: msg, user: user, workspace: workspace} do
       MockReqLLM.set_reply(text: "Hi.", input_tokens: 21, output_tokens: 9)
 
       {:ok, _} =
         msg
-        |> Ash.Changeset.for_update(:respond, %{}, actor: user)
+        |> Ash.Changeset.for_update(:respond, %{}, actor: user, tenant: workspace.id)
         |> Ash.update()
 
       [agent] =
-        Ash.read!(Chat.Message, actor: user, authorize?: false)
+        Ash.read!(Chat.Message, actor: user, tenant: workspace.id, authorize?: false)
         |> Enum.filter(&(&1.source == :agent))
 
       assert agent.prompt_tokens == 21
@@ -301,7 +301,7 @@ defmodule Concept.Knowledge.Chat.RespondChangeTest do
     end
 
     test "BUG-046 extension: persists grounding_score when Google provider_meta is present",
-         %{user_message: msg, user: user} do
+         %{user_message: msg, user: user, workspace: workspace} do
       MockReqLLM.set_reply(
         text: "Grounded reply.",
         input_tokens: 5,
@@ -311,21 +311,21 @@ defmodule Concept.Knowledge.Chat.RespondChangeTest do
 
       {:ok, _} =
         msg
-        |> Ash.Changeset.for_update(:respond, %{}, actor: user)
+        |> Ash.Changeset.for_update(:respond, %{}, actor: user, tenant: workspace.id)
         |> Ash.update()
 
       [agent] =
-        Ash.read!(Chat.Message, actor: user, authorize?: false)
+        Ash.read!(Chat.Message, actor: user, tenant: workspace.id, authorize?: false)
         |> Enum.filter(&(&1.source == :agent))
 
       assert_in_delta agent.grounding_score, 0.75, 1.0e-9
     end
 
     test "FUP-028: second invocation does not re-call the LLM",
-         %{user_message: msg, user: user} do
+         %{user_message: msg, user: user, workspace: workspace} do
       {:ok, _} =
         msg
-        |> Ash.Changeset.for_update(:respond, %{}, actor: user)
+        |> Ash.Changeset.for_update(:respond, %{}, actor: user, tenant: workspace.id)
         |> Ash.update()
 
       first_calls = MockReqLLM.call_count()
@@ -334,26 +334,26 @@ defmodule Concept.Knowledge.Chat.RespondChangeTest do
       # Re-run — should be a no-op since a complete response exists.
       {:ok, _} =
         msg
-        |> Ash.Changeset.for_update(:respond, %{}, actor: user)
+        |> Ash.Changeset.for_update(:respond, %{}, actor: user, tenant: workspace.id)
         |> Ash.update()
 
       assert MockReqLLM.call_count() == first_calls
     end
 
     test "FUP-028: partial response is finalized with [response interrupted] suffix",
-         %{user_message: msg, user: user} = ctx do
+         %{user_message: msg, user: user, workspace: workspace} = ctx do
       _partial = upsert_agent_reply!(msg, ctx, text: "I was about to say", complete: false)
 
       {:ok, _} =
         msg
-        |> Ash.Changeset.for_update(:respond, %{}, actor: user)
+        |> Ash.Changeset.for_update(:respond, %{}, actor: user, tenant: workspace.id)
         |> Ash.update()
 
       # No LLM call.
       assert MockReqLLM.call_count() == 0
 
       [agent] =
-        Ash.read!(Chat.Message, actor: user, authorize?: false)
+        Ash.read!(Chat.Message, actor: user, tenant: workspace.id, authorize?: false)
         |> Enum.filter(&(&1.source == :agent))
 
       assert agent.complete
@@ -376,9 +376,14 @@ defmodule Concept.Knowledge.Chat.RespondChangeTest do
       })
       |> Ash.create(authorize?: false)
 
+    {:ok, [workspace]} = Concept.Accounts.Workspace.for_user(user.id, actor: user)
+
     {:ok, conversation} =
       Chat.Conversation
-      |> Ash.Changeset.for_create(:create, %{}, actor: user)
+      |> Ash.Changeset.for_create(:create, %{workspace_id: workspace.id},
+        actor: user,
+        tenant: workspace.id
+      )
       |> Ash.create()
 
     {:ok, user_message} =
@@ -386,15 +391,21 @@ defmodule Concept.Knowledge.Chat.RespondChangeTest do
       |> Ash.Changeset.for_create(
         :create,
         %{text: "What can you do?"},
-        actor: user
+        actor: user,
+        tenant: workspace.id
       )
       |> Ash.Changeset.force_change_attribute(:conversation_id, conversation.id)
       |> Ash.create(authorize?: false)
 
-    %{user: user, conversation: conversation, user_message: user_message}
+    %{
+      user: user,
+      workspace: workspace,
+      conversation: conversation,
+      user_message: user_message
+    }
   end
 
-  defp upsert_agent_reply!(user_message, %{conversation: conv}, opts) do
+  defp upsert_agent_reply!(user_message, %{conversation: conv, workspace: workspace}, opts) do
     Chat.Message
     |> Ash.Changeset.for_create(
       :upsert_response,
@@ -405,7 +416,8 @@ defmodule Concept.Knowledge.Chat.RespondChangeTest do
         text: Keyword.fetch!(opts, :text),
         complete: Keyword.get(opts, :complete, false)
       },
-      actor: %AshAi{}
+      actor: %AshAi{},
+      tenant: workspace.id
     )
     |> Ash.create!()
   end

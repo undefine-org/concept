@@ -68,7 +68,7 @@ defmodule Concept.Pages.Block.Changes.EvaluateAi do
         scope_target_id: scope_target_id,
         profile: profile
       })
-      |> Ash.create(actor: actor, authorize?: false)
+      |> Ash.create(actor: actor, tenant: tenant, authorize?: false)
 
     # 5. Belt-and-suspenders: a fast respond job may have completed before the
     # broadcast was wired (or between create and now). Poll once for an
@@ -98,7 +98,11 @@ defmodule Concept.Pages.Block.Changes.EvaluateAi do
 
     if existing_id do
       # Verify it exists
-      case Concept.Knowledge.Chat.get_conversation(existing_id, actor: actor, authorize?: false) do
+      case Concept.Knowledge.Chat.get_conversation(existing_id,
+             actor: actor,
+             tenant: tenant,
+             authorize?: false
+           ) do
         {:ok, _conv} -> existing_id
         {:error, _} -> create_conversation(block, actor, tenant)
       end
@@ -107,14 +111,15 @@ defmodule Concept.Pages.Block.Changes.EvaluateAi do
     end
   end
 
-  defp create_conversation(block, actor, _tenant) do
+  defp create_conversation(block, actor, tenant) do
     block_short = binary_part(block.id, 0, 8)
     title = "AI Block #{block_short}"
 
     {:ok, conversation} =
       Concept.Knowledge.Chat.create_conversation(
-        %{title: title},
+        %{title: title, workspace_id: tenant},
         actor: actor,
+        tenant: tenant,
         authorize?: false
       )
 

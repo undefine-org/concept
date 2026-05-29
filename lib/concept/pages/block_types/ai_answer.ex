@@ -111,7 +111,7 @@ defmodule Concept.Pages.BlockTypes.AiAnswer do
         "empty"
 
       message_id ->
-        case load_message(message_id) do
+        case load_message(message_id, block.workspace_id) do
           {:ok, %{complete: true}} -> "answered"
           {:ok, %{complete: false}} -> "streaming"
           {:error, _} -> "failed"
@@ -119,9 +119,9 @@ defmodule Concept.Pages.BlockTypes.AiAnswer do
     end
   end
 
-  defp load_message(message_id) do
+  defp load_message(message_id, workspace_id) do
     Concept.Knowledge.Chat.Message
-    |> Ash.get(message_id, actor: %{system?: true}, authorize?: false)
+    |> Ash.get(message_id, actor: %{system?: true}, tenant: workspace_id, authorize?: false)
     |> case do
       {:ok, message} -> {:ok, message}
       error -> error
@@ -133,7 +133,7 @@ defmodule Concept.Pages.BlockTypes.AiAnswer do
     workspace_id = block.workspace_id
     system_actor = %{system?: true}
 
-    with {:ok, message} <- load_message(message_id),
+    with {:ok, message} <- load_message(message_id, workspace_id),
          {:ok, citations} <-
            Concept.Knowledge.citations_for_message(message_id,
              actor: system_actor,

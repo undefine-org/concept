@@ -23,8 +23,7 @@ defmodule Concept.Knowledge.BlockChunker do
     |> Enum.reject(&(String.trim(&1.text) == ""))
     |> coalesce_small()
     |> Enum.with_index()
-    |> Enum.map(fn {%{text: t, block_ids: ids, primary_id: pid, type: type, token_count: tc},
-                    idx} ->
+    |> Enum.map(fn {%{text: t, block_ids: ids, primary_id: pid, type: type, token_count: tc}, idx} ->
       %{
         text: t,
         chunk_index: idx,

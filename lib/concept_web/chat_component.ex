@@ -24,10 +24,13 @@ defmodule ConceptWeb.ChatComponent do
     socket =
       if !socket.assigns[:initialized] do
         conversations =
-          if true && is_nil(socket.assigns.current_user) do
+          if is_nil(socket.assigns.current_user) or is_nil(socket.assigns[:workspace_id]) do
             []
           else
-            Concept.Knowledge.Chat.my_conversations!(actor: socket.assigns.current_user)
+            Concept.Knowledge.Chat.my_conversations!(
+              actor: socket.assigns.current_user,
+              tenant: socket.assigns.workspace_id
+            )
           end
 
         socket
@@ -321,10 +324,15 @@ defmodule ConceptWeb.ChatComponent do
     else
       conversation =
         Concept.Knowledge.Chat.get_conversation!(conversation_id,
-          actor: socket.assigns.current_user
+          actor: socket.assigns.current_user,
+          tenant: socket.assigns[:workspace_id]
         )
 
-      messages = Concept.Knowledge.Chat.message_history!(conversation.id, stream?: true)
+      messages =
+        Concept.Knowledge.Chat.message_history!(conversation.id,
+          stream?: true,
+          tenant: socket.assigns[:workspace_id]
+        )
 
       ConceptWeb.Endpoint.subscribe("chat:messages:#{conversation.id}")
 
@@ -413,10 +421,13 @@ defmodule ConceptWeb.ChatComponent do
         do: Map.put(base_args, :text, socket.assigns.initial_text),
         else: base_args
 
+    tenant = socket.assigns[:workspace_id]
+
     form =
       if socket.assigns.conversation do
         Concept.Knowledge.Chat.form_to_create_message(
           actor: socket.assigns.current_user,
+          tenant: tenant,
           params: base_args,
           private_arguments: %{conversation_id: socket.assigns.conversation.id}
         )
@@ -424,6 +435,7 @@ defmodule ConceptWeb.ChatComponent do
       else
         Concept.Knowledge.Chat.form_to_create_message(
           actor: socket.assigns.current_user,
+          tenant: tenant,
           params: base_args
         )
         |> to_form()
