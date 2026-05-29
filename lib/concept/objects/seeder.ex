@@ -45,7 +45,10 @@ defmodule Concept.Objects.Seeder do
   defp create_task_type(workspace_id) do
     {:ok, wf} =
       Workflow
-      |> Ash.Changeset.for_create(:create, %{name: "Default"}, actor: @system, tenant: workspace_id)
+      |> Ash.Changeset.for_create(:create, %{name: "Default"},
+        actor: @system,
+        tenant: workspace_id
+      )
       |> Ash.create()
 
     states = create_states(wf, workspace_id)

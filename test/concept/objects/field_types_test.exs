@@ -18,6 +18,7 @@ defmodule Concept.Objects.FieldTypesTest do
   describe "registry" do
     test "all built-in types are registered" do
       keys = FieldTypes.all_keys()
+
       for k <- [:text, :number, :select, :date, :user, :url, :checklist, :relation] do
         assert k in keys, "expected #{k} in registry"
       end

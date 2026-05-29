@@ -82,6 +82,13 @@ defmodule Concept.Objects.Mcp do
     put_in_arguments(arguments, Map.put(input, "object_type_id", otid))
   end
 
+  # list_<type> points at the read action :list_for_type, whose required
+  # object_type_id argument is supplied as a top-level tool argument (not under
+  # "input"). Pin it from _meta so the agent never has to know the uuid.
+  defp pin_object_type(%AshAi.Tool{action: %{name: :list_for_type}, _meta: meta}, arguments) do
+    Map.put(arguments, "object_type_id", meta["object_type_id"])
+  end
+
   defp pin_object_type(_tool, arguments), do: arguments
 
   defp put_in_arguments(arguments, input), do: Map.put(arguments, "input", input)

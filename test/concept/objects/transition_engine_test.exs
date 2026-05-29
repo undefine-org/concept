@@ -44,7 +44,9 @@ defmodule Concept.Objects.TransitionEngineTest do
 
     # object type using this workflow
     {:ok, type} = Objects.create_object_type("Ticket", actor: user, tenant: ws.id)
-    {:ok, type} = Ash.update(type, %{workflow_id: wf.id}, action: :set_workflow, actor: user, tenant: ws.id)
+
+    {:ok, type} =
+      Ash.update(type, %{workflow_id: wf.id}, action: :set_workflow, actor: user, tenant: ws.id)
 
     {:ok, _} =
       Concept.Objects.FieldDef
@@ -110,16 +112,25 @@ defmodule Concept.Objects.TransitionEngineTest do
 
   test "cannot enter a non-initial state from nil", ctx do
     rec = new_record(ctx)
+
     assert {:error, _} =
-             Objects.transition_record(rec, ctx.states[:doing].id, actor: ctx.user, tenant: ctx.ws)
+             Objects.transition_record(rec, ctx.states[:doing].id,
+               actor: ctx.user,
+               tenant: ctx.ws
+             )
   end
 
   test "follows defined transitions and rejects undefined ones", ctx do
     transition(ctx, :backlog, :todo)
 
     rec = new_record(ctx)
-    {:ok, rec} = Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
-    {:ok, rec} = Objects.transition_record(rec, ctx.states[:todo].id, actor: ctx.user, tenant: ctx.ws)
+
+    {:ok, rec} =
+      Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
+
+    {:ok, rec} =
+      Objects.transition_record(rec, ctx.states[:todo].id, actor: ctx.user, tenant: ctx.ws)
+
     assert rec.state_id == ctx.states[:todo].id
 
     # No transition Todo -> Done defined
@@ -129,18 +140,30 @@ defmodule Concept.Objects.TransitionEngineTest do
 
   test "requires_proof guard blocks until field present", ctx do
     transition(ctx, :backlog, :doing)
-    transition(ctx, :doing, :review, [%{"kind" => "requires_proof", "config" => %{"field" => "pr"}}])
+
+    transition(ctx, :doing, :review, [
+      %{"kind" => "requires_proof", "config" => %{"field" => "pr"}}
+    ])
 
     rec = new_record(ctx)
-    {:ok, rec} = Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
-    {:ok, rec} = Objects.transition_record(rec, ctx.states[:doing].id, actor: ctx.user, tenant: ctx.ws)
+
+    {:ok, rec} =
+      Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
+
+    {:ok, rec} =
+      Objects.transition_record(rec, ctx.states[:doing].id, actor: ctx.user, tenant: ctx.ws)
 
     # No PR yet -> blocked
     assert {:error, _} =
-             Objects.transition_record(rec, ctx.states[:review].id, actor: ctx.user, tenant: ctx.ws)
+             Objects.transition_record(rec, ctx.states[:review].id,
+               actor: ctx.user,
+               tenant: ctx.ws
+             )
 
     {:ok, rec} =
-      Objects.update_record_fields(rec, %{"title" => "T", "pr" => "https://github.com/x/y/pull/1"},
+      Objects.update_record_fields(
+        rec,
+        %{"title" => "T", "pr" => "https://github.com/x/y/pull/1"},
         actor: ctx.user,
         tenant: ctx.ws
       )
@@ -172,8 +195,12 @@ defmodule Concept.Objects.TransitionEngineTest do
       Concept.Accounts.Membership.create(ctx.ws, other.id, :member, actor: %{system?: true})
 
     rec = new_record(ctx)
-    {:ok, rec} = Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
-    {:ok, rec} = Objects.transition_record(rec, ctx.states[:review].id, actor: ctx.user, tenant: ctx.ws)
+
+    {:ok, rec} =
+      Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
+
+    {:ok, rec} =
+      Objects.transition_record(rec, ctx.states[:review].id, actor: ctx.user, tenant: ctx.ws)
 
     # Non-creator blocked
     assert {:error, _} =
@@ -193,7 +220,9 @@ defmodule Concept.Objects.TransitionEngineTest do
     ])
 
     rec = new_record(ctx)
-    {:ok, rec} = Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
+
+    {:ok, rec} =
+      Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
 
     assert {:error, %Ash.Error.Invalid{errors: errors}} =
              Objects.transition_record(rec, ctx.states[:done].id, actor: ctx.user, tenant: ctx.ws)

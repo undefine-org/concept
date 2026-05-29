@@ -35,6 +35,7 @@ defmodule Concept.Objects.RecordLink do
       accept [:from_record_id, :to_record_id, :field_def_id]
 
       change Concept.Objects.Changes.SetWorkspaceFromTenant
+      change Concept.Objects.RecordLink.Changes.ValidateSameWorkspace
     end
 
     destroy :destroy do

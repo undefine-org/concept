@@ -22,7 +22,11 @@ defmodule Concept.Objects.SchemaLoader do
 
   @doc "Load one bundle for a specific object type id (nil if not found)."
   def bundle_for(object_type_id, workspace_id) do
-    case Ash.get(ObjectType, object_type_id, tenant: workspace_id, actor: @system, authorize?: false) do
+    case Ash.get(ObjectType, object_type_id,
+           tenant: workspace_id,
+           actor: @system,
+           authorize?: false
+         ) do
       {:ok, type} -> bundle(type, workspace_id)
       _ -> nil
     end

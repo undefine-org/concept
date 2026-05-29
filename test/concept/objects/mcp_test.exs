@@ -48,7 +48,12 @@ defmodule Concept.Objects.McpTest do
     context = %{actor: ctx.user, tenant: ctx.ws, context: %{}}
 
     {:ok, text} =
-      Mcp.call("create_task", %{"input" => %{"fields" => %{"title" => "From MCP"}}}, context, ctx.ws)
+      Mcp.call(
+        "create_task",
+        %{"input" => %{"fields" => %{"title" => "From MCP"}}},
+        context,
+        ctx.ws
+      )
 
     assert is_binary(text)
 

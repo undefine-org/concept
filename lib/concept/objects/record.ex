@@ -193,7 +193,6 @@ defmodule Concept.Objects.Record do
       source_attribute: :state_id,
       destination_attribute: :id
 
-    has_many :outgoing_links, Concept.Objects.RecordLink,
-      destination_attribute: :from_record_id
+    has_many :outgoing_links, Concept.Objects.RecordLink, destination_attribute: :from_record_id
   end
 end

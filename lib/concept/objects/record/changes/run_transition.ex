@@ -46,12 +46,14 @@ defmodule Concept.Objects.Record.Changes.RunTransition do
     end
   end
 
-  # No current state: allow entering an initial state only.
-  defp resolve(%{state_id: nil}, to_state, _tenant) do
-    if to_state.is_initial? do
+  # No current state: allow entering an initial state of the record's OWN
+  # workflow only (else a record could jump into another workflow's initial
+  # state in the same tenant — a graph escape).
+  defp resolve(%{state_id: nil} = record, to_state, tenant) do
+    if to_state.is_initial? and to_state.workflow_id == workflow_id_for(record, tenant) do
       {:ok, %Transition{guards: []}}
     else
-      {:error, "record has no state; can only enter an initial state"}
+      {:error, "record has no state; can only enter its workflow's initial state"}
     end
   end
 

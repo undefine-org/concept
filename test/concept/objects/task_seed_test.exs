@@ -30,7 +30,9 @@ defmodule Concept.Objects.TaskSeedTest do
       assert task.is_system?
       assert is_binary(task.workflow_id)
 
-      {:ok, states} = Objects.list_workflow_states(task.workflow_id, actor: ctx.user, tenant: ctx.ws)
+      {:ok, states} =
+        Objects.list_workflow_states(task.workflow_id, actor: ctx.user, tenant: ctx.ws)
+
       cats = states |> Enum.map(& &1.category) |> Enum.sort()
       assert cats == Enum.sort([:backlog, :todo, :doing, :review, :done, :canceled])
       assert Enum.find(states, & &1.is_initial?).category == :backlog
@@ -56,7 +58,10 @@ defmodule Concept.Objects.TaskSeedTest do
     setup ctx do
       {:ok, types} = Objects.list_object_types(actor: ctx.user, tenant: ctx.ws)
       task = Enum.find(types, &(&1.key == "task"))
-      {:ok, states} = Objects.list_workflow_states(task.workflow_id, actor: ctx.user, tenant: ctx.ws)
+
+      {:ok, states} =
+        Objects.list_workflow_states(task.workflow_id, actor: ctx.user, tenant: ctx.ws)
+
       by_cat = Map.new(states, &{&1.category, &1})
       {:ok, fields} = Objects.list_field_defs(task.id, actor: ctx.user, tenant: ctx.ws)
       blocked_by = Enum.find(fields, &(&1.key == "blocked_by"))
@@ -126,7 +131,8 @@ defmodule Concept.Objects.TaskSeedTest do
       refute Enum.any?(ready, &(&1.id == r.id))
     end
 
-    test "a todo record blocked by an unfinished task is not ready; becomes ready when blocker done", ctx do
+    test "a todo record blocked by an unfinished task is not ready; becomes ready when blocker done",
+         ctx do
       blocker = mk(ctx, "blocker") |> then(&put_state(ctx, &1, :todo))
       blocked = mk(ctx, "blocked") |> then(&put_state(ctx, &1, :todo))
 

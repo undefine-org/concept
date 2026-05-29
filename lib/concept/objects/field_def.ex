@@ -35,7 +35,17 @@ defmodule Concept.Objects.FieldDef do
 
     create :create do
       description "Add a field to an object type."
-      accept [:object_type_id, :name, :key, :field_type, :required?, :config, :is_title?, :position]
+
+      accept [
+        :object_type_id,
+        :name,
+        :key,
+        :field_type,
+        :required?,
+        :config,
+        :is_title?,
+        :position
+      ]
 
       change Concept.Objects.Changes.SetWorkspaceFromTenant
       change Concept.Objects.Changes.SlugifyKey

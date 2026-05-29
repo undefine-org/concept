@@ -39,8 +39,14 @@ defmodule Concept.Objects.Record.Changes.ValidateFieldsForType do
     unknown = fields |> Map.keys() |> Enum.reject(&MapSet.member?(known_keys, &1))
 
     case unknown do
-      [] -> cs
-      keys -> Ash.Changeset.add_error(cs, field: :fields, message: "unknown field(s): #{Enum.join(keys, ", ")}")
+      [] ->
+        cs
+
+      keys ->
+        Ash.Changeset.add_error(cs,
+          field: :fields,
+          message: "unknown field(s): #{Enum.join(keys, ", ")}"
+        )
     end
   end
 
@@ -58,8 +64,11 @@ defmodule Concept.Objects.Record.Changes.ValidateFieldsForType do
 
         true ->
           case mod.validate(value, def.config || %{}) do
-            :ok -> acc
-            {:error, msg} -> Ash.Changeset.add_error(acc, field: :fields, message: "#{def.name}: #{msg}")
+            :ok ->
+              acc
+
+            {:error, msg} ->
+              Ash.Changeset.add_error(acc, field: :fields, message: "#{def.name}: #{msg}")
           end
       end
     end)

@@ -15,7 +15,12 @@ defmodule Concept.Objects.GuardsTest do
     test "all built-in guards registered" do
       kinds = Guards.all_kinds()
 
-      for k <- [:requires_approval, :requires_proof, :requires_checklist_complete, :requires_fields] do
+      for k <- [
+            :requires_approval,
+            :requires_proof,
+            :requires_checklist_complete,
+            :requires_fields
+          ] do
         assert k in kinds
       end
     end
@@ -42,7 +47,9 @@ defmodule Concept.Objects.GuardsTest do
     test "creator may approve, others may not" do
       record = %{created_by_id: "u1", fields: %{}}
       assert RequiresApproval.check(record, %{"by" => "creator"}, %{actor: %{id: "u1"}}) == :ok
-      assert {:error, _} = RequiresApproval.check(record, %{"by" => "creator"}, %{actor: %{id: "u2"}})
+
+      assert {:error, _} =
+               RequiresApproval.check(record, %{"by" => "creator"}, %{actor: %{id: "u2"}})
     end
 
     test "anyone policy allows any actor" do
@@ -57,9 +64,16 @@ defmodule Concept.Objects.GuardsTest do
 
   describe "RequiresProof" do
     test "present field passes; missing fails" do
-      assert RequiresProof.check(%{fields: %{"pr_url" => "http://x"}}, %{"field" => "pr_url"}, %{}) == :ok
+      assert RequiresProof.check(
+               %{fields: %{"pr_url" => "http://x"}},
+               %{"field" => "pr_url"},
+               %{}
+             ) == :ok
+
       assert {:error, _} = RequiresProof.check(%{fields: %{}}, %{"field" => "pr_url"}, %{})
-      assert {:error, _} = RequiresProof.check(%{fields: %{"pr_url" => ""}}, %{"field" => "pr_url"}, %{})
+
+      assert {:error, _} =
+               RequiresProof.check(%{fields: %{"pr_url" => ""}}, %{"field" => "pr_url"}, %{})
     end
   end
 

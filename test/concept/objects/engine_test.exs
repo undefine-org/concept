@@ -89,7 +89,9 @@ defmodule Concept.Objects.EngineTest do
 
     test "valid fields create a record and derive title", ctx do
       {:ok, rec} =
-        Objects.create_record(ctx.type.id, %{fields: %{"name" => "Acme", "arr" => 1000, "tier" => "pro", "owner" => "me"}},
+        Objects.create_record(
+          ctx.type.id,
+          %{fields: %{"name" => "Acme", "arr" => 1000, "tier" => "pro", "owner" => "me"}},
           actor: ctx.user,
           tenant: ctx.ws
         )
@@ -111,7 +113,9 @@ defmodule Concept.Objects.EngineTest do
 
     test "select outside options is rejected", ctx do
       assert {:error, err} =
-               Objects.create_record(ctx.type.id, %{fields: %{"tier" => "enterprise", "owner" => "me"}},
+               Objects.create_record(
+                 ctx.type.id,
+                 %{fields: %{"tier" => "enterprise", "owner" => "me"}},
                  actor: ctx.user,
                  tenant: ctx.ws
                )
@@ -121,7 +125,10 @@ defmodule Concept.Objects.EngineTest do
 
     test "missing required field is rejected", ctx do
       assert {:error, err} =
-               Objects.create_record(ctx.type.id, %{fields: %{"name" => "Acme"}}, actor: ctx.user, tenant: ctx.ws)
+               Objects.create_record(ctx.type.id, %{fields: %{"name" => "Acme"}},
+                 actor: ctx.user,
+                 tenant: ctx.ws
+               )
 
       assert error_on_fields?(err)
     end
@@ -144,7 +151,9 @@ defmodule Concept.Objects.EngineTest do
         )
 
       assert {:error, _} =
-               Objects.update_record_fields(rec, %{"arr" => "nope", "owner" => "me", "name" => "Acme"},
+               Objects.update_record_fields(
+                 rec,
+                 %{"arr" => "nope", "owner" => "me", "name" => "Acme"},
                  actor: ctx.user,
                  tenant: ctx.ws
                )
@@ -155,8 +164,18 @@ defmodule Concept.Objects.EngineTest do
     test "link two records and list outgoing", ctx do
       type = new_type(ctx)
       {:ok, _} = add_field(ctx, type, "Name", :text, %{is_title?: true})
-      {:ok, a} = Objects.create_record(type.id, %{fields: %{"name" => "A"}}, actor: ctx.user, tenant: ctx.ws)
-      {:ok, b} = Objects.create_record(type.id, %{fields: %{"name" => "B"}}, actor: ctx.user, tenant: ctx.ws)
+
+      {:ok, a} =
+        Objects.create_record(type.id, %{fields: %{"name" => "A"}},
+          actor: ctx.user,
+          tenant: ctx.ws
+        )
+
+      {:ok, b} =
+        Objects.create_record(type.id, %{fields: %{"name" => "B"}},
+          actor: ctx.user,
+          tenant: ctx.ws
+        )
 
       {:ok, _link} =
         Objects.link_records(a.id, b.id, nil, actor: ctx.user, tenant: ctx.ws)
@@ -169,12 +188,45 @@ defmodule Concept.Objects.EngineTest do
     test "assign a record to the actor and read mine", ctx do
       type = new_type(ctx)
       {:ok, _} = add_field(ctx, type, "Name", :text, %{is_title?: true})
-      {:ok, rec} = Objects.create_record(type.id, %{fields: %{"name" => "A"}}, actor: ctx.user, tenant: ctx.ws)
+
+      {:ok, rec} =
+        Objects.create_record(type.id, %{fields: %{"name" => "A"}},
+          actor: ctx.user,
+          tenant: ctx.ws
+        )
+
       {:ok, rec} = Objects.assign_record(rec, ctx.user.id, actor: ctx.user, tenant: ctx.ws)
       assert rec.assignee_id == ctx.user.id
 
       {:ok, mine} = Objects.my_records(actor: ctx.user, tenant: ctx.ws)
       assert Enum.any?(mine, &(&1.id == rec.id))
+    end
+
+    test "linking to a record in another workspace is rejected", ctx do
+      type = new_type(ctx)
+      {:ok, _} = add_field(ctx, type, "Name", :text, %{is_title?: true})
+      {:ok, a} = Objects.create_record(type.id, %{fields: %{"name" => "A"}}, actor: ctx.user, tenant: ctx.ws)
+
+      # a foreign record in another user's auto-seeded workspace
+      {:ok, other_user} =
+        Concept.Accounts.User
+        |> Ash.Changeset.for_create(:register_with_password, %{
+          email: "foreign_#{System.unique_integer([:positive])}@example.com",
+          password: "passw0rd!",
+          password_confirmation: "passw0rd!"
+        })
+        |> Ash.create(authorize?: false)
+
+      {:ok, [ws2]} = Concept.Accounts.Workspace.for_user(other_user.id, actor: other_user)
+      {:ok, types2} = Objects.list_object_types(actor: other_user, tenant: ws2.id)
+      task2 = Enum.find(types2, &(&1.key == "task"))
+
+      {:ok, foreign} =
+        Objects.create_record(task2.id, %{fields: %{"title" => "Foreign"}}, actor: other_user, tenant: ws2.id)
+
+      # attempt to link a (ws) -> foreign (ws2) under tenant ws → rejected
+      assert {:error, _} =
+               Objects.link_records(a.id, foreign.id, nil, actor: ctx.user, tenant: ctx.ws)
     end
   end
 

@@ -15,8 +15,11 @@ defmodule Concept.Objects.Changes.SetWorkspaceFromTenant do
 
       true ->
         case Ash.Changeset.get_argument(changeset, :workspace_id) do
-          id when is_binary(id) -> Ash.Changeset.force_change_attribute(changeset, :workspace_id, id)
-          _ -> changeset
+          id when is_binary(id) ->
+            Ash.Changeset.force_change_attribute(changeset, :workspace_id, id)
+
+          _ ->
+            changeset
         end
     end
   end

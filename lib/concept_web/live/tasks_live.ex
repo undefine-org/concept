@@ -46,7 +46,10 @@ defmodule ConceptWeb.TasksLive do
       %{workspace: ws, board: %{type: type}} = socket.assigns
       user = socket.assigns.current_user
 
-      case Objects.create_record(type.id, %{fields: %{"title" => title}}, actor: user, tenant: ws.id) do
+      case Objects.create_record(type.id, %{fields: %{"title" => title}},
+             actor: user,
+             tenant: ws.id
+           ) do
         {:ok, _record} ->
           {:noreply, socket |> assign(:new_title, "") |> load_board()}
 
@@ -93,6 +96,9 @@ defmodule ConceptWeb.TasksLive do
 
       {:error, :no_task_type} ->
         assign(socket, board: nil, moves: %{}, board_error: "No Task type in this workspace yet.")
+
+      {:error, _other} ->
+        assign(socket, board: nil, moves: %{}, board_error: "Could not load the task board.")
     end
   end
 

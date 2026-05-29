@@ -32,8 +32,35 @@ defmodule Concept.Objects.Record.Changes.AssignDefaults do
         cs
         |> Ash.Changeset.force_change_attribute(:fields, merged)
         |> maybe_set_title(defs, merged)
+        |> maybe_set_initial_state(type_id, tenant)
       end
     end)
+  end
+
+  # New records enter their type's workflow at the initial state, so they are
+  # immediately actionable (movable on the board) rather than stranded with a
+  # nil state. No-op when state_id is supplied or the type has no workflow.
+  defp maybe_set_initial_state(cs, type_id, tenant) do
+    if Ash.Changeset.get_attribute(cs, :state_id) do
+      cs
+    else
+      with {:ok, %{workflow_id: wid}} when is_binary(wid) <-
+             Ash.get(Concept.Objects.ObjectType, type_id, tenant: tenant, authorize?: false),
+           %{id: state_id} <- initial_state(wid, tenant) do
+        Ash.Changeset.force_change_attribute(cs, :state_id, state_id)
+      else
+        _ -> cs
+      end
+    end
+  end
+
+  defp initial_state(workflow_id, tenant) do
+    Concept.Objects.WorkflowState
+    |> Ash.Query.filter(workflow_id == ^workflow_id and is_initial? == true)
+    |> Ash.Query.limit(1)
+    |> Ash.Query.set_tenant(tenant)
+    |> Ash.read!(authorize?: false)
+    |> List.first()
   end
 
   defp maybe_set_title(cs, defs, fields) do
@@ -45,7 +72,10 @@ defmodule Concept.Objects.Record.Changes.AssignDefaults do
       case Enum.find(defs, & &1.is_title?) do
         %{key: key} ->
           title = fields[key]
-          if is_binary(title), do: Ash.Changeset.force_change_attribute(cs, :title, title), else: cs
+
+          if is_binary(title),
+            do: Ash.Changeset.force_change_attribute(cs, :title, title),
+            else: cs
 
         _ ->
           cs
