@@ -1,17 +1,16 @@
 defmodule Concept.Pages.BlockTypes.Quote do
-  @behaviour Concept.Pages.BlockType
-  @impl true
+  use Concept.Pages.BlockType.Text
+
+  @impl Concept.Pages.BlockType
   def type, do: :quote
-  @impl true
+  @impl Concept.Pages.BlockType
   def default_content, do: Concept.Lexical.empty_quote()
-  @impl true
-  def default_props, do: %{}
-  @impl true
+  @impl Concept.Pages.BlockType
   def validate_props(p) when p == %{}, do: :ok
   def validate_props(_), do: {:error, "no props"}
-  @impl true
+  @impl Concept.Pages.BlockType
   def lexical_node, do: "quote"
-  @impl true
+  @impl Concept.Pages.BlockType
   def slash_menu,
     do: %{
       label: "Quote",
@@ -20,6 +19,6 @@ defmodule Concept.Pages.BlockTypes.Quote do
       group: :advanced
     }
 
-  @impl true
-  def container?, do: false
+  @impl Concept.Pages.BlockType
+  def placeholder, do: "Quote"
 end

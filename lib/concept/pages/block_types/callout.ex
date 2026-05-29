@@ -1,21 +1,22 @@
 defmodule Concept.Pages.BlockTypes.Callout do
-  @behaviour Concept.Pages.BlockType
+  use Concept.Pages.BlockType.Text
+
   @colors ~w(default red orange yellow green blue purple pink gray)
-  @impl true
+  @impl Concept.Pages.BlockType
   def type, do: :callout
-  @impl true
+  @impl Concept.Pages.BlockType
   def default_content, do: Concept.Lexical.empty_paragraph()
-  @impl true
+  @impl Concept.Pages.BlockType
   def default_props, do: %{"emoji" => "💡", "color" => "default"}
-  @impl true
+  @impl Concept.Pages.BlockType
   def validate_props(%{"emoji" => e, "color" => c}) when is_binary(e) and c in @colors, do: :ok
 
   def validate_props(_),
     do: {:error, "expects emoji string + color one of #{Enum.join(@colors, ",")}"}
 
-  @impl true
+  @impl Concept.Pages.BlockType
   def lexical_node, do: "paragraph"
-  @impl true
+  @impl Concept.Pages.BlockType
   def slash_menu,
     do: %{
       label: "Callout",
@@ -24,8 +25,8 @@ defmodule Concept.Pages.BlockTypes.Callout do
       group: :advanced
     }
 
-  @impl true
-  def container?, do: false
+  @impl Concept.Pages.BlockType
+  def placeholder, do: "Callout"
 
   def colors, do: @colors
 end

@@ -1,17 +1,16 @@
 defmodule Concept.Pages.BlockTypes.NumberedListItem do
-  @behaviour Concept.Pages.BlockType
-  @impl true
+  use Concept.Pages.BlockType.Text
+
+  @impl Concept.Pages.BlockType
   def type, do: :numbered_list_item
-  @impl true
+  @impl Concept.Pages.BlockType
   def default_content, do: Concept.Lexical.empty_paragraph()
-  @impl true
-  def default_props, do: %{}
-  @impl true
+  @impl Concept.Pages.BlockType
   def validate_props(p) when p == %{}, do: :ok
   def validate_props(_), do: {:error, "no props"}
-  @impl true
+  @impl Concept.Pages.BlockType
   def lexical_node, do: "paragraph"
-  @impl true
+  @impl Concept.Pages.BlockType
   def slash_menu,
     do: %{
       label: "Numbered list",
@@ -20,6 +19,6 @@ defmodule Concept.Pages.BlockTypes.NumberedListItem do
       group: :list
     }
 
-  @impl true
-  def container?, do: false
+  @impl Concept.Pages.BlockType
+  def placeholder, do: "List"
 end

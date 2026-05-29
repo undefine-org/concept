@@ -1,12 +1,17 @@
 defmodule ConceptWeb.BlockRender do
   @moduledoc """
-  Function component that dispatches per block type to its renderer.
+  Pure dispatcher: routes each block to a render path by its type module's
+  `render_kind/0` — the single source of truth declared on the block type.
 
-  * text / composite paths render in-module (legacy paths, not yet migrated).
-  * Interactive types (`live_component?/0 == true`) render via
-    `<.live_component module={mod} ...>`.
-  * All other types delegate to `mod.render(assigns)` where `mod` implements
-    `Concept.Pages.BlockType`.
+  | `render_kind/0` | Path |
+  |---|---|
+  | `:text` | shared `<ora-block>` Lexical host; `placeholder/0` + `editor_class/0` from the module |
+  | `:static` | `mod.render/1` |
+  | `:interactive` | `<.live_component module={mod} ...>` |
+  | `:composite` | shared grid host selected by `mod.composite_layout/0` |
+
+  No hardcoded type lists, no string special-casing. Adding a block type never
+  requires editing this module — see `lib/concept/pages/block_types/AGENTS.md`.
   """
   use Phoenix.Component
 
@@ -14,60 +19,51 @@ defmodule ConceptWeb.BlockRender do
 
   alias Concept.Pages.BlockTypes
 
-  @text_types ~w(
-    paragraph heading_1 heading_2 heading_3 quote
-    callout to_do bulleted_list_item numbered_list_item code toggle
-    table_cell column
-  )
-
   attr :block, :map, required: true
   attr :locked_by, :map, default: nil
   attr :locked_blocks, :map, default: %{}
   attr :current_user, :map, default: nil
 
   def block(assigns) do
-    assigns = assign(assigns, :type, to_string(assigns.block.type))
+    mod = BlockTypes.lookup(assigns.block.type)
+    assigns = assign(assigns, mod: mod, type: to_string(assigns.block.type))
 
-    cond do
-      assigns.type == "table" ->
-        composite_table(assigns)
-
-      assigns.type == "columns" ->
-        composite_columns(assigns)
-
-      assigns.type in @text_types ->
-        text_block(assigns)
-
-      true ->
-        custom_block(assigns)
+    case mod.render_kind() do
+      :text -> text_block(assigns)
+      :composite -> composite_block(assigns)
+      :interactive -> interactive_block(assigns)
+      :static -> static_block(assigns)
     end
   end
 
-  defp custom_block(assigns) do
-    mod = BlockTypes.lookup(assigns.block.type)
-    assigns = assign(assigns, :mod, mod)
+  defp interactive_block(assigns) do
+    ~H"""
+    <div id={"block-" <> @block.id} class="block-anchor scroll-mt-20">
+      <.live_component
+        module={@mod}
+        id={"ai-" <> @block.id}
+        block={@block}
+        current_user={@current_user}
+      />
+    </div>
+    """
+  end
 
-    if function_exported?(mod, :live_component?, 0) and mod.live_component?() do
-      ~H"""
-      <div id={"block-" <> @block.id} class="block-anchor scroll-mt-20">
-        <.live_component
-          module={@mod}
-          id={"ai-" <> @block.id}
-          block={@block}
-          current_user={@current_user}
-        />
-      </div>
-      """
-    else
-      ~H"""
-      <div id={"block-" <> @block.id} class="block-anchor scroll-mt-20">
-        {@mod.render(assigns)}
-      </div>
-      """
-    end
+  defp static_block(assigns) do
+    ~H"""
+    <div id={"block-" <> @block.id} class="block-anchor scroll-mt-20">
+      {@mod.render(assigns)}
+    </div>
+    """
   end
 
   defp text_block(assigns) do
+    assigns =
+      assign(assigns,
+        placeholder: assigns.mod.placeholder(),
+        editor_class: assigns.mod.editor_class()
+      )
+
     ~H"""
     <div id={"block-" <> @block.id} class="block-anchor scroll-mt-20">
       <div
@@ -84,16 +80,23 @@ defmodule ConceptWeb.BlockRender do
           block-id={@block.id}
           block-type={@type}
           initial-content={Jason.encode!(@block.content)}
-          placeholder={placeholder_for(@block.type)}
+          placeholder={@placeholder}
           class="ora-block-host"
         >
-          <div data-editor class={ora_block_class(@type)}>
+          <div data-editor class={@editor_class}>
             {raw(Concept.Lexical.to_html(@block.content))}
           </div>
         </ora-block>
       </div>
     </div>
     """
+  end
+
+  defp composite_block(assigns) do
+    case assigns.mod.composite_layout() do
+      :table -> composite_table(assigns)
+      :columns -> composite_columns(assigns)
+    end
   end
 
   defp composite_table(assigns) do
@@ -173,22 +176,4 @@ defmodule ConceptWeb.BlockRender do
   defp composite_children(%{children: nil}), do: []
   defp composite_children(%{children: children}) when is_list(children), do: children
   defp composite_children(_), do: []
-
-  defp ora_block_class("heading_1"), do: "ora-block h1"
-  defp ora_block_class("heading_2"), do: "ora-block h2"
-  defp ora_block_class("heading_3"), do: "ora-block h3"
-  defp ora_block_class(_), do: "ora-block"
-
-  defp placeholder_for(:paragraph), do: "Type something…"
-  defp placeholder_for(:heading_1), do: "Heading 1"
-  defp placeholder_for(:heading_2), do: "Heading 2"
-  defp placeholder_for(:heading_3), do: "Heading 3"
-  defp placeholder_for(:quote), do: "Quote"
-  defp placeholder_for(:callout), do: "Callout"
-  defp placeholder_for(:to_do), do: "To-do"
-  defp placeholder_for(:bulleted_list_item), do: "List"
-  defp placeholder_for(:numbered_list_item), do: "List"
-  defp placeholder_for(:code), do: "Code"
-  defp placeholder_for(:toggle), do: "Toggle"
-  defp placeholder_for(_), do: ""
 end

@@ -1,27 +1,14 @@
 import { LitElement, html, css } from "lit";
 
+// Group display order. Items whose group is absent here are appended after,
+// in first-seen order, so a new registry group never silently vanishes.
 const GROUP_ORDER = ["ai", "basic", "list", "media", "advanced"];
 
-const FALLBACK_ITEMS = [
-  { type: "ai_answer", label: "AI answer", icon: "✨", group: "ai" },
-  { type: "paragraph", label: "Text", icon: "T", group: "basic" },
-  { type: "heading_1", label: "Heading 1", icon: "H1", group: "basic" },
-  { type: "heading_2", label: "Heading 2", icon: "H2", group: "basic" },
-  { type: "heading_3", label: "Heading 3", icon: "H3", group: "basic" },
-  { type: "to_do", label: "To-do list", icon: "☐", group: "list" },
-  { type: "bulleted_list_item", label: "Bulleted list", icon: "•", group: "list" },
-  { type: "numbered_list_item", label: "Numbered list", icon: "1.", group: "list" },
-  { type: "quote", label: "Quote", icon: '"', group: "basic" },
-  { type: "code", label: "Code", icon: "</>", group: "advanced" },
-  { type: "callout", label: "Callout", icon: "!", group: "advanced" },
-  { type: "toggle", label: "Toggle", icon: "▶", group: "advanced" },
-  { type: "divider", label: "Divider", icon: "—", group: "basic" },
-  { type: "image", label: "Image", icon: "🖼", group: "media" },
-  { type: "bookmark", label: "Bookmark", icon: "🔗", group: "media" },
-  { type: "equation", label: "Equation", icon: "∑", group: "media" },
-  { type: "table", label: "Table", icon: "▦", group: "advanced" },
-  { type: "columns", label: "Columns", icon: "▐▌", group: "advanced" },
-];
+// Source of truth is the Elixir registry (Concept.Pages.BlockTypes), fed in
+// via the `items` attribute (see page_editor_live.ex). The empty fallback is
+// intentional: if items are missing/invalid we show nothing rather than a
+// hand-maintained copy that drifts from the server.
+const FALLBACK_ITEMS = [];
 
 export class OraSlashMenu extends LitElement {
   static styles = css`
@@ -172,12 +159,18 @@ export class OraSlashMenu extends LitElement {
         .filter(Boolean)
         .map((w) => w[0])
         .join("");
+      // Keywords come from the registry (each type's slash_menu.keywords) and
+      // are the primary affordance for fuzzy intent matching (e.g. /task → To-do).
+      const keywordHit = (i.keywords || []).some((k) =>
+        k.toLowerCase().includes(f),
+      );
       return (
         labelNorm.includes(f) ||
         typeNorm.includes(f) ||
         labelKey.includes(f) ||
         labelInitials.includes(f) ||
-        typeInitials.includes(f)
+        typeInitials.includes(f) ||
+        keywordHit
       );
     });
   }
@@ -210,6 +203,13 @@ export class OraSlashMenu extends LitElement {
       groups[item.group].push(item);
     }
 
+    // Render known groups in GROUP_ORDER, then any unknown groups after, so a
+    // newly added registry group is always visible without editing this file.
+    const orderedGroups = [
+      ...GROUP_ORDER,
+      ...Object.keys(groups).filter((g) => !GROUP_ORDER.includes(g)),
+    ];
+
     let idx = 0;
     return html`
       <input
@@ -218,7 +218,7 @@ export class OraSlashMenu extends LitElement {
         .value=${this._filter}
         @input=${this._onInput}
       />
-      ${GROUP_ORDER.map((group) => {
+      ${orderedGroups.map((group) => {
         const groupItems = groups[group];
         if (!groupItems || groupItems.length === 0) return null;
         return html`

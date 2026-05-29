@@ -98,7 +98,7 @@ defmodule ConceptWeb.PageEditorLive do
           phx-hook="SlashMenu"
           phx-update="ignore"
         >
-          <ora-slash-menu />
+          <ora-slash-menu items={Jason.encode!(Concept.Pages.BlockTypes.slash_menu_items())} />
         </div>
         <ConceptWeb.CompositePicker.picker id="composite-picker" />
       </div>

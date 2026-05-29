@@ -5,13 +5,13 @@ implementations. Each block type is a single module that owns its full
 vertical slice: schema, validation, render, slash-menu entry, and (when
 interactive) its event handlers.
 
-This document covers the three flavors you'll write in practice:
+This document covers the four flavors you'll write in practice:
 
 1. **Static block** — non-interactive (divider, image, equation, bookmark).
-2. **Text block** — Lexical-edited (paragraph, heading, to-do). *Legacy
-   path; not yet macro-fied. See "Text blocks today".*
-3. **Interactive block** — runs as a `Phoenix.LiveComponent` with
+2. **Interactive block** — runs as a `Phoenix.LiveComponent` with
    server-side event handlers (AI Answer).
+3. **Text block** — Lexical-edited (paragraph, heading, to-do, …).
+4. **Composite block** — container laid out as a grid (table, columns).
 
 The wiring guarantee: **if it compiles, it works.** You cannot forget to
 register a JS hook, define a LiveView event handler, or wire a `phx-target` —
@@ -264,17 +264,48 @@ implementation.
 
 ---
 
-## 3. Text blocks today (legacy path)
+## 3. Text block (Lexical-edited)
 
 Text blocks (paragraph, heading_1/2/3, quote, callout, to_do,
 bulleted_list_item, numbered_list_item, code, toggle, table_cell, column)
-are still handled by `text_block/1` inside
-`lib/concept_web/components/block_render.ex`. Their `BlockType` module only
-declares metadata (`type`, `lexical_node`, `slash_menu`, validation).
-Conversion to `Static` is a follow-up.
+`use Concept.Pages.BlockType.Text`. They render through the shared
+`<ora-block>` Lexical editor host owned by `BlockRender`; the type module
+contributes only its presentation metadata.
 
-If you're adding a new text-shaped block today, follow `paragraph.ex` as
-the template and add the type to the dispatcher's `@text_types` list.
+```elixir
+defmodule Concept.Pages.BlockTypes.Heading1 do
+  use Concept.Pages.BlockType.Text
+
+  @impl Concept.Pages.BlockType
+  def type, do: :heading_1
+  @impl Concept.Pages.BlockType
+  def default_content, do: Concept.Lexical.empty_heading(1)
+  @impl Concept.Pages.BlockType
+  def lexical_node, do: "heading"
+  @impl Concept.Pages.BlockType
+  def slash_menu,
+    do: %{label: "Heading 1", icon: "H1", keywords: ~w(heading h1 title), group: :basic}
+
+  # Presentation metadata — was previously stranded in block_render.ex.
+  @impl Concept.Pages.BlockType
+  def placeholder, do: "Heading 1"
+  @impl Concept.Pages.BlockType
+  def editor_class, do: "ora-block h1"
+end
+```
+
+`placeholder/0` defaults to `""` and `editor_class/0` to `"ora-block"`, so
+plain types (paragraph aside) override only what differs. **No edit to
+`block_render.ex` is needed** — the dispatcher routes every `render_kind() ==
+:text` module through the shared host automatically.
+
+## 4. Composite block (table / columns)
+
+Container types `use Concept.Pages.BlockType.Composite` and declare
+`composite_layout/0` (`:table` or `:columns`). The shared grid host in
+`BlockRender` lays out the children, recursing through the normal dispatcher
+for each cell/column. Selection is by `composite_layout/0`, never by matching
+the type string.
 
 ---
 
@@ -311,7 +342,9 @@ Two assertions to add per block type:
 | `lib/concept/pages/block_type/static.ex` | `use`-able for non-interactive types. |
 | `lib/concept/pages/block_type/interactive.ex` | `use`-able for LC-backed types. |
 | `lib/concept/pages/block_types.ex` | Registry; `lookup/1`, `slash_menu_items/0`. |
-| `lib/concept_web/components/block_render.ex` | Dispatcher. Should not need editing. |
+| `lib/concept_web/components/block_render.ex` | Pure dispatcher (routes on `render_kind/0`). Never edited to add a type. |
+| `lib/concept/pages/block_type/text.ex` | `use`-able for Lexical-edited text types. |
+| `lib/concept/pages/block_type/composite.ex` | `use`-able for container types (table/columns). |
 | `assets/js/hooks/ora_block.js` | Generic JS hook. Should not need editing. |
 | `config/config.exs` `:concept, :block_types` | The single registry list. |
 

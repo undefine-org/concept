@@ -54,7 +54,7 @@ defmodule Concept.Pages.BlockType.Interactive do
     invoke the declared Ash code interface with the named arguments lifted
     from the event payload, `actor: socket.assigns.current_user`, and
     `tenant: block.workspace_id`.
-  * `live_component?/0` returns `true` so the dispatcher routes through
+  * `render_kind/0` returns `:interactive` so the dispatcher routes through
     `<.live_component ...>`.
 
   ## Contract on the consuming module
@@ -177,7 +177,7 @@ defmodule Concept.Pages.BlockType.Interactive do
       @__block_type_mcp_except__ unquote(mcp_except)
 
       @impl Concept.Pages.BlockType
-      def live_component?, do: true
+      def render_kind, do: :interactive
 
       @impl Concept.Pages.BlockType
       def default_content, do: %{}

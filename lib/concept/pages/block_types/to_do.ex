@@ -1,17 +1,18 @@
 defmodule Concept.Pages.BlockTypes.ToDo do
-  @behaviour Concept.Pages.BlockType
-  @impl true
+  use Concept.Pages.BlockType.Text
+
+  @impl Concept.Pages.BlockType
   def type, do: :to_do
-  @impl true
+  @impl Concept.Pages.BlockType
   def default_content, do: Concept.Lexical.empty_paragraph()
-  @impl true
+  @impl Concept.Pages.BlockType
   def default_props, do: %{"checked" => false}
-  @impl true
+  @impl Concept.Pages.BlockType
   def validate_props(%{"checked" => v}) when is_boolean(v), do: :ok
   def validate_props(_), do: {:error, "checked must be boolean"}
-  @impl true
+  @impl Concept.Pages.BlockType
   def lexical_node, do: "paragraph"
-  @impl true
+  @impl Concept.Pages.BlockType
   def slash_menu,
     do: %{
       label: "To-do",
@@ -20,6 +21,6 @@ defmodule Concept.Pages.BlockTypes.ToDo do
       group: :list
     }
 
-  @impl true
-  def container?, do: false
+  @impl Concept.Pages.BlockType
+  def placeholder, do: "To-do"
 end

@@ -13,11 +13,15 @@ pattern.
 
 TL;DR:
 
-| Flavor | `use` | Provides `render_body/1`? |
+| Flavor | `use` | What you provide |
 |---|---|---|
-| Static (`divider`, `image`, `bookmark`, `equation`) | `Concept.Pages.BlockType.Static` | No — provide `render/1` |
-| Interactive (`ai_answer`) | `Concept.Pages.BlockType.Interactive, ash_actions: [...]` | Yes — wrapper is auto-generated |
-| Text (paragraph, headings, lists, callout, …) | bare `@behaviour` (legacy; covered by `text_block/1` in `BlockRender`) | n/a |
+| Text (paragraph, headings, lists, callout, code, toggle, …) | `Concept.Pages.BlockType.Text` | `placeholder/0` + `editor_class/0` (rendered through the shared `<ora-block>` host) |
+| Static (`divider`, `image`, `bookmark`, `equation`) | `Concept.Pages.BlockType.Static` | `render/1` (compile-time enforced) |
+| Interactive (`ai_answer`) | `Concept.Pages.BlockType.Interactive, ash_actions: [...]` | `render_body/1`; wrapper + handlers auto-generated |
+| Composite (`table`, `columns`) | `Concept.Pages.BlockType.Composite` | `composite_layout/0` (`:table` \| `:columns`) |
+
+The dispatcher routes purely on `render_kind/0` (supplied by each mixin). There
+is no hardcoded type list and no string special-casing in `BlockRender`.
 
 After creating the module, add it to `config/config.exs`:
 
@@ -32,7 +36,9 @@ or LiveView event handlers.
 
 | ✗ Don't | ✓ Do instead |
 |---|---|
-| Edit `lib/concept_web/components/block_render.ex` to add a clause | Define `render/1` (Static) or `render_body/1` (Interactive) in your type module |
+| Edit `lib/concept_web/components/block_render.ex` to add a clause or type to a list | Pick the right mixin; the dispatcher routes on `render_kind/0` |
+| Hardcode a slash-menu item in `ora-slash-menu.js` | Declare `slash_menu/0` (incl. `keywords`) on the type module; the registry feeds the client |
+| Put `placeholder`/CSS class for a text block in `block_render.ex` | Define `placeholder/0` + `editor_class/0` on the Text type module |
 | Create a per-block JS hook | Use `OraBlock` + declare `data-events` via `ash_actions:` |
 | Add `handle_event/3` to `PageEditorLive` | The Interactive macro generates clauses on your LC from `ash_actions:` |
 | Put `phx-hook` inside `render_body/1` | The Interactive wrapper already has it |
