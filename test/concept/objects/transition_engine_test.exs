@@ -100,34 +100,42 @@ defmodule Concept.Objects.TransitionEngineTest do
     rec
   end
 
-  test "can enter the initial state from nil", ctx do
+  test "new records start in their workflow's initial state", ctx do
     rec = new_record(ctx)
-    assert rec.state_id == nil
-
-    {:ok, rec} =
-      Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
-
     assert rec.state_id == ctx.states[:backlog].id
   end
 
-  test "cannot enter a non-initial state from nil", ctx do
+  test "a record cannot enter the initial state of a different workflow", ctx do
+    {:ok, wf2} = Objects.create_workflow("Other", actor: ctx.user, tenant: ctx.ws)
+
+    {:ok, other_initial} =
+      Concept.Objects.WorkflowState
+      |> Ash.Changeset.for_create(
+        :create,
+        %{workflow_id: wf2.id, name: "Start", category: :backlog, is_initial?: true},
+        actor: ctx.user,
+        tenant: ctx.ws
+      )
+      |> Ash.create()
+
     rec = new_record(ctx)
 
     assert {:error, _} =
-             Objects.transition_record(rec, ctx.states[:doing].id,
-               actor: ctx.user,
-               tenant: ctx.ws
-             )
+             Objects.transition_record(rec, other_initial.id, actor: ctx.user, tenant: ctx.ws)
+  end
+
+  test "rejects a transition with no defined edge", ctx do
+    rec = new_record(ctx)
+    # starts in backlog; no backlog -> doing edge defined
+    assert {:error, _} =
+             Objects.transition_record(rec, ctx.states[:doing].id, actor: ctx.user, tenant: ctx.ws)
   end
 
   test "follows defined transitions and rejects undefined ones", ctx do
     transition(ctx, :backlog, :todo)
 
     rec = new_record(ctx)
-
-    {:ok, rec} =
-      Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
-
+    # starts in backlog (initial); follow the defined backlog -> todo edge
     {:ok, rec} =
       Objects.transition_record(rec, ctx.states[:todo].id, actor: ctx.user, tenant: ctx.ws)
 
@@ -146,10 +154,7 @@ defmodule Concept.Objects.TransitionEngineTest do
     ])
 
     rec = new_record(ctx)
-
-    {:ok, rec} =
-      Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
-
+    # starts in backlog
     {:ok, rec} =
       Objects.transition_record(rec, ctx.states[:doing].id, actor: ctx.user, tenant: ctx.ws)
 
@@ -181,7 +186,6 @@ defmodule Concept.Objects.TransitionEngineTest do
       %{"kind" => "requires_approval", "config" => %{"by" => "creator"}}
     ])
 
-    # A second user (member) who is NOT the creator
     {:ok, other} =
       Concept.Accounts.User
       |> Ash.Changeset.for_create(:register_with_password, %{
@@ -195,10 +199,7 @@ defmodule Concept.Objects.TransitionEngineTest do
       Concept.Accounts.Membership.create(ctx.ws, other.id, :member, actor: %{system?: true})
 
     rec = new_record(ctx)
-
-    {:ok, rec} =
-      Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
-
+    # starts in backlog
     {:ok, rec} =
       Objects.transition_record(rec, ctx.states[:review].id, actor: ctx.user, tenant: ctx.ws)
 
@@ -220,10 +221,7 @@ defmodule Concept.Objects.TransitionEngineTest do
     ])
 
     rec = new_record(ctx)
-
-    {:ok, rec} =
-      Objects.transition_record(rec, ctx.states[:backlog].id, actor: ctx.user, tenant: ctx.ws)
-
+    # starts in backlog; attempt the guarded backlog -> done edge
     assert {:error, %Ash.Error.Invalid{errors: errors}} =
              Objects.transition_record(rec, ctx.states[:done].id, actor: ctx.user, tenant: ctx.ws)
 

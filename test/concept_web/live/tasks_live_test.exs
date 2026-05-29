@@ -52,25 +52,26 @@ defmodule ConceptWeb.TasksLiveTest do
     assert Enum.any?(records, &(&1.title == "Write the spec"))
   end
 
-  test "a new task can be moved Backlog → Todo via a move button", %{conn: conn, ws: ws, user: user} do
-    {:ok, view, _} = live(conn, ~p"/w/#{ws.slug}/tasks")
-
-    # create + enter Backlog (creation leaves state nil; move into initial state first
-    # is done by the board's move buttons only when a transition exists from current.
-    # New records have no state, so we seed Backlog directly through the domain to
-    # exercise the move button Backlog→Todo.)
+  test "a new task can be moved Backlog → Todo via a move button", %{
+    conn: conn,
+    ws: ws,
+    user: user
+  } do
+    # New records auto-start in their workflow's initial state (Backlog), so a
+    # freshly created task already shows the Backlog→Todo move button.
     {:ok, types} = Objects.list_object_types(actor: user, tenant: ws.id)
     task = Enum.find(types, &(&1.key == "task"))
     {:ok, states} = Objects.list_workflow_states(task.workflow_id, actor: user, tenant: ws.id)
-    backlog = Enum.find(states, &(&1.category == :backlog))
     todo = Enum.find(states, &(&1.category == :todo))
 
     {:ok, rec} =
-      Objects.create_record(task.id, %{fields: %{"title" => "Movable"}}, actor: user, tenant: ws.id)
+      Objects.create_record(task.id, %{fields: %{"title" => "Movable"}},
+        actor: user,
+        tenant: ws.id
+      )
 
-    {:ok, rec} = Objects.transition_record(rec, backlog.id, actor: user, tenant: ws.id)
+    assert rec.state_id != nil
 
-    # re-render the page so the move button is present
     {:ok, view, _} = live(conn, ~p"/w/#{ws.slug}/tasks")
 
     view

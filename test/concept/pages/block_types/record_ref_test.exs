@@ -76,10 +76,11 @@ defmodule Concept.Pages.BlockTypes.RecordRefTest do
       {:ok, states} =
         Objects.list_workflow_states(ctx.task.workflow_id, actor: ctx.user, tenant: ctx.ws)
 
-      backlog = Enum.find(states, &(&1.category == :backlog))
+      todo = Enum.find(states, &(&1.category == :todo))
 
+      # records auto-start in Backlog; move to Todo via the seeded edge
       {:ok, _} =
-        Objects.transition_record(ctx.record, backlog.id, actor: ctx.user, tenant: ctx.ws)
+        Objects.transition_record(ctx.record, todo.id, actor: ctx.user, tenant: ctx.ws)
 
       block = %Concept.Pages.Block{
         workspace_id: ctx.ws,
@@ -87,7 +88,7 @@ defmodule Concept.Pages.BlockTypes.RecordRefTest do
       }
 
       html = render_block(block)
-      assert html =~ "Backlog"
+      assert html =~ "Todo"
     end
 
     test "renders an unlinked placeholder when record_id is nil", ctx do
