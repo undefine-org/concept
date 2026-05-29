@@ -226,9 +226,10 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
     limit = profile.search[:limit] || 10
 
     # Retrieval requires a workspace tenant to pick the Arcana collection and
-    # to write Citation rows (workspace_id is non-nullable). Until chat carries
-    # a workspace (BUG-061), context.tenant is nil here — degrade to an
-    # ungrounded answer rather than crash. Auto-activates once tenant lands.
+    # to write Citation rows (workspace_id is non-nullable). Chat is now
+    # workspace-tenanted (BUG-061), so context.tenant flows in via the :respond
+    # trigger. The is_binary guard remains a safety net: a missing tenant
+    # degrades to an ungrounded answer rather than crashing.
     retrievable? =
       is_binary(context.tenant) and limit > 0 and String.trim(query) != ""
 
