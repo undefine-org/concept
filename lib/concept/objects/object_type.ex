@@ -81,6 +81,11 @@ defmodule Concept.Objects.ObjectType do
   end
 
   relationships do
+    belongs_to :workflow, Concept.Objects.Workflow,
+      attribute_writable?: true,
+      source_attribute: :workflow_id,
+      destination_attribute: :id
+
     has_many :field_defs, Concept.Objects.FieldDef, destination_attribute: :object_type_id
     has_many :records, Concept.Objects.Record, destination_attribute: :object_type_id
   end

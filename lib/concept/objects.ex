@@ -53,5 +53,26 @@ defmodule Concept.Objects do
       define :unlink_records, action: :destroy
       define :list_links_from, args: [:from_record_id], action: :from_record
     end
+
+    resource Concept.Objects.Workflow do
+      define :create_workflow, action: :create, args: [:name]
+      define :rename_workflow, action: :rename, args: [:name]
+      define :list_workflows, action: :list
+      define :get_workflow, action: :read, get_by: :id
+    end
+
+    resource Concept.Objects.WorkflowState do
+      define :create_workflow_state, action: :create, args: [:workflow_id, :name, :category]
+      define :update_workflow_state, action: :update_state, args: [:name, :category]
+      define :reorder_workflow_state, action: :reorder, args: [:position]
+      define :list_workflow_states, action: :list_for_workflow, args: [:workflow_id]
+    end
+
+    resource Concept.Objects.Transition do
+      define :create_transition, action: :create, args: [:workflow_id, :from_state_id, :to_state_id]
+      define :set_transition_guards, action: :set_guards, args: [:guards]
+      define :list_transitions, action: :list_for_workflow, args: [:workflow_id]
+      define :transitions_from_state, action: :from_state, args: [:from_state_id]
+    end
   end
 end

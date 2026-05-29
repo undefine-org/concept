@@ -162,6 +162,13 @@ config :concept, :field_types, [
   Concept.Objects.FieldTypes.Relation
 ]
 
+config :concept, :record_guards, [
+  Concept.Objects.Guards.RequiresApproval,
+  Concept.Objects.Guards.RequiresProof,
+  Concept.Objects.Guards.RequiresChecklistComplete,
+  Concept.Objects.Guards.RequiresFields
+]
+
 # Concept.AutoTools — opt-out rules for MCP tool auto-synthesis.
 # See lib/concept/auto_tools.ex for full docs.
 config :concept, Concept.AutoTools,
