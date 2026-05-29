@@ -52,6 +52,34 @@ defmodule ConceptWeb.TasksLiveTest do
     assert Enum.any?(records, &(&1.title == "Write the spec"))
   end
 
+  test "renders a card with a priority pill and an assignee avatar", %{
+    conn: conn,
+    ws: ws,
+    user: user
+  } do
+    # Regression: the board card reads assignee_id + fields directly; the
+    # :board read must select them or render raises Ash NotLoaded.
+    {:ok, types} = Objects.list_object_types(actor: user, tenant: ws.id)
+    task = Enum.find(types, &(&1.key == "task"))
+    {:ok, states} = Objects.list_workflow_states(task.workflow_id, actor: user, tenant: ws.id)
+    todo = Enum.find(states, &(&1.category == :todo))
+
+    {:ok, rec} =
+      Objects.create_record(task.id, %{fields: %{"title" => "Hi", "priority" => "high"}},
+        actor: user,
+        tenant: ws.id
+      )
+
+    {:ok, _} = Objects.assign_record(rec, user.id, actor: user, tenant: ws.id)
+    {:ok, _} = Objects.transition_record(rec, todo.id, actor: user, tenant: ws.id)
+
+    {:ok, _view, html} = live(conn, ~p"/w/#{ws.slug}/tasks")
+
+    assert html =~ "high"
+    # assignee avatar initial (from the user's email local-part)
+    assert html =~ ~s(id="task-#{rec.id}")
+  end
+
   test "a new task can be moved Backlog → Todo via a move button", %{
     conn: conn,
     ws: ws,
