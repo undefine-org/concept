@@ -36,7 +36,7 @@ defmodule Concept.Objects do
     end
 
     resource Concept.Objects.Record do
-      define :create_record, action: :create, args: [:object_type_id, {:optional, :fields}]
+      define :create_record, action: :create, args: [:object_type_id]
       define :update_record_fields, args: [:fields], action: :update_fields
       define :transition_record, args: [:to_state_id], action: :transition
       define :assign_record, args: [:assignee_id], action: :assign

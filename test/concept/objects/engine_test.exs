@@ -87,7 +87,7 @@ defmodule Concept.Objects.EngineTest do
 
     test "valid fields create a record and derive title", ctx do
       {:ok, rec} =
-        Objects.create_record(ctx.type.id, %{"name" => "Acme", "arr" => 1000, "tier" => "pro", "owner" => "me"},
+        Objects.create_record(ctx.type.id, %{fields: %{"name" => "Acme", "arr" => 1000, "tier" => "pro", "owner" => "me"}},
           actor: ctx.user,
           tenant: ctx.ws
         )
@@ -99,7 +99,7 @@ defmodule Concept.Objects.EngineTest do
 
     test "wrong-typed field is rejected", ctx do
       assert {:error, err} =
-               Objects.create_record(ctx.type.id, %{"arr" => "lots", "owner" => "me"},
+               Objects.create_record(ctx.type.id, %{fields: %{"arr" => "lots", "owner" => "me"}},
                  actor: ctx.user,
                  tenant: ctx.ws
                )
@@ -109,7 +109,7 @@ defmodule Concept.Objects.EngineTest do
 
     test "select outside options is rejected", ctx do
       assert {:error, err} =
-               Objects.create_record(ctx.type.id, %{"tier" => "enterprise", "owner" => "me"},
+               Objects.create_record(ctx.type.id, %{fields: %{"tier" => "enterprise", "owner" => "me"}},
                  actor: ctx.user,
                  tenant: ctx.ws
                )
@@ -119,14 +119,14 @@ defmodule Concept.Objects.EngineTest do
 
     test "missing required field is rejected", ctx do
       assert {:error, err} =
-               Objects.create_record(ctx.type.id, %{"name" => "Acme"}, actor: ctx.user, tenant: ctx.ws)
+               Objects.create_record(ctx.type.id, %{fields: %{"name" => "Acme"}}, actor: ctx.user, tenant: ctx.ws)
 
       assert error_on_fields?(err)
     end
 
     test "unknown field key is rejected", ctx do
       assert {:error, err} =
-               Objects.create_record(ctx.type.id, %{"owner" => "me", "bogus" => 1},
+               Objects.create_record(ctx.type.id, %{fields: %{"owner" => "me", "bogus" => 1}},
                  actor: ctx.user,
                  tenant: ctx.ws
                )
@@ -136,7 +136,7 @@ defmodule Concept.Objects.EngineTest do
 
     test "update_fields re-validates", ctx do
       {:ok, rec} =
-        Objects.create_record(ctx.type.id, %{"name" => "Acme", "owner" => "me"},
+        Objects.create_record(ctx.type.id, %{fields: %{"name" => "Acme", "owner" => "me"}},
           actor: ctx.user,
           tenant: ctx.ws
         )
@@ -153,8 +153,8 @@ defmodule Concept.Objects.EngineTest do
     test "link two records and list outgoing", ctx do
       type = new_type(ctx)
       {:ok, _} = add_field(ctx, type, "Name", :text, %{is_title?: true})
-      {:ok, a} = Objects.create_record(type.id, %{"name" => "A"}, actor: ctx.user, tenant: ctx.ws)
-      {:ok, b} = Objects.create_record(type.id, %{"name" => "B"}, actor: ctx.user, tenant: ctx.ws)
+      {:ok, a} = Objects.create_record(type.id, %{fields: %{"name" => "A"}}, actor: ctx.user, tenant: ctx.ws)
+      {:ok, b} = Objects.create_record(type.id, %{fields: %{"name" => "B"}}, actor: ctx.user, tenant: ctx.ws)
 
       {:ok, _link} =
         Objects.link_records(a.id, b.id, nil, actor: ctx.user, tenant: ctx.ws)
@@ -167,7 +167,7 @@ defmodule Concept.Objects.EngineTest do
     test "assign a record to the actor and read mine", ctx do
       type = new_type(ctx)
       {:ok, _} = add_field(ctx, type, "Name", :text, %{is_title?: true})
-      {:ok, rec} = Objects.create_record(type.id, %{"name" => "A"}, actor: ctx.user, tenant: ctx.ws)
+      {:ok, rec} = Objects.create_record(type.id, %{fields: %{"name" => "A"}}, actor: ctx.user, tenant: ctx.ws)
       {:ok, rec} = Objects.assign_record(rec, ctx.user.id, actor: ctx.user, tenant: ctx.ws)
       assert rec.assignee_id == ctx.user.id
 
