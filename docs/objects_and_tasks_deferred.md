@@ -32,6 +32,8 @@ thread (2) W1–W5 shipped + reviewer wave + cast-fix; `mix precommit` green,
 
 ---
 
+<!-- thread (2) verified complete: see completion stamp above -->
+
 ## A. The editors (vision §14 I6) — database-builder thesis
 
 The vision's defining promise: teams customize **schema and rules**. Today a
