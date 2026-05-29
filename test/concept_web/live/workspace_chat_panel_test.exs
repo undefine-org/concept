@@ -82,31 +82,32 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
     refute render(view) =~ "ora-chat-panel--open"
   end
 
-  test "scope dropdown renders 3 options", %{conn: conn, ws: ws} do
+  test "scope dropdown renders 3 scope buttons", %{conn: conn, ws: ws} do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}")
 
-    # Open chat panel
+    # Open chat panel (toggle_chat is synchronous).
     view
     |> element("#workspace-root")
     |> render_hook("toggle_chat", %{})
 
-    :timer.sleep(50)
-
-    html = render(view)
-    assert html =~ "workspace"
-    assert html =~ "page"
-    assert html =~ "subtree"
+    # Assert on the actual scope buttons (phx-value-scope), not leaky generic
+    # text like "workspace"/"page" which the layout/URLs render regardless.
+    for scope <- ~w(workspace page subtree) do
+      assert has_element?(
+               view,
+               ~s{button[phx-click="set_scope"][phx-value-scope="#{scope}"]}
+             ),
+             "expected a scope button for #{scope}"
+    end
   end
 
   test "profile dropdown renders all profile names", %{conn: conn, ws: ws} do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}")
 
-    # Open chat panel
+    # Open chat panel (toggle_chat is synchronous).
     view
     |> element("#workspace-root")
     |> render_hook("toggle_chat", %{})
-
-    :timer.sleep(50)
 
     html = render(view)
 
