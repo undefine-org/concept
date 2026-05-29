@@ -80,6 +80,34 @@ defmodule ConceptWeb.TasksLiveTest do
     assert html =~ ~s(id="task-#{rec.id}")
   end
 
+  test "a drag drop pushes the move event and transitions the record", %{
+    conn: conn,
+    ws: ws,
+    user: user
+  } do
+    # The TaskBoard DnD hook pushes the SAME "move" event the buttons push.
+    # Simulate it via render_hook on the board container.
+    {:ok, types} = Objects.list_object_types(actor: user, tenant: ws.id)
+    task = Enum.find(types, &(&1.key == "task"))
+    {:ok, states} = Objects.list_workflow_states(task.workflow_id, actor: user, tenant: ws.id)
+    todo = Enum.find(states, &(&1.category == :todo))
+
+    {:ok, rec} =
+      Objects.create_record(task.id, %{fields: %{"title" => "Draggable"}},
+        actor: user,
+        tenant: ws.id
+      )
+
+    {:ok, view, _} = live(conn, ~p"/w/#{ws.slug}/tasks")
+
+    view
+    |> element("#tasks-board")
+    |> render_hook("move", %{"record" => rec.id, "to" => todo.id})
+
+    {:ok, reloaded} = Objects.get_record(rec.id, actor: user, tenant: ws.id)
+    assert reloaded.state_id == todo.id
+  end
+
   test "a new task can be moved Backlog → Todo via a move button", %{
     conn: conn,
     ws: ws,

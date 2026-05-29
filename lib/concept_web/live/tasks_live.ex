@@ -111,12 +111,16 @@ defmodule ConceptWeb.TasksLive do
   # Members feed the :user field renderer + assignee avatars. Defensive: the
   # board still renders if membership loading fails.
   defp load_members(ws_id, user) do
-    case Accounts.Membership.list_for_workspace(ws_id, actor: user, load: [:user]) do
-      {:ok, memberships} ->
-        memberships |> Enum.map(& &1.user) |> Enum.reject(&is_nil/1)
-
-      _ ->
-        []
+    # Authorizing the membership read proves the actor belongs to this
+    # workspace; the User resource read policy is self-only, so resolve the
+    # (already-authorized) member ids directly for display. Co-members seeing
+    # each other's name is the intended behaviour.
+    with {:ok, memberships} <- Accounts.Membership.list_for_workspace(ws_id, actor: user),
+         ids = Enum.map(memberships, & &1.user_id),
+         {:ok, users} <- Accounts.list_users_by_ids(ids) do
+      users
+    else
+      _ -> []
     end
   end
 
@@ -177,7 +181,7 @@ defmodule ConceptWeb.TasksLive do
             </button>
           </form>
 
-          <div class="flex gap-3 overflow-x-auto pb-4">
+          <div id="tasks-board" phx-hook="TaskBoard" class="flex gap-3 overflow-x-auto pb-4">
             <div
               :for={state <- @board.states}
               class="w-64 shrink-0 rounded-lg bg-notion-gray/40 p-2"
@@ -200,7 +204,8 @@ defmodule ConceptWeb.TasksLive do
                 <div
                   :for={record <- Map.get(@board.columns, state.id, [])}
                   id={"task-#{record.id}"}
-                  class="group rounded-md border border-notion-divider bg-white p-2.5 shadow-sm transition hover:shadow-md"
+                  data-record-id={record.id}
+                  class="group cursor-grab rounded-md border border-notion-divider bg-white p-2.5 shadow-sm transition hover:shadow-md active:cursor-grabbing"
                 >
                   <div class="text-sm font-medium text-notion-text">{record_title(record)}</div>
 

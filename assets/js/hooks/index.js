@@ -9,6 +9,7 @@ import { LiveCitationRail } from "./live_citation_rail.js";
 import ContentEditable from "./content_editable.js";
 import EmojiPicker from "./emoji_picker.js";
 import GlobalKeys from "./global_keys.js";
+import TaskBoard from "./task_board.js";
 
 const Hooks = {
   BlockList,
@@ -22,6 +23,7 @@ const Hooks = {
   ContentEditable,
   EmojiPicker,
   GlobalKeys,
+  TaskBoard,
 };
 
 export default Hooks;

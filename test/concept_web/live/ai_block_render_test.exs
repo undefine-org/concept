@@ -76,17 +76,19 @@ defmodule ConceptWeb.AiBlockRenderTest do
       # Create a conversation and completed message
       {:ok, conversation} =
         Knowledge.Chat.create_conversation(
-          %{title: "Test Conversation"},
+          %{title: "Test Conversation", workspace_id: ws.id},
           actor: user,
+          tenant: ws.id,
           authorize?: false
         )
 
       # Create user message
       user_message =
         Concept.Knowledge.Chat.Message
-        |> Ash.Changeset.for_create(:create, %{text: "Test question"}, actor: user)
+        |> Ash.Changeset.new()
         |> Ash.Changeset.set_argument(:conversation_id, conversation.id)
-        |> Ash.create!(actor: user, authorize?: false)
+        |> Ash.Changeset.for_create(:create, %{text: "Test question"}, actor: user)
+        |> Ash.create!(actor: user, tenant: ws.id, authorize?: false)
 
       # Create completed assistant response
       system_actor = %{system?: true}
@@ -100,7 +102,7 @@ defmodule ConceptWeb.AiBlockRenderTest do
           text: "This is the AI answer.",
           complete: true
         })
-        |> Ash.create(actor: system_actor, authorize?: false)
+        |> Ash.create(actor: system_actor, tenant: ws.id, authorize?: false)
 
       # Update block content to point to the message (using system actor to bypass lock)
       _updated_block =
@@ -147,17 +149,19 @@ defmodule ConceptWeb.AiBlockRenderTest do
       # Create a conversation
       {:ok, conversation} =
         Knowledge.Chat.create_conversation(
-          %{title: "Test Conversation"},
+          %{title: "Test Conversation", workspace_id: ws.id},
           actor: user,
+          tenant: ws.id,
           authorize?: false
         )
 
       # Create user message
       user_message =
         Concept.Knowledge.Chat.Message
-        |> Ash.Changeset.for_create(:create, %{text: "Test question"}, actor: user)
+        |> Ash.Changeset.new()
         |> Ash.Changeset.set_argument(:conversation_id, conversation.id)
-        |> Ash.create!(actor: user, authorize?: false)
+        |> Ash.Changeset.for_create(:create, %{text: "Test question"}, actor: user)
+        |> Ash.create!(actor: user, tenant: ws.id, authorize?: false)
 
       # Create incomplete assistant response (streaming)
       system_actor = %{system?: true}
@@ -171,7 +175,7 @@ defmodule ConceptWeb.AiBlockRenderTest do
           text: "Partial answer...",
           complete: false
         })
-        |> Ash.create(actor: system_actor, authorize?: false)
+        |> Ash.create(actor: system_actor, tenant: ws.id, authorize?: false)
 
       # Update block content to point to the streaming message (using system actor to bypass lock)
       _updated_block =

@@ -75,7 +75,11 @@ defmodule ConceptWeb.ProjectedMcpToolsTest do
     assert Enum.any?(records, &(&1.title == "Via HTTP"))
   end
 
-  test "a custom object type immediately yields a typed create tool", %{conn: conn, user: user, ws: ws} do
+  test "a custom object type immediately yields a typed create tool", %{
+    conn: conn,
+    user: user,
+    ws: ws
+  } do
     {:ok, _} = Objects.create_object_type("Customer", actor: user, tenant: ws)
 
     resp = rpc(conn, "tools/list")

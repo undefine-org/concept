@@ -128,12 +128,13 @@ defmodule Concept.Objects.FieldTypes.User do
   defp member_id(%{"id" => id}), do: to_string(id)
   defp member_id(_), do: ""
 
-  defp member_name(%{email: email}) when is_binary(email), do: name_from_email(email)
-  defp member_name(%{"email" => email}) when is_binary(email), do: name_from_email(email)
-  defp member_name(%{name: name}) when is_binary(name), do: name
+  defp member_name(%{name: name}) when is_binary(name) and name != "", do: name
+  defp member_name(%{email: email}) when not is_nil(email), do: name_from_email(email)
+  defp member_name(%{"email" => email}) when not is_nil(email), do: name_from_email(email)
   defp member_name(_), do: "Member"
 
-  defp name_from_email(email), do: email |> String.split("@") |> List.first()
+  # email may be a binary or an Ash.CiString; normalize via to_string/1.
+  defp name_from_email(email), do: email |> to_string() |> String.split("@") |> List.first()
 
   defp initial(name) do
     name |> String.trim() |> String.first() |> Kernel.||("?") |> String.upcase()

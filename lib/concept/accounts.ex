@@ -70,4 +70,19 @@ defmodule Concept.Accounts do
         err
     end
   end
+
+  @doc """
+  Resolve a bounded list of users by id for *display* (avatars, member
+  pickers). The `User` read policy is self-only, so this performs a bounded,
+  unauthorized read — callers MUST have already authorized access to the set
+  of ids (e.g. by reading the workspace's memberships as the actor). Keeping
+  the escalation here (not in a LiveView) makes it auditable in one place.
+  """
+  def list_users_by_ids([]), do: {:ok, []}
+
+  def list_users_by_ids(ids) when is_list(ids) do
+    Concept.Accounts.User
+    |> Ash.Query.filter(id in ^ids)
+    |> Ash.read(authorize?: false)
+  end
 end
