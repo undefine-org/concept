@@ -46,6 +46,7 @@ defmodule Concept.Pages.StalenessTest do
     {:ok, user_message} =
       Concept.Knowledge.Chat.create_message(%{text: "Test question"},
         actor: user,
+        tenant: workspace.id,
         authorize?: false
       )
 
@@ -58,6 +59,7 @@ defmodule Concept.Pages.StalenessTest do
         id: ai_message_id,
         response_to_id: user_message.id,
         conversation_id: user_message.conversation_id,
+        workspace_id: workspace.id,
         text: "AI answer text",
         complete: true,
         source: :agent
@@ -212,6 +214,8 @@ defmodule Concept.Pages.StalenessTest do
         Pages.Block
         |> Ash.get(ai_block.id, actor: %{system?: true}, tenant: workspace.id)
 
+      original_message_id = get_in(ai_block.content, ["message_id"])
+
       result_before = Pages.staleness_for_ai_block(ai_block)
       assert result_before.stale? == true
 
@@ -241,9 +245,12 @@ defmodule Concept.Pages.StalenessTest do
             {:ok, block} ->
               message_id = get_in(block.content, ["message_id"])
 
-              if message_id do
+              # Wait for the block to point at the NEW message (finalize_completion
+              # has run), not the pre-refresh one — otherwise we'd halt on the old
+              # complete message and read stale state.
+              if message_id && message_id != original_message_id do
                 case Concept.Knowledge.Chat.Message
-                     |> Ash.get(message_id, actor: %{system?: true}) do
+                     |> Ash.get(message_id, actor: %{system?: true}, tenant: workspace.id) do
                   {:ok, %{complete: true}} ->
                     {:halt, Pages.staleness_for_ai_block(block)}
 

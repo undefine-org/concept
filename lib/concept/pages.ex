@@ -107,7 +107,7 @@ defmodule Concept.Pages do
     if is_nil(message_id) do
       %{stale?: false, drifted_count: 0, drifted_block_ids: []}
     else
-      with {:ok, message} <- load_message(message_id, system_actor),
+      with {:ok, message} <- load_message(message_id, system_actor, workspace_id),
            {:ok, citations} <-
              Concept.Knowledge.citations_for_message(message_id,
                actor: system_actor,
@@ -121,9 +121,9 @@ defmodule Concept.Pages do
     end
   end
 
-  defp load_message(message_id, actor) do
+  defp load_message(message_id, actor, workspace_id) do
     Concept.Knowledge.Chat.Message
-    |> Ash.get(message_id, actor: actor, authorize?: false)
+    |> Ash.get(message_id, actor: actor, tenant: workspace_id, authorize?: false)
   end
 
   defp load_cited_blocks(citations, actor, workspace_id) do

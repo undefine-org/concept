@@ -32,6 +32,7 @@ defmodule Concept.Knowledge.CitationTest do
     {:ok, message} =
       Concept.Knowledge.Chat.create_message(%{text: "Test message"},
         actor: user,
+        tenant: workspace.id,
         authorize?: false
       )
 
