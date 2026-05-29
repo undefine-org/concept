@@ -56,14 +56,5 @@ defmodule Concept.Accounts.Reactors.Onboarding do
     actor result(:system_actor)
   end
 
-  step :seed_task_type do
-    argument :workspace, result(:workspace)
-    wait_for :membership
-
-    run fn %{workspace: workspace}, _ ->
-      Concept.Objects.Seeder.seed_task_type(workspace.id)
-    end
-  end
-
   return :workspace
 end
