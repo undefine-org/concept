@@ -150,7 +150,6 @@ defmodule ConceptWeb.WorkflowEditorTest do
       {:ok, [t3]} = filter_transitions(ctx, a.id, b.id)
       assert t3.guards == []
     end
-  end
 
     test "setting a new initial state clears the previous one", ctx do
       {:ok, a} =
@@ -215,6 +214,8 @@ defmodule ConceptWeb.WorkflowEditorTest do
 
       {:ok, view, _} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/types/#{ctx.type.id}")
 
+      # a crafted event with a non-integer index must not crash the LiveView
+      # (parent ignores unknown events; component guards with Integer.parse)
       render_hook(view, "remove_guard", %{"transition_id" => t.id, "index" => "not_an_int"})
       assert Process.alive?(view.pid)
     end

@@ -167,12 +167,11 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
     end
   end
 
-  # Field events pushed while on the :index view (no type/fields loaded) are
-  # ignored rather than crashing the process.
-  def handle_event(event, _params, socket)
-      when event in ["add_field", "update_field", "reorder_field"] do
-    {:noreply, socket}
-  end
+  # Catch-all: any unhandled event (field events pushed on :index with no type
+  # loaded, or component-scoped events like guard edits that arrive at the
+  # page level via a crafted client message) is ignored rather than crashing
+  # the LiveView process.
+  def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   # ── data loading (code-interface only) ───────────────────────────────
 
