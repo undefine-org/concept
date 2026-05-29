@@ -66,6 +66,33 @@ defmodule ConceptWeb.PageHeaderTest do
            "editable title must carry phx-update=ignore (hook owns its DOM)"
   end
 
+  describe "popover click-away (BUG-063)" do
+    test "emoji popover closes on outside click", %{conn: conn, ws: ws, page: page} do
+      {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+      header = element(view, "#page-header-#{page.id}")
+
+      render_hook(header, "toggle_emoji_picker", %{})
+      assert has_element?(view, ".ora-emoji-picker-popover")
+      # The open popover must carry a click-away binding (no inline JS).
+      assert has_element?(view, ".ora-emoji-picker-popover[phx-click-away]")
+
+      render_hook(header, "close_emoji_picker", %{})
+      refute has_element?(view, ".ora-emoji-picker-popover")
+    end
+
+    test "cover popover closes on outside click", %{conn: conn, ws: ws, page: page} do
+      {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+      header = element(view, "#page-header-#{page.id}")
+
+      render_hook(header, "toggle_cover_picker", %{})
+      assert has_element?(view, ".ora-cover-picker-popover")
+      assert has_element?(view, ".ora-cover-picker-popover[phx-click-away]")
+
+      render_hook(header, "close_cover_picker", %{})
+      refute has_element?(view, ".ora-cover-picker-popover")
+    end
+  end
+
   test "save_title updates the page", %{conn: conn, ws: ws, page: page, user: user} do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 

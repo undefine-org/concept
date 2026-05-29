@@ -30,7 +30,11 @@ defmodule ConceptWeb.Components.PageHeader do
         </button>
 
         <%= if @show_emoji_picker do %>
-          <div class="ora-emoji-picker-popover">
+          <div
+            class="ora-emoji-picker-popover"
+            phx-click-away="close_emoji_picker"
+            phx-target={@myself}
+          >
             <ora-emoji-picker
               phx-hook="EmojiPicker"
               phx-target={@myself}
@@ -52,7 +56,11 @@ defmodule ConceptWeb.Components.PageHeader do
       ><%= @page.title || "" %></h1>
 
       <%= if @show_cover_picker do %>
-        <div class="ora-cover-picker-popover">
+        <div
+          class="ora-cover-picker-popover"
+          phx-click-away="close_cover_picker"
+          phx-target={@myself}
+        >
           <%= for color <- ~w(default red orange yellow green blue purple pink gray)a do %>
             <button
               type="button"
@@ -75,8 +83,18 @@ defmodule ConceptWeb.Components.PageHeader do
   end
 
   @impl true
+  def handle_event("close_emoji_picker", _params, socket) do
+    {:noreply, assign(socket, :show_emoji_picker, false)}
+  end
+
+  @impl true
   def handle_event("toggle_cover_picker", _params, socket) do
     {:noreply, update(socket, :show_cover_picker, &not/1)}
+  end
+
+  @impl true
+  def handle_event("close_cover_picker", _params, socket) do
+    {:noreply, assign(socket, :show_cover_picker, false)}
   end
 
   @impl true
