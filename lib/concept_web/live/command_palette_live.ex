@@ -64,12 +64,22 @@ defmodule ConceptWeb.CommandPaletteLive do
           >
           </div>
           <div class="fixed inset-0 flex items-start justify-center z-50 pt-[15vh]">
-            <div class="w-full max-w-[600px] bg-white rounded-md shadow-xl overflow-hidden">
+            <div
+              class="w-full max-w-[600px] bg-white rounded-md shadow-xl overflow-hidden"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Command palette"
+            >
               <div class="border-b border-gray-100 px-4 py-3">
                 <input
                   type="text"
                   placeholder="Search pages or run a command..."
                   class="w-full text-base outline-none text-notion-text placeholder:text-notion-text-light"
+                  role="combobox"
+                  aria-label="Search pages or run a command"
+                  aria-controls="palette-listbox"
+                  aria-expanded="true"
+                  aria-activedescendant={"palette-item-#{@selected_index}"}
                   phx-keyup="palette_search"
                   phx-debounce="100"
                   phx-target={@myself}
@@ -78,7 +88,7 @@ defmodule ConceptWeb.CommandPaletteLive do
                 />
               </div>
 
-              <div class="max-h-[60vh] overflow-y-auto py-2">
+              <div id="palette-listbox" role="listbox" class="max-h-[60vh] overflow-y-auto py-2">
                 <div>
                   <.action_item
                     :for={{action, idx} <- Enum.with_index(@actions)}
@@ -179,11 +189,27 @@ defmodule ConceptWeb.CommandPaletteLive do
     """
   end
 
-  defp action_item(assigns) do
+  # Shared shell for every selectable palette row. Owns the listbox-option
+  # semantics (role/aria-selected) and the click/hover wiring so they can never
+  # drift per result type (BUG-065).
+  attr :index, :integer, required: true
+  attr :selected_index, :integer, required: true
+  attr :myself, :any, required: true
+  attr :data_type, :string, default: nil
+  attr :page_id, :string, default: nil
+  attr :block_id, :string, default: nil
+  slot :inner_block, required: true
+
+  defp palette_item(assigns) do
     ~H"""
     <button
       type="button"
       id={"palette-item-#{@index}"}
+      role="option"
+      aria-selected={to_string(@index == @selected_index)}
+      data-type={@data_type}
+      data-page-id={@page_id}
+      data-block-id={@block_id}
       class={[
         "w-full text-left px-4 py-2 flex items-center gap-3 text-sm",
         @index == @selected_index && "bg-notion-hover"
@@ -193,27 +219,28 @@ defmodule ConceptWeb.CommandPaletteLive do
       phx-target={@myself}
       phx-mouseenter="hover_item"
     >
+      {render_slot(@inner_block)}
+    </button>
+    """
+  end
+
+  defp action_item(assigns) do
+    ~H"""
+    <.palette_item index={@index} selected_index={@selected_index} myself={@myself}>
       <.icon name={@icon} class="size-4 text-notion-text-light" />
       <span class="truncate text-notion-text">{@label}</span>
-    </button>
+    </.palette_item>
     """
   end
 
   defp page_item(assigns) do
     ~H"""
-    <button
-      type="button"
-      id={"palette-item-#{@index}"}
-      data-type={@type}
-      data-page-id={@page_id}
-      class={[
-        "w-full text-left px-4 py-2 flex items-center gap-3 text-sm",
-        @index == @selected_index && "bg-notion-hover"
-      ]}
-      phx-click="select_item"
-      phx-value-index={@index}
-      phx-target={@myself}
-      phx-mouseenter="hover_item"
+    <.palette_item
+      index={@index}
+      selected_index={@selected_index}
+      myself={@myself}
+      data_type={@type}
+      page_id={@page_id}
     >
       <%= if @icon do %>
         <.icon name={@icon} class="size-4 text-notion-text-light" />
@@ -221,28 +248,19 @@ defmodule ConceptWeb.CommandPaletteLive do
         <span class="text-base">{@icon_emoji || "📄"}</span>
       <% end %>
       <span class="truncate text-notion-text">{@title || "Untitled"}</span>
-    </button>
+    </.palette_item>
     """
   end
 
   defp semantic_item(assigns) do
-    # TODO: When CitationCard is available, use it via Code.ensure_loaded? check
-    # For now, use inline fallback to avoid compile-time dependency
     ~H"""
-    <button
-      type="button"
-      id={"palette-item-#{@index}"}
-      data-type="semantic"
-      data-page-id={@hit.page_id}
-      data-block-id={@hit.block_id}
-      class={[
-        "w-full text-left px-4 py-2 flex items-center gap-3 text-sm",
-        @index == @selected_index && "bg-notion-hover"
-      ]}
-      phx-click="select_item"
-      phx-value-index={@index}
-      phx-target={@myself}
-      phx-mouseenter="hover_item"
+    <.palette_item
+      index={@index}
+      selected_index={@selected_index}
+      myself={@myself}
+      data_type="semantic"
+      page_id={@hit.page_id}
+      block_id={@hit.block_id}
     >
       <.icon name="hero-sparkles" class="size-4 text-notion-text-light" />
       <div class="flex-1 min-w-0">
@@ -253,28 +271,21 @@ defmodule ConceptWeb.CommandPaletteLive do
           {@hit.snippet}
         </div>
       </div>
-    </button>
+    </.palette_item>
     """
   end
 
   defp ask_answer_item(assigns) do
     ~H"""
-    <button
-      type="button"
-      id={"palette-item-#{@index}"}
-      data-type="ask_answer"
-      class={[
-        "w-full text-left px-4 py-2 flex items-center gap-3 text-sm",
-        @index == @selected_index && "bg-notion-hover"
-      ]}
-      phx-click="select_item"
-      phx-value-index={@index}
-      phx-target={@myself}
-      phx-mouseenter="hover_item"
+    <.palette_item
+      index={@index}
+      selected_index={@selected_index}
+      myself={@myself}
+      data_type="ask_answer"
     >
       <.icon name="hero-chat-bubble-left-right" class="size-4 text-notion-text-light" />
       <span class="truncate text-notion-text">Ask answer for "{@query}"</span>
-    </button>
+    </.palette_item>
     """
   end
 
