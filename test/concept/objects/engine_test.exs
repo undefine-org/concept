@@ -61,7 +61,9 @@ defmodule Concept.Objects.EngineTest do
       _ = new_type(ctx, "A")
       _ = new_type(ctx, "B")
       {:ok, types} = Objects.list_object_types(actor: ctx.user, tenant: ctx.ws)
-      assert length(types) == 2
+      # excludes the seeded built-in Task type
+      user_types = Enum.reject(types, & &1.is_system?)
+      assert length(user_types) == 2
     end
   end
 

@@ -43,7 +43,7 @@ defmodule Concept.Objects.TransitionEngineTest do
       |> Map.new()
 
     # object type using this workflow
-    {:ok, type} = Objects.create_object_type("Task", actor: user, tenant: ws.id)
+    {:ok, type} = Objects.create_object_type("Ticket", actor: user, tenant: ws.id)
     {:ok, type} = Ash.update(type, %{workflow_id: wf.id}, action: :set_workflow, actor: user, tenant: ws.id)
 
     {:ok, _} =
