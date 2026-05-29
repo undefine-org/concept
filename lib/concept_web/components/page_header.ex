@@ -46,6 +46,8 @@ defmodule ConceptWeb.Components.PageHeader do
         contenteditable="true"
         phx-hook="ContentEditable"
         phx-target={@myself}
+        phx-update="ignore"
+        data-title={@page.title || ""}
         data-placeholder="Untitled"
       ><%= @page.title || "" %></h1>
 

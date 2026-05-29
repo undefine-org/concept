@@ -53,6 +53,19 @@ defmodule ConceptWeb.PageHeaderTest do
     assert has_element?(view, "h1#page-title-#{page.id}[contenteditable=\"true\"]")
   end
 
+  test "title h1 sets phx-update=ignore so the caret survives re-renders (BUG-062)",
+       %{conn: conn, ws: ws, page: page} do
+    # The ContentEditable hook owns the h1's DOM (user types directly into it).
+    # Per the LiveView guideline, a hook managing its own DOM MUST set
+    # phx-update=ignore; otherwise a parent re-render (emoji toggle, presence,
+    # remote edit) patches innerText back to @page.title and resets the caret
+    # to position 0 mid-edit.
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    assert has_element?(view, "h1#page-title-#{page.id}[phx-update=\"ignore\"]"),
+           "editable title must carry phx-update=ignore (hook owns its DOM)"
+  end
+
   test "save_title updates the page", %{conn: conn, ws: ws, page: page, user: user} do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -108,8 +121,12 @@ defmodule ConceptWeb.PageHeaderTest do
       }
     )
 
+    # The title h1 uses phx-update=ignore, so the server publishes the canonical
+    # value via data-title (attributes ARE patched under ignore). The visible
+    # text is applied by the ContentEditable hook when unfocused (JS, not run by
+    # LiveViewTest), so we assert the server-observable contract: data-title.
     assert render(view2) =~ "Renamed"
-    assert has_element?(view2, "h1#page-title-#{page.id}", "Renamed")
+    assert has_element?(view2, ~s(h1#page-title-#{page.id}[data-title="Renamed"]))
   end
 
   test "remote set_emoji updates other LV's page header", %{conn: conn, ws: ws, page: page} do
@@ -171,7 +188,9 @@ defmodule ConceptWeb.PageHeaderTest do
     # and update both the page header live_component and the sidebar PageTree.
     html2 = render(view2)
 
-    assert has_element?(view2, "h1#page-title-#{page.id}", "Cross-Tab Renamed")
+    # Server-observable contract under phx-update=ignore: data-title carries the
+    # canonical value; the hook applies the visible text when unfocused.
+    assert has_element?(view2, ~s(h1#page-title-#{page.id}[data-title="Cross-Tab Renamed"]))
     assert html2 =~ "Cross-Tab Renamed"
     # Original title in the sidebar tree is replaced.
     refute has_element?(view2, "aside.ora-sidebar a[href$=\"/p/#{page.id}\"]", "Roadmap")
