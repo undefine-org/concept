@@ -26,6 +26,7 @@ defmodule ConceptWeb.TasksLive do
          |> assign(:page_title, "Tasks")
          |> assign(:new_title, "")
          |> assign(:assignee_field_def, %{field_type: :user, config: %{}, key: "assignee"})
+         |> assign(:open_record_id, nil)
          |> load_board()}
 
       _ ->
@@ -57,6 +58,10 @@ defmodule ConceptWeb.TasksLive do
           {:noreply, put_flash(socket, :error, "Could not create task")}
       end
     end
+  end
+
+  def handle_event("open_record", %{"record" => record_id}, socket) do
+    {:noreply, assign(socket, :open_record_id, record_id)}
   end
 
   def handle_event("move", %{"record" => record_id, "to" => to_state_id}, socket) do
@@ -205,7 +210,9 @@ defmodule ConceptWeb.TasksLive do
                   :for={record <- Map.get(@board.columns, state.id, [])}
                   id={"task-#{record.id}"}
                   data-record-id={record.id}
-                  class="group cursor-grab rounded-md border border-notion-divider bg-white p-2.5 shadow-sm transition hover:shadow-md active:cursor-grabbing"
+                  phx-click="open_record"
+                  phx-value-record={record.id}
+                  class="group cursor-pointer rounded-md border border-notion-divider bg-white p-2.5 shadow-sm transition hover:shadow-md"
                 >
                   <div class="text-sm font-medium text-notion-text">{record_title(record)}</div>
 
@@ -232,10 +239,11 @@ defmodule ConceptWeb.TasksLive do
                     <button
                       :for={move <- @moves[record.id]}
                       type="button"
-                      phx-click="move"
+                      phx-click={JS.push("move")}
                       phx-value-record={record.id}
                       phx-value-to={move.to_state.id}
                       title={requirements_title(move)}
+                      onclick="event.stopPropagation()"
                       class="inline-flex items-center gap-1 rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text transition hover:bg-notion-divider"
                     >
                       → {move.to_state.name}<span :if={move.requirements != []} class="text-notion-text-light">🔒</span>
@@ -253,6 +261,18 @@ defmodule ConceptWeb.TasksLive do
             </div>
           </div>
         <% end %>
+
+        <.live_component
+          :if={@open_record_id}
+          module={ConceptWeb.Objects.RecordDetailComponent}
+          id={"record-detail-#{@open_record_id}"}
+          record_id={@open_record_id}
+          workspace={@workspace}
+          current_user={@current_user}
+          members={@members}
+          field_defs={@board.field_defs}
+          board={@board}
+        />
       </div>
     </Layouts.app>
     """
@@ -271,6 +291,15 @@ defmodule ConceptWeb.TasksLive do
   defp category_dot(:done), do: "bg-green-500"
   defp category_dot(:canceled), do: "bg-notion-text-light/30"
   defp category_dot(_), do: "bg-notion-text-light/40"
+
+  @impl true
+  def handle_info(:close_record_detail, socket) do
+    {:noreply, assign(socket, :open_record_id, nil)}
+  end
+
+  def handle_info(:record_changed, socket) do
+    {:noreply, load_board(socket)}
+  end
 
   @impl true
   def handle_params(_params, _uri, socket), do: {:noreply, socket}

@@ -58,6 +58,7 @@ defmodule Concept.Objects.Record do
       accept [:fields]
       require_atomic? false
       change Concept.Objects.Record.Changes.ValidateFieldsForType
+      change Concept.Objects.Record.Changes.SyncTitle
     end
 
     update :transition do
