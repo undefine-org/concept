@@ -1,0 +1,37 @@
+#+TITLE: Objects engine core resources and field types
+#+STATE: ITEM
+#+SESSION_ID: 14f437a4d57957b7
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-15-33-205Z_14f437a4d57957b7.jsonl]]
+#+CUSTOM_ID: FEAT-069-objects-engine-core-resources-and-field
+#+LAYER: platform
+
+* Initial Message
+
+Let's think. What is a nice, simple system that lets us do project management within Concept? As opposed to simple knowledge base stuff. This would mean:
+- it's easy to know which tasks need to be done. which are known as tasks and which ones are aspirational/research/whatever.
+- task assignment
+
+look up online to read expert designers' takes on the shortcomings of the Notion model. This is a DESIGN session where we think deeply, from first principles, about what can help us achieve these principles:
+1. Simple (it's easy for agents and humans to understand the system)
+2. Transparent & not prone to redundancy (it's easy to find where each task is, and it's easy to know where to put each task)
+4. Ease of management
+
+For this first iteration, think about what we'd do if we had to design Notion's system from scratch, with the principle that Concept is for human and agent TEAMS working together. Ask me plenty of questions to operationalise this principle
+
+Parent: [[id:PLAN-009-objects-and-tasks-database-builder]]
+
+ObjectType, FieldDef, Record, RecordLink resources (use WorkspaceTenanted +
+AshArchival + AshPaperTrail). FieldType behaviour + registry (config
+:concept, :field_types) + built-in field types: text, number, select, date,
+user, relation, checklist, url. Record.Changes.ValidateFieldsForType
+(generalize Block.Changes.ValidatePropsForType). Title denormalized from a
+designated display FieldDef. JSONB+GIN indexes for field filter/sort.
+
+** Verification (REQUIRED before R1 + report)
+- TDD: FieldType.validate/2 per built-in type (red→green); Record :create with
+  ValidateFieldsForType (valid + invalid field-bag); RecordLink relation edge.
+- Browser: n/a this wave (no UI yet) — defer to a seeded iex demo proving create/read.
+- Reviewer wave R1: policy/tenancy on all 4 resources, JSONB index presence,
+  registry parity with block_types idiom.
+- Mid-flight report: work done (+tests) · next-wave assumptions · learnings.
+- Gate: mix precommit green + R1 sign-off + report.

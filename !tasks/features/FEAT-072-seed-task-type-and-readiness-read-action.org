@@ -1,0 +1,40 @@
+#+TITLE: Seed Task type and readiness read actions
+#+STATE: ITEM
+#+SESSION_ID: 14f437a4d57957b7
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-15-33-205Z_14f437a4d57957b7.jsonl]]
+#+CUSTOM_ID: FEAT-072-seed-task-type-and-readiness-read-action
+#+LAYER: platform
+#+DEPENDS: FEAT-068-workflow-states-and-transition-guard-eng
+
+* Initial Message
+
+Let's think. What is a nice, simple system that lets us do project management within Concept? As opposed to simple knowledge base stuff. This would mean:
+- it's easy to know which tasks need to be done. which are known as tasks and which ones are aspirational/research/whatever.
+- task assignment
+
+look up online to read expert designers' takes on the shortcomings of the Notion model. This is a DESIGN session where we think deeply, from first principles, about what can help us achieve these principles:
+1. Simple (it's easy for agents and humans to understand the system)
+2. Transparent & not prone to redundancy (it's easy to find where each task is, and it's easy to know where to put each task)
+4. Ease of management
+
+For this first iteration, think about what we'd do if we had to design Notion's system from scratch, with the principle that Concept is for human and agent TEAMS working together. Ask me plenty of questions to operationalise this principle
+
+Parent: [[id:PLAN-009-objects-and-tasks-database-builder]]
+
+Extend Accounts.Reactors.Onboarding to seed, per workspace: Task ObjectType
+(is_system?), default Workflow (Backlog→Todo→Doing→Review→Done + Canceled,
+categories mapped), built-in FieldDefs (priority select, blocked_by relation),
+and a →Done transition carrying requires_approval{by: :creator}. Add
+ready_records (category :todo ∧ unblocked via RecordLink ∧ unassigned) and
+my_records (assignee == actor) described read actions. Membership.role gains
+:agent.
+
+** Verification (REQUIRED before R3 + report)
+- TDD: onboarding seeds exactly one Task type + default workflow + built-in
+  fields + →Done guard; ready_records (category todo ∧ unblocked ∧ unassigned)
+  and my_records correctness incl. RecordLink-derived readiness; Membership :agent role.
+- Browser: n/a (no UI) — iex demo: new workspace → Task type present → ready_records.
+- Reviewer wave R3: idempotent seeding, no duplicate types on re-onboard, role enum
+  reconciliation (Scope :admin vs Membership).
+- Mid-flight report: work done (+tests) · next-wave assumptions · learnings.
+- Gate: mix precommit green + R3 sign-off + report.

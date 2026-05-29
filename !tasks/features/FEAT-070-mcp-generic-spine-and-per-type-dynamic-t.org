@@ -1,0 +1,43 @@
+#+TITLE: MCP generic spine and per-type dynamic tool projector
+#+STATE: ITEM
+#+SESSION_ID: 14f437a4d57957b7
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-15-33-205Z_14f437a4d57957b7.jsonl]]
+#+CUSTOM_ID: FEAT-070-mcp-generic-spine-and-per-type-dynamic-t
+#+LAYER: platform
+#+DEPENDS: FEAT-072-seed-task-type-and-readiness-read-action
+
+* Initial Message
+
+Let's think. What is a nice, simple system that lets us do project management within Concept? As opposed to simple knowledge base stuff. This would mean:
+- it's easy to know which tasks need to be done. which are known as tasks and which ones are aspirational/research/whatever.
+- task assignment
+
+look up online to read expert designers' takes on the shortcomings of the Notion model. This is a DESIGN session where we think deeply, from first principles, about what can help us achieve these principles:
+1. Simple (it's easy for agents and humans to understand the system)
+2. Transparent & not prone to redundancy (it's easy to find where each task is, and it's easy to know where to put each task)
+4. Ease of management
+
+For this first iteration, think about what we'd do if we had to design Notion's system from scratch, with the principle that Concept is for human and agent TEAMS working together. Ask me plenty of questions to operationalise this principle
+
+Parent: [[id:PLAN-009-objects-and-tasks-database-builder]]
+
+HIGHEST RISK. Generic spine: described Record/ObjectType/Workflow actions auto-
+exposed via AutoTools. Runtime ToolProjector: read ObjectType+FieldDef+Workflow
+per tenant → [%AshAi.Tool{}] (create_<type>, <type>_transition with state names,
+list_<type>); Guard.describe/1 feeds tool descriptions. Custom MCP router/server
+wrapper merging projected tools into BOTH tools/list and tools/call, keyed on the
+tenant MCPWorkspaceContext resolves (VERIFIED: ash_ai resolves both paths from
+compile-time DSL only; extra_tools is prompt-path only). Schema-introspection MCP
+resource list_object_types. Extend test/integration/mcp_parity_test.exs.
+
+** Verification (REQUIRED before R4 + report)
+- TDD: ToolProjector.project/3 PURE-FN tests (Customer type → create_customer
+  name, description lists fields, transition tool lists state names + Guard.describe
+  prose); MCP wrapper integration via mcp_parity_test harness: seed type → tools/list
+  has create_customer w/ correct schema → tools/call creates row (tenant-keyed).
+- Browser: connect an MCP client (or curl tools/list + tools/call) against running
+  app; verify per-workspace tools appear and execute with policies enforced.
+- Reviewer wave R4 (HIGH SCRUTINY): tenant isolation in wrapper (no cross-workspace
+  tool leakage), parity contract intact, no compile-time codegen introduced.
+- Mid-flight report: work done (+tests) · next-wave assumptions · learnings.
+- Gate: mix precommit green + R4 sign-off + report.

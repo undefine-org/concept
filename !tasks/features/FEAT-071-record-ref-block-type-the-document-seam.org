@@ -1,0 +1,40 @@
+#+TITLE: record_ref block type the document seam
+#+STATE: ITEM
+#+SESSION_ID: 14f437a4d57957b7
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-15-33-205Z_14f437a4d57957b7.jsonl]]
+#+CUSTOM_ID: FEAT-071-record-ref-block-type-the-document-seam
+#+LAYER: platform
+#+DEPENDS: FEAT-072-seed-task-type-and-readiness-read-action
+
+* Initial Message
+
+Let's think. What is a nice, simple system that lets us do project management within Concept? As opposed to simple knowledge base stuff. This would mean:
+- it's easy to know which tasks need to be done. which are known as tasks and which ones are aspirational/research/whatever.
+- task assignment
+
+look up online to read expert designers' takes on the shortcomings of the Notion model. This is a DESIGN session where we think deeply, from first principles, about what can help us achieve these principles:
+1. Simple (it's easy for agents and humans to understand the system)
+2. Transparent & not prone to redundancy (it's easy to find where each task is, and it's easy to know where to put each task)
+4. Ease of management
+
+For this first iteration, think about what we'd do if we had to design Notion's system from scratch, with the principle that Concept is for human and agent TEAMS working together. Ask me plenty of questions to operationalise this principle
+
+Parent: [[id:PLAN-009-objects-and-tasks-database-builder]]
+
+New block type per docs/blocks/ADDING_A_BLOCK.md (one registry line in
+config :concept, :block_types; zero dispatcher edits). props %{record_id}.
+Renders the referenced Record's LIVE title, state (category color), assignee.
+Editing status/assignee from inside a doc calls the same Record actions. This
+is the projection that lets any page mention a record without copying it —
+the structural redundancy-killer.
+
+** Verification (REQUIRED before R5 + report)
+- TDD: block-type contract test (per ai_answer_test pattern) — props validation,
+  render output references record_id, edit dispatches Record action.
+- Browser (REQUIRED): embed a record_ref in a page; change the record's state via
+  the Tasks surface; confirm the block re-renders live (category color + assignee)
+  without reload (pub_sub).
+- Reviewer wave R5: registry-only wiring (no dispatcher/handle_event edits per
+  ADDING_A_BLOCK anti-patterns), live update path.
+- Mid-flight report: work done (+tests) · next-wave assumptions · learnings.
+- Gate: mix precommit green + R5 sign-off + report.

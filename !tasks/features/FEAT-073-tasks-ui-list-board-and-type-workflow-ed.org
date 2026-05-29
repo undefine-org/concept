@@ -1,0 +1,40 @@
+#+TITLE: Tasks UI list board and type workflow editors
+#+STATE: ITEM
+#+SESSION_ID: 14f437a4d57957b7
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-15-33-205Z_14f437a4d57957b7.jsonl]]
+#+CUSTOM_ID: FEAT-073-tasks-ui-list-board-and-type-workflow-ed
+#+LAYER: platform
+#+DEPENDS: FEAT-072-seed-task-type-and-readiness-read-action
+
+* Initial Message
+
+Let's think. What is a nice, simple system that lets us do project management within Concept? As opposed to simple knowledge base stuff. This would mean:
+- it's easy to know which tasks need to be done. which are known as tasks and which ones are aspirational/research/whatever.
+- task assignment
+
+look up online to read expert designers' takes on the shortcomings of the Notion model. This is a DESIGN session where we think deeply, from first principles, about what can help us achieve these principles:
+1. Simple (it's easy for agents and humans to understand the system)
+2. Transparent & not prone to redundancy (it's easy to find where each task is, and it's easy to know where to put each task)
+4. Ease of management
+
+For this first iteration, think about what we'd do if we had to design Notion's system from scratch, with the principle that Concept is for human and agent TEAMS working together. Ask me plenty of questions to operationalise this principle
+
+Parent: [[id:PLAN-009-objects-and-tasks-database-builder]]
+
+LiveView (code-interface fns only per LiveViewPurity EX9001): Tasks list +
+board grouped by category. ObjectType/field editor (create/rename types,
+add/reorder fields). Workflow editor: states + drag transitions + attach
+guards from a palette (Guard.describe for labels). Full customization usable
+immediately. Begin templates with <Layouts.app flash={@flash} ...>.
+
+** Verification (REQUIRED before R6 + report)
+- TDD: LiveView tests (Phoenix.LiveViewTest) by element id — list/board render,
+  create record, drag transition (guard rejection surfaced), field editor mutates
+  FieldDefs, workflow editor adds state/transition/guard.
+- Browser (REQUIRED): full manual pass — define a custom type end-to-end, build a
+  workflow with a guard, create + move records on the board, confirm an agent MCP
+  tool appears for the new type. World-class UI polish check.
+- Reviewer wave R6: LiveViewPurity EX9001 (code-interface only, no Ash.Query in
+  live/), Layouts.app usage, accessibility of drag interactions.
+- Mid-flight report: work done (+tests) · process learnings · follow-ups filed.
+- Gate: mix precommit green + R6 sign-off + final report.

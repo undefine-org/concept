@@ -1,0 +1,160 @@
+#+TITLE: Objects and Tasks database builder
+#+STATE: ITEM
+#+SESSION_ID: 14f437a4d57957b7
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-15-33-205Z_14f437a4d57957b7.jsonl]]
+#+CUSTOM_ID: PLAN-009-objects-and-tasks-database-builder
+
+* Initial Message
+
+Let's think. What is a nice, simple system that lets us do project management within Concept? As opposed to simple knowledge base stuff. This would mean:
+- it's easy to know which tasks need to be done. which are known as tasks and which ones are aspirational/research/whatever.
+- task assignment
+
+look up online to read expert designers' takes on the shortcomings of the Notion model. This is a DESIGN session where we think deeply, from first principles, about what can help us achieve these principles:
+1. Simple (it's easy for agents and humans to understand the system)
+2. Transparent & not prone to redundancy (it's easy to find where each task is, and it's easy to know where to put each task)
+4. Ease of management
+
+For this first iteration, think about what we'd do if we had to design Notion's system from scratch, with the principle that Concept is for human and agent TEAMS working together. Ask me plenty of questions to operationalise this principle
+
+* Initial Message
+
+Design a simple project-management system within Concept (as opposed to a
+knowledge base): easy to know which tasks need doing vs aspirational/research;
+task assignment; for human + agent TEAMS. Principles: (1) Simple, (2)
+Transparent & not redundant, (3) Ease of management. Design from first
+principles as if rebuilding Notion's system. Evolved through design dialogue
+into a runtime database builder: users define their own object types, fields,
+and validation workflows; Task is the first built-in type.
+
+Full design: [[file:../../docs/objects_and_tasks.md][docs/objects_and_tasks.md]]
+
+* PLAN Objects and Tasks database builder
+
+** Principle
+
+#+begin_quote
+A task is one entity with one home. Everything else is a reference. What
+teams customize is the schema and the rules — never the entity's identity.
+Agents reason about a fixed set of semantic categories; humans customize the
+state names that map onto them.
+#+end_quote
+
+This is a runtime database builder for human + agent teams. Workspaces define
+their own object *types*, *fields*, and *workflows* (state graphs with guarded
+transitions). **Task** is the first built-in type — the proof the engine
+works, not a special case.
+
+** Why this shape (design decisions, validated)
+
+- *Records are entities, Blocks are content.* They share the runtime-typed +
+  JSONB-payload + registry-dispatched *mechanism* but differ in *identity
+  model*. A block lives positionally in one page tree; a Record is a canonical,
+  queryable entity. The decisive test — "what is ready and mine across the
+  workspace?" — is one indexed query over Records, impossible over scattered
+  blocks (that is the Notion failure mode). Reuse the BlockType machinery
+  (behaviour + registry + ValidatePropsForType change) lifted one level; keep
+  two identity models; bridge with a ~record_ref~ block (the seam).
+- *Two-layer lifecycle.* WorkflowState names are user-customizable and open;
+  each maps to exactly one FIXED ~category~ ∈
+  {:backlog,:todo,:doing,:review,:done,:canceled}. Agents bind to categories,
+  never names → total customization AND universal agent-legibility.
+- *Guards = validation engine.* Developer plane: ~Guard~ behaviour + registry
+  (compile-time vocabulary). User plane: a Transition row carries
+  ~guards: [%{kind, config}]~ (runtime composition). One ~RunTransition~
+  change runs the engine — mirroring RequireOwnLock / ValidatePropsForType.
+- *Agents are Users.* assignee_id → User uniformly (Membership.role gains
+  :agent). Push (assign) AND pull (ready_records, Symphony model). :review is
+  the human acceptance gate; created_by is the acceptor (no owner field).
+- *MCP.* Generic spine free via AutoTools. Per-type dynamic tools require a
+  custom MCP router/server wrapper running a runtime ToolProjector per tenant —
+  VERIFIED net-new infra (ash_ai resolves tools/list+call from compile-time
+  DSL only). Highest-risk item.
+- *Storage.* Validated JSONB field-bag (matches Block grain) + RecordLink rows
+  for relations/blocked_by; JSONB+GIN for per-field filter/sort.
+
+** Trade-offs accepted
+
+1. Categories fixed forever (names + set customizable). Price of agent-legibility.
+2. created_by doubles as acceptor; autonomous agent→agent chains need follow-up.
+3. JSONB+GIN not EAV; revisit at cross-field relational scale.
+4. "Project = Page"; free-floating records via page_id=nil.
+5. Platform-scope, not a PM feature; delivered in waves.
+
+** Execution waves
+
+*** Wave 1 — Engine core
+ObjectType, FieldDef, Record, RecordLink resources (WorkspaceTenanted +
+archival + paper-trail). FieldType behaviour + registry + built-in field types
+(text, number, select, date, user, relation, checklist, url). ValidateFieldsForType
+change (generalize ValidatePropsForType). Designated title field denormalization.
+
+*** Wave 2 — Workflow + guards
+Workflow, WorkflowState (category invariant), Transition resources. Guard
+behaviour + registry + built-in guards (requires_approval, requires_proof,
+requires_checklist_complete, requires_fields). RunTransition engine change
+(graph resolution + guard execution + error aggregation).
+
+*** Wave 3 — Task seed + reads
+Extend Accounts.Reactors.Onboarding to seed the Task ObjectType + default
+workflow (Backlog→Todo→Doing→Review→Done + Canceled) + built-in fields
+(priority, blocked_by) + →Done requires_approval guard. ~ready_records~ /
+~my_records~ read actions (category + RecordLink-derived readiness).
+
+*** Wave 4 — MCP (highest risk)
+Generic spine via AutoTools (described actions). Runtime ToolProjector
+(ObjectType+FieldDef+Workflow → %AshAi.Tool{} list, Guard.describe in
+descriptions). Custom MCP router/server wrapper merging projected tools into
+tools/list + tools/call, keyed on resolved tenant. Schema-introspection MCP
+resource (list_object_types). Extend mcp_parity_test.
+
+*** Wave 5 — The seam
+~record_ref~ block type (ADDING_A_BLOCK flow): props {record_id}, live render
+of title/category-color/assignee, edit via Record actions.
+
+*** Wave 6 — UI (full customization usable)
+Tasks list + board-by-category (LiveView, code-interface only per LiveViewPurity).
+ObjectType/field editor. Workflow editor: states + drag transitions + guard palette.
+
+
+
+** Children
+- Wave 1 :: [[id:FEAT-069-objects-engine-core-resources-and-field]]
+- Wave 2 :: [[id:FEAT-068-workflow-states-and-transition-guard-eng]]
+- Wave 3 :: [[id:FEAT-072-seed-task-type-and-readiness-read-action]]
+- Wave 4 :: [[id:FEAT-070-mcp-generic-spine-and-per-type-dynamic-t]]
+- Wave 5 :: [[id:FEAT-071-record-ref-block-type-the-document-seam]]
+- Wave 6 :: [[id:FEAT-073-tasks-ui-list-board-and-type-workflow-ed]]
+** Acceptance
+Each wave ends green against ~mix precommit~ (Credo LiveView-purity EX9001, MCP
+surface drift, tests). End state: a user defines a Customer type with a custom
+workflow in the UI; an agent immediately gets create_customer / customer_transition
+MCP tools with guard-aware descriptions; a doc embeds a record_ref rendering live state.
+
+
+** Process model (every wave)
+- *Main-thread execution.* No isolated worktrees; implement on the main thread.
+- *Dual verification, both REQUIRED:* (1) TDD red→green — failing test first,
+  every wave; engine is designed for it (pure ToolProjector + guards, standard
+  Ash action tests, mcp_parity_test harness). (2) Manual BROWSER testing via
+  puppeteer once a wave has an observable surface. Compilation + unit-green is
+  necessary, not sufficient.
+- *Reviewer waves interleaved.* After each implementation wave, before the next:
+  a `reviewer` pass audits the diff (correctness, policy/tenancy, LiveView
+  purity EX9001, contract drift). Next wave blocks on findings resolved/deferred.
+- *Mid-flight report between every wave:* Work done (+ proving tests) · Work to
+  be done (next-wave assumptions, open risks) · Process learnings (codebase
+  surprises, dead ends, patterns to reuse).
+- *Wave gate.* Green `mix precommit` (Credo EX9001, MCP surface drift, tests)
+  AND reviewer sign-off AND mid-flight report, before the next wave starts.
+
+** Dynamic MCP tools — approach (no codegen)
+VERIFIED in deps/ash_ai: a %AshAi.Tool{} schema is derived from a real
+{resource, action} (AshAi.Tool.Schema.for_tool); no free-floating typed tools;
+runtime resource codegen rejected (module explosion / hot-recompile races).
+Approach = ONE generic compile-time Record resource (actions :create/:transition/
+:list) + runtime ToolProjector.project/3 (data→[%AshAi.Tool{}], rewrites
+name/description, pins object_type_id via action_parameters/arguments — NO
+per-type action) + thin MCP Server/Router wrapper injecting projected tools at
+the single tools/0 chokepoint (list + call), keyed on the resolved tenant. Whole
+dynamic surface is pure-function/action testable without an LLM.
