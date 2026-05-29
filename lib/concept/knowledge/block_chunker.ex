@@ -23,11 +23,12 @@ defmodule Concept.Knowledge.BlockChunker do
     |> Enum.reject(&(String.trim(&1.text) == ""))
     |> coalesce_small()
     |> Enum.with_index()
-    |> Enum.map(fn {%{text: t, block_ids: ids, primary_id: pid, type: type}, idx} ->
+    |> Enum.map(fn {%{text: t, block_ids: ids, primary_id: pid, type: type, token_count: tc},
+                    idx} ->
       %{
         text: t,
         chunk_index: idx,
-        token_count: max(1, div(byte_size(t), 4)),
+        token_count: tc,
         metadata: %{
           "page_id" => page.id,
           "workspace_id" => workspace_id,
@@ -77,13 +78,22 @@ defmodule Concept.Knowledge.BlockChunker do
         true -> prefix <> md
       end
 
+    trimmed = String.trim(text)
+
     %{
-      text: String.trim(text),
+      text: trimmed,
       block_ids: [block.id] ++ collect_child_ids(children),
       primary_id: block.id,
-      type: type
+      type: type,
+      # Estimate tokens once, here. Carried through coalescing so it is never
+      # recomputed from byte_size downstream (BUG-056).
+      token_count: estimate_tokens(trimmed)
     }
   end
+
+  # Single source of the token estimate. byte_size/4 over-counts multibyte
+  # text; String.length (graphemes) is a closer, language-stable proxy.
+  defp estimate_tokens(text), do: max(1, div(String.length(text), 4))
 
   defp block_prefix(:heading_1, _), do: "# "
   defp block_prefix(:heading_2, _), do: "## "
@@ -140,8 +150,8 @@ defmodule Concept.Knowledge.BlockChunker do
   end
 
   defp coalesce_small([chunk | rest], [prev | prev_rest]) do
-    prev_tokens = max(1, div(byte_size(prev.text), 4))
-    curr_tokens = max(1, div(byte_size(chunk.text), 4))
+    prev_tokens = prev.token_count
+    curr_tokens = chunk.token_count
 
     if prev_tokens + curr_tokens <= @target_tokens and curr_tokens < @merge_below do
       merged = %{
