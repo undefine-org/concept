@@ -1,11 +1,16 @@
 defmodule Concept.Objects.Record.Changes.ValidateFieldsForType do
   @moduledoc """
-  Validate a record's `fields` JSONB bag against its `ObjectType`'s `FieldDef`s.
+  Cast then validate a record's `fields` JSONB bag against its `ObjectType`'s
+  `FieldDef`s.
 
   The object-layer analogue of `Concept.Pages.Block.Changes.ValidatePropsForType`:
-  for each defined field, dispatch to its `FieldType.validate/2`; enforce
-  `required?`; and reject unknown keys. Relation fields are skipped here
-  (their values live in `RecordLink` rows, not the bag).
+  for each defined field, first `FieldType.cast/2` the raw input (form strings,
+  MCP payloads, indexed checklist maps) into the stored representation, then
+  dispatch to `FieldType.validate/2`; enforce `required?`; and reject unknown
+  keys. Casting here (one place, before validation) means every write source
+  — the slide-over form, MCP tools, seeds — normalizes uniformly; a number
+  field typed as "3" in a form lands as 3 rather than failing `is_number`.
+  Relation fields are skipped here (their values live in `RecordLink` rows).
   """
   use Ash.Resource.Change
   require Ash.Query
@@ -30,9 +35,50 @@ defmodule Concept.Objects.Record.Changes.ValidateFieldsForType do
     defs_by_key = Map.new(defs, &{&1.key, &1})
     known_keys = MapSet.new(Map.keys(defs_by_key))
 
-    cs
-    |> reject_unknown_keys(fields, known_keys)
-    |> validate_each(defs, fields)
+    case cast_fields(defs, fields) do
+      {:ok, cast} ->
+        cs
+        |> Ash.Changeset.force_change_attribute(:fields, cast)
+        |> reject_unknown_keys(cast, known_keys)
+        |> validate_each(defs, cast)
+
+      {:error, errors} ->
+        Enum.reduce(errors, cs, fn {name, msg}, acc ->
+          Ash.Changeset.add_error(acc, field: :fields, message: "#{name}: #{msg}")
+        end)
+    end
+  end
+
+  # Cast each non-relational field's raw value via its FieldType.cast/2,
+  # collecting cast failures. Keys with no matching def pass through untouched
+  # (reject_unknown_keys reports them).
+  defp cast_fields(defs, fields) do
+    defs_by_key = Map.new(defs, &{&1.key, &1})
+
+    {cast, errors} =
+      Enum.reduce(fields, {%{}, []}, fn {key, value}, {acc, errs} ->
+        case Map.get(defs_by_key, key) do
+          nil ->
+            {Map.put(acc, key, value), errs}
+
+          def ->
+            mod = Concept.Objects.FieldTypes.lookup(def.field_type)
+
+            if relational?(mod) do
+              {Map.put(acc, key, value), errs}
+            else
+              case mod.cast(value, def.config || %{}) do
+                {:ok, cast_val} -> {Map.put(acc, key, cast_val), errs}
+                {:error, msg} -> {acc, [{def.name, msg} | errs]}
+              end
+            end
+        end
+      end)
+
+    case errors do
+      [] -> {:ok, cast}
+      errs -> {:error, Enum.reverse(errs)}
+    end
   end
 
   defp reject_unknown_keys(cs, fields, known_keys) do

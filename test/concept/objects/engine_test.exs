@@ -111,6 +111,31 @@ defmodule Concept.Objects.EngineTest do
       assert error_on_fields?(err)
     end
 
+    test "numeric strings (from forms/MCP) are cast before validation", ctx do
+      # The slide-over and form inputs submit numbers as strings; the write
+      # path casts via FieldType.cast/2 so "1000" lands as 1000, not a
+      # validation failure.
+      {:ok, rec} =
+        Objects.create_record(
+          ctx.type.id,
+          %{fields: %{"name" => "Acme", "arr" => "1000", "owner" => "me"}},
+          actor: ctx.user,
+          tenant: ctx.ws
+        )
+
+      assert rec.fields["arr"] == 1000
+
+      {:ok, updated} =
+        Objects.update_record_fields(
+          rec,
+          Map.put(rec.fields, "arr", "2500"),
+          actor: ctx.user,
+          tenant: ctx.ws
+        )
+
+      assert updated.fields["arr"] == 2500
+    end
+
     test "select outside options is rejected", ctx do
       assert {:error, err} =
                Objects.create_record(
