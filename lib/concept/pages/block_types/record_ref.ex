@@ -45,7 +45,7 @@ defmodule Concept.Pages.BlockTypes.RecordRef do
     }
 
   def render(assigns) do
-    record = load_record(assigns.block)
+    record = load_record(assigns.block, assigns[:current_user])
     assigns = assign(assigns, :record, record)
 
     ~H"""
@@ -66,13 +66,24 @@ defmodule Concept.Pages.BlockTypes.RecordRef do
 
   # ── helpers ──────────────────────────────────────────────────────────
 
-  defp load_record(block) do
+  # Load the referenced record scoped to the viewing actor when present (the
+  # block renders inside an authenticated LiveView, which threads
+  # `current_user`). Falls back to a tenant-pinned system read only when no
+  # actor is available (e.g. server-side rendering without a user); the
+  # tenant pin keeps it within the block's workspace either way.
+  defp load_record(block, actor) do
+    {actor, authorize?} =
+      case actor do
+        %{__struct__: _} = user -> {user, true}
+        _ -> {%{system?: true}, false}
+      end
+
     with id when is_binary(id) <- get_in(block.props, ["record_id"]),
          {:ok, record} <-
            Ash.get(Concept.Objects.Record, id,
              tenant: block.workspace_id,
-             actor: %{system?: true},
-             authorize?: false,
+             actor: actor,
+             authorize?: authorize?,
              load: [:state]
            ) do
       record
