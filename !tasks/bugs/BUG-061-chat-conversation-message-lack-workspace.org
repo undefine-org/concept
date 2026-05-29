@@ -1,9 +1,10 @@
 #+TITLE: Chat Conversation/Message lack workspace_id — respond pipeline has no tenant (blocks RAG)
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14f4437d27b935fb
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
 #+CUSTOM_ID: BUG-061-chat-conversation-message-lack-workspace
 #+LAYER: knowledge
+#+COMPLETION_HASH: 2263fcd7d2e81854
 
 * Initial Message
 
@@ -47,3 +48,5 @@ Prerequisite for BUG-052 (chat RAG wiring). Discovered while implementing it.
 * Gates
 - gateCmd: ~mix compile --warnings-as-errors~
 - gateCommit: true
+
+NOTE [2026-05-29]: Fixed across 3 commits. Added attribute multitenancy (workspace_id, global? false) to Conversation+Message — no policy authorizer (chat has none; %AshAi{} has no :system? field so WorkspaceTenanted bypass would fail; isolation enforced at query layer). Conversation :create takes workspace_id arg; name_conversation trigger gets use_tenant_from_record?+WorkspaceTenants+SystemActorPersister. CreateConversationIfNotProvided forwards tenant. Respond threads message.workspace_id into all upsert_response + idempotency read. Tenant flows to :respond via run_oban_trigger -> context.tenant non-nil -> K1 retrieval+citations+scope now LIVE (verified: msg/conv carry workspace_id). Threaded tenant through chat_panel/ChatComponent/evaluate_ai/ai_answer/demo + all chat test fixtures. Backfill-safe migration (nullable->backfill->NOT NULL). 98 knowledge + 48 web tests green.
