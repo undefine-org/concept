@@ -49,8 +49,8 @@ defmodule ConceptWeb.Integration.FullFlowTest do
       assert a < mid and mid < b
     end
 
-    test "block_types registry has all 19 modules" do
-      assert length(Concept.Pages.BlockTypes.all()) == 20
+    test "block_types registry has all 21 modules" do
+      assert length(Concept.Pages.BlockTypes.all()) == 21
       slash = Concept.Pages.BlockTypes.slash_menu_items()
       assert Enum.any?(slash, &(&1.type == :paragraph))
       assert Enum.all?(slash, &(&1.group != :hidden))
