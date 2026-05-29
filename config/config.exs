@@ -78,7 +78,13 @@ config :spark,
 config :concept,
   ecto_repos: [Concept.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true],
-  ash_domains: [Concept.Knowledge.Chat, Concept.Accounts, Concept.Pages, Concept.Knowledge]
+  ash_domains: [
+    Concept.Knowledge.Chat,
+    Concept.Accounts,
+    Concept.Pages,
+    Concept.Knowledge,
+    Concept.Objects
+  ]
 
 # Configure the endpoint
 config :concept, ConceptWeb.Endpoint,
@@ -143,6 +149,17 @@ config :concept, :block_types, [
   Concept.Pages.BlockTypes.Columns,
   Concept.Pages.BlockTypes.Column,
   Concept.Pages.BlockTypes.AiAnswer
+]
+
+config :concept, :field_types, [
+  Concept.Objects.FieldTypes.Text,
+  Concept.Objects.FieldTypes.Number,
+  Concept.Objects.FieldTypes.Select,
+  Concept.Objects.FieldTypes.Date,
+  Concept.Objects.FieldTypes.User,
+  Concept.Objects.FieldTypes.Url,
+  Concept.Objects.FieldTypes.Checklist,
+  Concept.Objects.FieldTypes.Relation
 ]
 
 # Concept.AutoTools — opt-out rules for MCP tool auto-synthesis.
