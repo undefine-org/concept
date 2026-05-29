@@ -129,6 +129,16 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
   # ──────────────────────────────────────────────────────────────────────
 
   defp do_stream(message, context) do
+    profile_name = message.profile || :default
+    profile = Concept.Knowledge.Profiles.get!(profile_name)
+
+    # ── Retrieval phase (BUG-052 / BUG-053) ──────────────────────────────
+    # Ground the answer in workspace content before generation. Without this
+    # the chat is a bare tool-calling loop: no citations, empty search_trace,
+    # dead "Why this answer?" UI. Degrades gracefully — on retrieval failure
+    # we still answer, just ungrounded.
+    retrieval = retrieve_context(message, profile, context)
+
     messages =
       Concept.Knowledge.Chat.Message
       |> Ash.Query.filter(conversation_id == ^message.conversation_id)
@@ -139,17 +149,9 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
       |> Enum.concat([%{source: :user, text: message.text}])
 
     prompt_messages =
-      [
-        Context.system("""
-        You are a helpful chat bot.
-        Your job is to use the tools at your disposal to assist the user.
-        """)
-      ] ++ message_chain(messages)
+      [Context.system(system_prompt(retrieval))] ++ message_chain(messages)
 
     new_message_id = Ash.UUIDv7.generate()
-
-    profile_name = message.profile || :default
-    profile = Concept.Knowledge.Profiles.get!(profile_name)
 
     model =
       (profile.answer[:model] || "google:gemini-2.5-flash")
@@ -190,18 +192,176 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
         |> Map.merge(tap_usage)
         |> Map.merge(tap_extras)
 
-      maybe_persist_final(
-        final_state,
-        message,
-        new_message_id,
-        merged_metadata,
-        latency_ms
-      )
+      persisted? =
+        maybe_persist_final(
+          final_state,
+          message,
+          new_message_id,
+          merged_metadata,
+          latency_ms,
+          retrieval
+        )
+
+      # Citations reference the assistant response row (new_message_id); only
+      # persist them once that row was actually written.
+      if persisted?, do: persist_citations(retrieval.hits, new_message_id, context.tenant)
     after
       ReqLLMTap.reset()
     end
   end
 
+  # ──────────────────────────────────────────────────────────────────────
+  # Retrieval (BUG-052 / BUG-053)
+  # ──────────────────────────────────────────────────────────────────────
+
+  @doc """
+  Retrieve grounding context for a message. Returns a map with the
+  (possibly rewritten) query, ranked hits, and a jsonb-friendly search_trace.
+
+  Never raises: any retrieval failure degrades to empty grounding so the
+  answer still streams. Public for unit testing.
+  """
+  def retrieve_context(message, profile, context) do
+    query = message.text || ""
+    limit = profile.search[:limit] || 10
+
+    # Retrieval requires a workspace tenant to pick the Arcana collection and
+    # to write Citation rows (workspace_id is non-nullable). Until chat carries
+    # a workspace (BUG-061), context.tenant is nil here — degrade to an
+    # ungrounded answer rather than crash. Auto-activates once tenant lands.
+    retrievable? =
+      is_binary(context.tenant) and limit > 0 and String.trim(query) != ""
+
+    if retrievable? do
+      rewritten = maybe_rewrite(query, profile)
+      search_query = rewritten || query
+
+      opts =
+        [mode: profile.search[:mode] || :hybrid, limit: limit] ++
+          scope_opts(message, context)
+
+      hits =
+        case Concept.Knowledge.Search.search(search_query, context.tenant, opts) do
+          {:ok, hits} -> hits
+          {:error, _} -> []
+        end
+
+      %{
+        rewritten_prompt: rewritten,
+        hits: hits,
+        search_trace: Enum.map(hits, &trace_entry/1)
+      }
+    else
+      %{rewritten_prompt: nil, hits: [], search_trace: []}
+    end
+  end
+  defp maybe_rewrite(_query, %{rewrite?: false}), do: nil
+  defp maybe_rewrite("", _profile), do: nil
+
+  defp maybe_rewrite(query, _profile) do
+    model = Concept.Knowledge.Profiles.route_model("google:gemini-2.5-flash-lite")
+    prompt = Concept.Knowledge.Prompts.rewrite_prompt(query)
+
+    case ReqLLM.generate_text(model, [Context.user(prompt)]) do
+      {:ok, response} ->
+        case response |> ReqLLM.Response.text() |> String.trim() do
+          "" -> nil
+          text -> text
+        end
+
+      {:error, _} ->
+        nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  # Translate the message's retrieval scope into an Arcana source filter.
+  # Chunks are ingested with source_id "page:<page_id>" (see PerformIngest),
+  # so page/subtree scope narrows retrieval to that page's source.
+  defp scope_opts(%{scope: :page, scope_target_id: page_id}, _context)
+       when is_binary(page_id),
+       do: [source_id: "page:" <> page_id]
+
+  defp scope_opts(%{scope: :subtree, scope_target_id: block_id}, context)
+       when is_binary(block_id) do
+    case Ash.get(Concept.Pages.Block, block_id,
+           actor: context.actor,
+           tenant: context.tenant,
+           authorize?: false
+         ) do
+      {:ok, %{page_id: page_id}} when is_binary(page_id) -> [source_id: "page:" <> page_id]
+      _ -> []
+    end
+  end
+
+  defp scope_opts(_message, _context), do: []
+
+  defp trace_entry(hit) do
+    %{
+      "rank" => hit.rank,
+      "score" => hit.score,
+      "block_id" => hit.block_id,
+      "page_id" => hit.page_id,
+      "snippet" => hit.snippet,
+      "breadcrumbs" => hit.breadcrumbs
+    }
+  end
+
+  defp system_prompt(%{hits: []}) do
+    """
+    You are a helpful chat bot.
+    Your job is to use the tools at your disposal to assist the user.
+    """
+  end
+
+  defp system_prompt(%{hits: hits}) do
+    sources =
+      hits
+      |> Enum.map(fn h -> "[block-#{h.block_id} | #{h.breadcrumbs}] #{h.snippet}" end)
+      |> Enum.join("\n\n")
+
+    """
+    You are a helpful chat bot answering questions about the user's workspace.
+    Use the retrieved sources below as primary context, and the tools at your
+    disposal when the sources are insufficient. Cite sources inline as
+    [block-<id>] when you rely on them.
+
+    Sources:
+    #{sources}
+    """
+  end
+
+  defp persist_citations([], _message_id, _tenant), do: :ok
+
+  defp persist_citations(hits, message_id, tenant) do
+    hits
+    |> Enum.filter(&(is_binary(&1.block_id) and is_binary(&1.page_id)))
+    |> Enum.each(fn hit ->
+      Concept.Knowledge.Citation
+      |> Ash.Changeset.for_create(
+        :create,
+        %{
+          message_id: message_id,
+          block_id: hit.block_id,
+          page_id: hit.page_id,
+          workspace_id: tenant,
+          rank: hit.rank,
+          score: clamp_score(hit.score),
+          snippet: hit.snippet,
+          breadcrumbs: hit.breadcrumbs
+        },
+        actor: %Concept.Knowledge.SystemActor{},
+        tenant: tenant
+      )
+      |> Ash.create(authorize?: false)
+    end)
+
+    :ok
+  end
+
+  defp clamp_score(score) when is_number(score), do: score |> max(0.0) |> min(1.0)
+  defp clamp_score(_), do: nil
   defp initial_state do
     %{
       text: "",
@@ -249,7 +409,7 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
 
   defp reduce_event(_, acc, _, _), do: acc
 
-  defp maybe_persist_final(final_state, message, new_message_id, metadata, latency_ms) do
+  defp maybe_persist_final(final_state, message, new_message_id, metadata, latency_ms, retrieval) do
     stream_error_text = stream_error_text(final_state.stream_error)
 
     final_text =
@@ -286,17 +446,21 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
         },
         actor: %AshAi{}
       )
-      |> force_audit_attributes(metadata, latency_ms)
+      |> force_audit_attributes(metadata, latency_ms, retrieval)
       |> Ash.create!()
+
+      true
+    else
+      false
     end
   end
 
   # The audit columns (`prompt_tokens`, `completion_tokens`, `latency_ms`,
   # `grounding_score`, `search_trace`, `rewritten_prompt`) are `public?: false`,
   # so they cannot be passed through the action's input map.
-  defp force_audit_attributes(changeset, metadata, latency_ms) do
+  defp force_audit_attributes(changeset, metadata, latency_ms, retrieval) do
     metadata
-    |> build_audit_attrs(latency_ms)
+    |> build_audit_attrs(latency_ms, retrieval)
     |> Enum.reduce(changeset, fn {k, v}, cs ->
       Ash.Changeset.force_change_attribute(cs, k, v)
     end)
@@ -359,16 +523,16 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
     "I hit an error while generating this response. Please try again."
   end
 
-  defp build_audit_attrs(metadata, latency_ms) do
+  defp build_audit_attrs(metadata, latency_ms, retrieval) do
     %{
       prompt_tokens: metadata[:prompt_tokens],
       completion_tokens: metadata[:completion_tokens],
       latency_ms: latency_ms,
       grounding_score: metadata[:grounding_score],
-      # For now, search_trace is empty (TODO: integrate with retrieval)
-      search_trace: [],
-      # rewritten_prompt: captured during retrieval phase (not yet implemented)
-      rewritten_prompt: nil
+      # search_trace + rewritten_prompt come from the retrieval phase (BUG-052).
+      # search_trace is non-nullable (defaults []), so always set it.
+      search_trace: retrieval.search_trace,
+      rewritten_prompt: retrieval.rewritten_prompt
     }
     |> Enum.reject(fn {_k, v} -> is_nil(v) end)
     |> Map.new()

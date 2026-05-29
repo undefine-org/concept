@@ -19,9 +19,39 @@ defmodule Concept.Knowledge.Chat.RespondChangeTest do
   alias Concept.LLM.ReqLLMTap
   alias Concept.TestSupport.MockReqLLM
 
+  alias Concept.Knowledge.Profiles
+
   # ──────────────────────────────────────────────────────────────────────
   # Pure / unit tests — no DB
   # ──────────────────────────────────────────────────────────────────────
+
+  describe "retrieve_context/3 — BUG-052/053 grounding" do
+    test "degrades to empty grounding when tenant is nil (no crash)" do
+      # Until chat carries a workspace (BUG-061), context.tenant is nil and
+      # retrieval must be skipped rather than crashing collection_for/1.
+      message = %{text: "anything", scope: :workspace, scope_target_id: nil}
+      ctx = %{tenant: nil, actor: %Concept.Knowledge.SystemActor{}}
+
+      assert %{rewritten_prompt: nil, hits: [], search_trace: []} =
+               Respond.retrieve_context(message, Profiles.get!(:default), ctx)
+    end
+
+    test "degrades to empty grounding for blank query" do
+      message = %{text: "   ", scope: :workspace, scope_target_id: nil}
+      ctx = %{tenant: Ash.UUID.generate(), actor: %Concept.Knowledge.SystemActor{}}
+
+      assert %{hits: [], search_trace: []} =
+               Respond.retrieve_context(message, Profiles.get!(:default), ctx)
+    end
+
+    test "intent profile (limit 0) performs no retrieval" do
+      message = %{text: "q", scope: :workspace, scope_target_id: nil}
+      ctx = %{tenant: Ash.UUID.generate(), actor: %Concept.Knowledge.SystemActor{}}
+
+      assert %{hits: [], search_trace: []} =
+               Respond.retrieve_context(message, Profiles.get!(:intent), ctx)
+    end
+  end
 
   describe "extract_done_metadata/1 — BUG-045 regression" do
     test "returns empty map for %AshAi.ToolLoop.Result{} without raising" do

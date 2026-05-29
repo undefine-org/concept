@@ -1,0 +1,49 @@
+#+TITLE: Chat Conversation/Message lack workspace_id — respond pipeline has no tenant (blocks RAG)
+#+STATE: ITEM
+#+SESSION_ID: 14f4437d27b935fb
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
+#+CUSTOM_ID: BUG-061-chat-conversation-message-lack-workspace
+#+LAYER: knowledge
+
+* Initial Message
+
+Please dude, please. do a deep review of Concept, especially of its user-friendliness. It still has some QoL issues that render it basically unusable for humans. Do a first pass and show it to me
+
+* Intention & Purpose
+
+~Concept.Knowledge.Chat.Conversation~ and ~.Message~ are plain ~Ash.Resource~
+(no ~workspace_id~, not ~WorkspaceTenanted~). The ~:respond~ AshOban trigger
+carries no tenant. So inside ~Respond.do_stream/2~, ~context.tenant~ is nil and
+the workspace is unknown — retrieval (collection selection) and Citation
+creation (workspace_id is ~allow_nil?: false~) are both impossible.
+
+Prerequisite for BUG-052 (chat RAG wiring). Discovered while implementing it.
+
+* Files
+- ~priv/repo/migrations/*~ (new: add workspace_id to conversations + messages)
+- ~lib/concept/knowledge/chat/conversation.ex~ (WorkspaceTenanted + workspace_id arg on :create)
+- ~lib/concept/knowledge/chat/message.ex~ (WorkspaceTenanted; set workspace_id from conversation; tenant on :respond trigger)
+- ~lib/concept/knowledge/chat.ex~ (code interface args)
+- ~lib/concept_web/chat_component.ex~ + chat_panel.ex (thread workspace)
+- ~lib/concept/pages/block/changes/evaluate_ai.ex~ (pass workspace on conversation create)
+
+* Implementation
+1. Migration: add ~workspace_id :uuid~ to ~conversations~ and ~messages~ (backfill
+   nullable, then enforce on new rows).
+2. Conversation: ~use Concept.Resources.WorkspaceTenanted~; ~:create~ accepts a
+   ~workspace_id~ argument; set_attribute. Keep ~relate_actor(:user)~.
+3. Message: ~use WorkspaceTenanted~; on ~:create~ derive workspace_id from the
+   parent conversation. ~:respond~ trigger: ~use_tenant_from_record? true~ +
+   ~list_tenants Concept.AshOban.WorkspaceTenants~ + system actor persister, so
+   ~context.tenant~ is populated in ~Respond~.
+4. Thread the current workspace from the LiveView chat surfaces into
+   conversation creation.
+
+* Acceptance
+- New conversations + messages carry workspace_id.
+- ~Respond~ receives a non-nil ~context.tenant~.
+- ~mix test --exclude integration~ green.
+
+* Gates
+- gateCmd: ~mix compile --warnings-as-errors~
+- gateCommit: true

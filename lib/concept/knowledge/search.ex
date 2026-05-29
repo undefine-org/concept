@@ -31,12 +31,16 @@ defmodule Concept.Knowledge.Search do
     mode = Keyword.get(opts, :mode, :hybrid)
     limit = Keyword.get(opts, :limit, 10)
 
-    search_opts = [
-      repo: Concept.Repo,
-      collections: [collection_name],
-      mode: mode,
-      limit: limit
-    ]
+    search_opts =
+      [
+        repo: Concept.Repo,
+        collections: [collection_name],
+        mode: mode,
+        limit: limit
+      ]
+      # Forward an optional source filter (e.g. "page:<id>") so callers can
+      # scope retrieval to a single page/subtree (BUG-053).
+      |> maybe_put(:source_id, Keyword.get(opts, :source_id))
 
     case Arcana.search(query, search_opts) do
       {:ok, results} ->
@@ -56,6 +60,9 @@ defmodule Concept.Knowledge.Search do
       Logger.debug("Collection not found for workspace #{workspace_id}", error: inspect(e))
       {:ok, []}
   end
+
+  defp maybe_put(opts, _key, nil), do: opts
+  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp normalize_hit({chunk, rank}) do
     # Arcana returns chunks with atom keys
