@@ -38,7 +38,7 @@ defmodule ConceptWeb.Plugs.ProjectedMcpTools do
     end
   end
 
-  defp tenant(conn), do: Ash.PlugHelpers.get_tenant(conn)
+  defp tenant(conn), do: Ash.PlugHelpers.get_tenant(conn) || conn.assigns[:mcp_tenant]
 
   defp handle_list(conn, id) do
     case tenant(conn) do

@@ -43,9 +43,9 @@ defmodule Concept.Objects.ToolProjectorTest do
     [create, list, transition] = ToolProjector.project(bundle)
 
     assert create.resource == Concept.Objects.Record
-    assert create.action == :create
-    assert list.action == :list_for_type
-    assert transition.action == :transition
+    assert create.action.name == :create
+    assert list.action.name == :list_for_type
+    assert transition.action.name == :transition
 
     for t <- [create, list, transition] do
       assert t._meta["object_type_id"] == "t-bug"

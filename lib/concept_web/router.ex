@@ -12,6 +12,7 @@ defmodule ConceptWeb.Router do
       required?: true
 
     plug ConceptWeb.Plugs.MCPWorkspaceContext
+    plug ConceptWeb.Plugs.ProjectedMcpTools
   end
 
   pipeline :browser do

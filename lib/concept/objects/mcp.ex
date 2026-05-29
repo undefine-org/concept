@@ -76,7 +76,7 @@ defmodule Concept.Objects.Mcp do
 
   # Inject object_type_id (from the tool's _meta) into the create input so the
   # agent never has to supply it — the typed tool *is* the object type.
-  defp pin_object_type(%AshAi.Tool{action: :create, _meta: meta}, arguments) do
+  defp pin_object_type(%AshAi.Tool{action: %{name: :create}, _meta: meta}, arguments) do
     otid = meta["object_type_id"]
     input = Map.get(arguments, "input", %{})
     put_in_arguments(arguments, Map.put(input, "object_type_id", otid))

@@ -21,6 +21,11 @@ defmodule Concept.Objects.ToolProjector do
 
   alias Concept.Objects.{Guards, Record}
 
+  # The generic Record actions the projected tools point at. Resolved to action
+  # structs (not atoms) because AshAi.Tools.build/execute read `action.description`
+  # etc. — normally done by `AshAi.exposed_tools/1`, which we bypass.
+  defp action_struct(name), do: Ash.Resource.Info.action(Record, name)
+
   @doc """
   Project one object type's schema bundle into typed tools.
 
@@ -59,7 +64,7 @@ defmodule Concept.Objects.ToolProjector do
     %AshAi.Tool{
       name: :"create_#{type.key}",
       resource: Record,
-      action: :create,
+      action: action_struct(:create),
       description: desc,
       load: [],
       async: false,
@@ -76,7 +81,7 @@ defmodule Concept.Objects.ToolProjector do
     %AshAi.Tool{
       name: :"list_#{type.key}",
       resource: Record,
-      action: :list_for_type,
+      action: action_struct(:list_for_type),
       description: "List all #{type.name} records.",
       load: [],
       async: false,
@@ -105,7 +110,7 @@ defmodule Concept.Objects.ToolProjector do
     %AshAi.Tool{
       name: :"#{type.key}_transition",
       resource: Record,
-      action: :transition,
+      action: action_struct(:transition),
       description: desc,
       load: [],
       async: false,
