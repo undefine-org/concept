@@ -123,10 +123,11 @@ defmodule ConceptWeb.Components.PageTree do
             phx-click="archive_page"
             phx-value-id={@page.id}
             phx-target={@myself}
+            data-confirm={"Archive \"#{if @page.title in ["", nil], do: "Untitled", else: @page.title}\"?"}
             class="w-5 h-5 flex items-center justify-center rounded hover:bg-notion-sidebar-hover text-notion-text-light"
             title="Archive"
           >
-            <.icon name="hero-ellipsis-horizontal-micro" class="size-3" />
+            <.icon name="hero-archive-box-micro" class="size-3" />
           </button>
         </div>
       </div>

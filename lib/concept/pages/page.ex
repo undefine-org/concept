@@ -27,7 +27,6 @@ defmodule Concept.Pages.Page do
 
   archive do
     attribute :archived_at
-    base_filter?(true)
   end
 
   actions do
@@ -80,6 +79,7 @@ defmodule Concept.Pages.Page do
       description "Archive the page"
       accept []
       require_atomic? false
+      change set_attribute(:archived_at, &DateTime.utc_now/0)
       change Concept.Pages.Changes.CascadeArchive
     end
 

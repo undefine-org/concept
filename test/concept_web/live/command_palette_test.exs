@@ -267,16 +267,36 @@ defmodule ConceptWeb.CommandPaletteTest do
     |> element("#workspace-root")
     |> render_hook("open_command_palette", %{})
 
-    html =
-      view
-      |> element("#command-palette input[type='text']")
-      |> render_keyup(%{key: "", value: "Unique"})
+    view
+    |> element("#command-palette input[type='text']")
+    |> render_keyup(%{key: "", value: "Unique"})
 
-    # Should show the page in title results
-    assert html =~ page.title
-    # Count occurrences - should only appear once
-    count = html |> String.split(page.title) |> length() |> Kernel.-(1)
-    assert count == 1, "Page should appear exactly once, but appeared #{count} times"
+    render_async(view)
+
+    # The page must appear exactly once among palette *result* rows. Scope to
+    # the #command-palette subtree (via render/1 of that element) and count
+    # result buttons by data-page-id. Counting raw title text across the whole
+    # LV HTML is a false-green: the title also renders in the always-present
+    # sidebar tree (link text + archive data-confirm).
+    assert has_element?(
+             view,
+             ~s(#command-palette button[data-type="title"][data-page-id="#{page.id}"])
+           ),
+           "expected the page as a title result in the palette"
+
+    palette_html = view |> element("#command-palette") |> render()
+
+    # Count result rows carrying this page's id within the palette subtree. A
+    # title row and a semantic row for the same page would both match — the
+    # dedupe contract requires exactly one.
+    count =
+      palette_html
+      |> String.split(~s(data-page-id="#{page.id}"))
+      |> length()
+      |> Kernel.-(1)
+
+    assert count == 1,
+           "Page should appear exactly once in palette results, got #{count}"
   end
 
   test "search timeout - title rows render, semantic absent (no crash)", %{
