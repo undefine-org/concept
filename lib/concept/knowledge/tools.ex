@@ -5,6 +5,42 @@ defmodule Concept.Knowledge.Tools do
   """
   use Ash.Resource, domain: Concept.Knowledge
 
+  @doc """
+  Synchronous, grounded Q&A for the `answer_question` MCP tool.
+
+  Retrieves workspace context via `Concept.Knowledge.Search`, then asks the
+  LLM in a single shot with an inline-citation prompt. Returns the answer
+  plus its sources in the response body — unlike the deprecated
+  `Concept.Knowledge.Ask`, which returned an async handle and broadcast the
+  answer on a PubSub topic no MCP caller subscribes to.
+  """
+  @spec answer_question(String.t(), binary()) :: {:ok, map()} | {:error, term()}
+  def answer_question(question, workspace_id) do
+    case Concept.Knowledge.Search.search(question, workspace_id, mode: :hybrid, limit: 10) do
+      {:ok, hits} ->
+        prompt = Concept.Knowledge.Prompts.answer_prompt(to_chunks(hits), question)
+        model = Concept.Knowledge.Profiles.route_model(Concept.Knowledge.Config.llm_model())
+
+        case ReqLLM.generate_text(model, [ReqLLM.Context.user(prompt)]) do
+          {:ok, response} ->
+            {:ok, %{answer: ReqLLM.Response.text(response), sources: hits}}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  # Adapt Search hits to the chunk shape Prompts.answer_prompt/2 expects.
+  defp to_chunks(hits) do
+    Enum.map(hits, fn h ->
+      %{text: h.snippet, metadata: %{"block_id" => h.block_id}}
+    end)
+  end
+
   actions do
     action :search_workspace, {:array, :map} do
       description "Hybrid vector+graph search over the workspace's pages and blocks."
@@ -56,13 +92,10 @@ defmodule Concept.Knowledge.Tools do
         description: "Workspace to draw context from."
 
       run fn input, _context ->
-        case Concept.Knowledge.Ask.ask(
-               input.arguments.question,
-               input.arguments.workspace_id
-             ) do
-          {:ok, result} -> {:ok, result}
-          {:error, reason} -> {:error, reason}
-        end
+        Concept.Knowledge.Tools.answer_question(
+          input.arguments.question,
+          input.arguments.workspace_id
+        )
       end
     end
   end
