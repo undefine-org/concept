@@ -11,6 +11,15 @@
 
 Last audited: 2026-05-29 (post Wave 6, post reviewer waves R1–R6 retroactive).
 
+**Thread (2) progress (W1–W2 done):**
+- ✓ FieldType render contract + `FieldTypeComponent` dispatcher (W1) — folds the
+  structural basis for A, B-fields, C-picker.
+- ✓ Board v2 (W2): columns-from-states (fixes B "Canceled noise" + any-workflow),
+  generic card fields via dispatcher, assignee avatars (B), preloaded transition
+  graph kills `available_moves` N+1 (F), guard-requirement tooltips (B).
+- Remaining in thread (2): W3 DnD, W4 RecordDetail slide-over + seam picker,
+  W5 Guard contract + nav.
+
 ---
 
 ## A. The editors (vision §14 I6) — database-builder thesis
@@ -40,16 +49,16 @@ then compose those same components. Do not hand-roll per-type widgets.
 
 | Item | Status | Note |
 |---|---|---|
-| Assignee shown on cards + assign control | ☐ | `assignee_id` first-class; `assign_record` exists; board ignores it |
-| Field rendering on cards (priority pill, blocked badge) | ☐ | seeded Task has `priority`, `blocked_by`; board shows neither |
-| Drag-and-drop moves (not text buttons) | ☐ | SortableJS already in repo (`block_list.js`); moves are `→ State` buttons |
+| Assignee shown on cards + assign control | ◐ | W2: avatar shown; assign *control* lands in W4 detail |
+| Field rendering on cards (priority pill, blocked badge) | ◐ | W2: priority pill via dispatcher; blocked badge still TODO |
+| Drag-and-drop moves (not text buttons) | ☐ | W3 — SortableJS shared-group hook |
 | Record detail view (open card → edit fields/guards/history) | ☐ | no way to fill `pr_url` to satisfy a `requires_proof` guard from UI |
 | Guard-aware move affordance (why a move is blocked) | ◐ | guard rejection surfaces as flash only, after the attempt |
 | Empty / loading / error states polish | ◐ | bare empty columns; plain `board_error` sentence; no skeleton |
 | `my_records` / `ready_records` views (pull model) | ☐ | actions exist; no UI consumes them |
 | Filtering / grouping / sorting | ☐ | board is single fixed grouping (category) |
-| `available_moves` N+1 per card per render | ☐ | reviewer-flagged; recompute on every `load_board` |
-| Canceled column always rendered, equal width | ◐ | 5 empty equal columns is visual noise |
+| `available_moves` N+1 per card per render | ✓ | W2: preloaded graph; `moves_for/2` pure |
+| Canceled column always rendered, equal width | ✓ | W2: columns are workflow states, lane layout |
 
 ---
 
