@@ -6,12 +6,16 @@ defmodule Concept.Objects.FieldTypes.Checklist do
   Powers the `requires_checklist_complete` transition guard.
   """
   @behaviour Concept.Objects.FieldType
+  use Phoenix.Component
 
   @impl true
   def key, do: :checklist
 
   @impl true
   def label, do: "Checklist"
+
+  @impl true
+  def icon, do: "☑"
 
   @impl true
   def validate(nil, _config), do: :ok
@@ -68,4 +72,57 @@ defmodule Concept.Objects.FieldTypes.Checklist do
   @doc "True when the checklist value has no unchecked items (empty = complete)."
   def complete?(items) when is_list(items), do: Enum.all?(items, & &1["checked"])
   def complete?(_), do: true
+
+  @impl true
+  def render_value(value, _config, assigns) do
+    items = if(is_list(value), do: value, else: [])
+    done = Enum.count(items, & &1["checked"])
+
+    assigns =
+      assigns
+      |> assign(:total, length(items))
+      |> assign(:done, done)
+
+    ~H"""
+    <%= if @total > 0 do %>
+      <span class="inline-flex items-center gap-1.5 text-xs text-notion-text-light">
+        <span class="h-1.5 w-16 overflow-hidden rounded-full bg-notion-gray">
+          <span
+            class="block h-full rounded-full bg-green-500"
+            style={"width: #{percent(@done, @total)}%"}
+          />
+        </span>
+        {@done}/{@total}
+      </span>
+    <% else %>
+      <span class="text-sm text-notion-text-light">—</span>
+    <% end %>
+    """
+  end
+
+  @impl true
+  def render_input(field, _config, assigns) do
+    items = if(is_list(field.value), do: field.value, else: [])
+    assigns = assigns |> assign(:field, field) |> assign(:items, items)
+
+    ~H"""
+    <div class="space-y-1">
+      <label :for={{item, idx} <- Enum.with_index(@items)} class="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          name={"#{@field.name}[#{idx}][checked]"}
+          checked={item["checked"]}
+          class="rounded border-notion-divider"
+        />
+        <input type="hidden" name={"#{@field.name}[#{idx}][label]"} value={item["label"]} />
+        <span class={[item["checked"] && "line-through text-notion-text-light"]}>
+          {item["label"]}
+        </span>
+      </label>
+    </div>
+    """
+  end
+
+  defp percent(_done, 0), do: 0
+  defp percent(done, total), do: round(done / total * 100)
 end

@@ -53,5 +53,37 @@ defmodule Concept.Objects.FieldType do
   @doc "Whether this field's values live in `RecordLink` rows (relations)."
   @callback relational?() :: boolean
 
-  @optional_callbacks relational?: 0
+  # ── presentation contract (the object-layer analogue of BlockType render) ──
+  #
+  # These make every human surface (board card, record detail, record_ref
+  # badge) and the ObjectType/FieldDef editor *generic projectors* over the
+  # registry: a dispatcher routes on `field_type`, never branches per type.
+  # See docs/objects_and_tasks_ux.md §1.
+
+  @doc "Emoji/icon for type pickers and field rows."
+  @callback icon() :: String.t()
+
+  @doc """
+  Read-only display of a stored `value` (card pill, detail row, record_ref
+  badge). `assigns` carries ambient context (e.g. `:members` for `:user`,
+  `:linked` records for `:relation`) so the component stays pure.
+  """
+  @callback render_value(value :: term, config :: map, assigns :: map) ::
+              Phoenix.LiveView.Rendered.t()
+
+  @doc """
+  The edit control for this field (record detail, create form). `field` is a
+  `Phoenix.HTML.FormField`; `assigns` carries context (members, link options).
+  """
+  @callback render_input(field :: Phoenix.HTML.FormField.t(), config :: map, assigns :: map) ::
+              Phoenix.LiveView.Rendered.t()
+
+  @doc """
+  The field's own settings UI in the ObjectType/FieldDef editor (e.g.
+  `:select` edits its option list). Optional — most types have no config.
+  """
+  @callback render_config_form(config :: map, form :: Phoenix.HTML.Form.t()) ::
+              Phoenix.LiveView.Rendered.t()
+
+  @optional_callbacks relational?: 0, render_config_form: 2
 end

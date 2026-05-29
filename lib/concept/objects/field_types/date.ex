@@ -1,12 +1,16 @@
 defmodule Concept.Objects.FieldTypes.Date do
   @moduledoc "A date field, stored as an ISO-8601 string (`YYYY-MM-DD`)."
   @behaviour Concept.Objects.FieldType
+  use Phoenix.Component
 
   @impl true
   def key, do: :date
 
   @impl true
   def label, do: "Date"
+
+  @impl true
+  def icon, do: "📅"
 
   @impl true
   def validate(nil, _config), do: :ok
@@ -39,4 +43,31 @@ defmodule Concept.Objects.FieldTypes.Date do
 
   @impl true
   def json_schema(_config), do: %{"type" => "string", "format" => "date"}
+
+  @impl true
+  def render_value(value, _config, assigns) do
+    assigns = assign(assigns, :value, value)
+
+    ~H"""
+    <span class="text-sm text-notion-text">{display(@value)}</span>
+    """
+  end
+
+  @impl true
+  def render_input(field, _config, assigns) do
+    assigns = assign(assigns, :field, field)
+
+    ~H"""
+    <input
+      type="date"
+      id={@field.id}
+      name={@field.name}
+      value={@field.value}
+      class="w-full rounded-md border border-notion-divider px-2 py-1 text-sm"
+    />
+    """
+  end
+
+  defp display(v) when is_binary(v) and v != "", do: v
+  defp display(_), do: "—"
 end

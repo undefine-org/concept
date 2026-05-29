@@ -1,12 +1,16 @@
 defmodule Concept.Objects.FieldTypes.Text do
   @moduledoc "A plain string field."
   @behaviour Concept.Objects.FieldType
+  use Phoenix.Component
 
   @impl true
   def key, do: :text
 
   @impl true
   def label, do: "Text"
+
+  @impl true
+  def icon, do: "✎"
 
   @impl true
   def validate(nil, _config), do: :ok
@@ -23,4 +27,31 @@ defmodule Concept.Objects.FieldTypes.Text do
 
   @impl true
   def json_schema(_config), do: %{"type" => "string"}
+
+  @impl true
+  def render_value(value, _config, assigns) do
+    assigns = assign(assigns, :value, value)
+
+    ~H"""
+    <span class="text-sm text-notion-text">{display(@value)}</span>
+    """
+  end
+
+  @impl true
+  def render_input(field, _config, assigns) do
+    assigns = assign(assigns, :field, field)
+
+    ~H"""
+    <input
+      type="text"
+      id={@field.id}
+      name={@field.name}
+      value={@field.value}
+      class="w-full rounded-md border border-notion-divider px-2 py-1 text-sm"
+    />
+    """
+  end
+
+  defp display(v) when is_binary(v) and v != "", do: v
+  defp display(_), do: "—"
 end
