@@ -294,7 +294,7 @@ List messages in a chat conversation, most recent first by default.
 
 ---
 ## Concept.Objects
-### Tools (31)
+### Tools (32)
 
 #### `field_def_create`
 
@@ -378,6 +378,18 @@ Assign a record to a user (human or agent), or clear with nil.
 
 - **Resource**: `Concept.Objects.Record`
 - **Action**: `:assign` (update)
+
+
+#### `record_board`
+
+List an object type's records with workflow state loaded, for board/list views.
+
+- **Resource**: `Concept.Objects.Record`
+- **Action**: `:board` (read)
+
+**Arguments:**
+
+  - `object_type_id` (`UUID`, required) — Object type whose records to list.
 
 
 #### `record_create`
