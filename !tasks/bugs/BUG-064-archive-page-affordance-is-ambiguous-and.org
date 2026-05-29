@@ -1,0 +1,44 @@
+#+TITLE: Archive page affordance is ambiguous and unconfirmed (destructive)
+#+STATE: DONE
+#+SESSION_ID: 14f440a2f4a99f1d
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-54-50-578Z_14f440a2f4a99f1d.jsonl]]
+#+CUSTOM_ID: BUG-064-archive-page-affordance-is-ambiguous-and
+#+COMPLETION_HASH: fcdd01e654092d46
+
+* Initial Message
+
+ok dude can you tell me what your structural solution to FUP-034 is?
+
+* Observation (2026-05-29, QoL review M3)
+
+=lib/concept_web/components/page_tree.ex= renders, on row hover, an archive
+button using =hero-ellipsis-horizontal-micro= with =title="Archive"=. Two
+problems:
+
+1. *Ambiguous icon*: an ellipsis (…) conventionally means "more options /
+   open a menu", not "archive". Users won't discover archiving, and those who
+   click expecting a menu instead immediately archive the page.
+2. *No confirmation on a destructive action*: =phx-click="archive_page"= fires
+   immediately. One stray hover-click silently removes a page from the tree.
+   The "+" add-subpage button sits right next to it (both 5x5, same hover
+   group) — easy mis-click.
+
+* Decision
+
+- Swap the icon to an archive-semantic glyph (=hero-archive-box-micro= or
+  =hero-trash-micro=) so the affordance reads correctly.
+- Gate the action behind a confirmation using =data-confirm= (Phoenix's
+  built-in confirm, honored by app.js) — no custom modal needed. e.g.
+  =data-confirm="Archive this page?"=.
+
+* Scope
+- lib/concept_web/components/page_tree.ex — change archive button icon +
+  add data-confirm.
+- Test: assert archive button has data-confirm and the archive-semantic icon
+  class; existing archive_page flow still reachable.
+
+* Acceptance
+- Archive button reads as archive (not "more"); clicking prompts confirmation
+  before dispatching archive_page. Tests green.
+
+NOTE [2026-05-29]: Fixed 3e1a06d: hero-archive-box-micro icon + data-confirm. Uncovered + fixed BUG-066 (archive action never archived the page).

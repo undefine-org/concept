@@ -1,0 +1,55 @@
+#+TITLE: Command palette lacks ARIA combobox/listbox semantics
+#+STATE: DONE
+#+SESSION_ID: 14f440a2f4a99f1d
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-54-50-578Z_14f440a2f4a99f1d.jsonl]]
+#+CUSTOM_ID: BUG-065-command-palette-lacks-aria-combobox-list
+#+COMPLETION_HASH: 1e8426a0679e2b8a
+
+* Initial Message
+
+ok dude can you tell me what your structural solution to FUP-034 is?
+
+* Observation (2026-05-29, QoL review M4)
+
+=lib/concept_web/live/command_palette_live.ex= renders a modal search palette
+with full keyboard navigation (ArrowUp/Down/Enter via palette_key,
+=@selected_index= highlight) but *zero ARIA semantics*:
+
+- Outer overlay: no =role="dialog"= / =aria-modal="true"= / =aria-label=.
+- Search input: no label, no =role="combobox"=, no =aria-expanded=,
+  no =aria-controls=, no =aria-activedescendant= pointing at the selected row.
+- Results list (=div.max-h-[60vh]=): no =role="listbox"=.
+- Each item button (action/page/semantic/ask): no =role="option"=,
+  no =aria-selected= reflecting =@index == @selected_index=.
+
+Screen-reader users cannot perceive that a dialog opened, that it is a
+searchable list, which option is highlighted, or how many results exist.
+The visual selection state (=bg-notion-sidebar-hover=) has no programmatic
+equivalent. The four item components share an identical button shell — a good
+opportunity to consolidate into one =palette_item/1= wrapper carrying the
+=role="option"= + =aria-selected= so the semantics can't drift per type.
+
+* Decision (combobox + listbox pattern)
+
+- Overlay container → =role="dialog" aria-modal="true" aria-label="Command palette"=.
+- Input → =role="combobox" aria-expanded="true" aria-controls="palette-listbox"
+  aria-activedescendant={"palette-item-#{@selected_index}"}=, plus an
+  =aria-label= (e.g. "Search pages or run a command").
+- Results wrapper → =id="palette-listbox" role="listbox"=.
+- Each item → =role="option" aria-selected={@index == @selected_index}=.
+- DRY: extract shared =palette_item/1= shell used by action/page/semantic/ask
+  so role/aria-selected live in one place.
+
+* Scope
+- lib/concept_web/live/command_palette_live.ex — add roles/aria; optionally
+  consolidate the 4 item fns into one shell.
+- Test: open palette, assert role=dialog, input role=combobox +
+  aria-activedescendant, listbox present, selected item aria-selected=true and
+  moves with ArrowDown.
+
+* Acceptance
+- Palette exposes dialog + combobox + listbox + option semantics;
+  aria-selected tracks selected_index; aria-activedescendant updates on arrow
+  nav. Existing palette tests green.
+
+NOTE [2026-05-29]: Fixed 4cf01d8: dialog/combobox/listbox/option ARIA + aria-activedescendant tracking selected_index; DRY'd 4 item fns into palette_item/1 shell owning role=option + aria-selected. a11y test pins the contract incl. ArrowDown moving selection.

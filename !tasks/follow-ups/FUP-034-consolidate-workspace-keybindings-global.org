@@ -1,8 +1,9 @@
 #+TITLE: Consolidate workspace keybindings — GlobalKeys hook and phx-window-keydown both bound, window path dead
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14f440a2f4a99f1d
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-54-50-578Z_14f440a2f4a99f1d.jsonl]]
 #+CUSTOM_ID: FUP-034-consolidate-workspace-keybindings-global
+#+COMPLETION_HASH: e15e8a085ebfca43
 
 * Initial Message
 
@@ -32,3 +33,5 @@ Option A (prefer): drop the dead =global_key= k/j clauses; keep =phx-hook="Globa
 
 - One mechanism for Cmd-K/Cmd-J; no dead clauses; palette+chat+Escape work (tests + manual).
 - Sequence after BUG-059 to avoid churn.
+
+NOTE [2026-05-29]: Cutover committed c817c48. GlobalKeys hook is now sole keyboard owner: removed phx-window-keydown + 6 dead global_key clauses + unused toggle_palette/1; added handle_event("escape") with palette-then-chat priority; centralized chat visibility in put_chat_open/2 (assign + push chat_state) so the hook can gate Escape. Also fixed a latent gap: hook's _chatOpen was never synced — Escape-to-close-chat would have silently broken in-browser. Tests migrated off dead global_key events to real toggle_chat/escape; new workspace_keybindings_test pins single-mechanism + chat_state push. Full web suite 145/0.

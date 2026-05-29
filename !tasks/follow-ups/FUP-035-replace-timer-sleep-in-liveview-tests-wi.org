@@ -1,0 +1,54 @@
+#+TITLE: Replace timer.sleep in LiveView tests with deterministic sync
+#+STATE: ITEM
+#+SESSION_ID: 14f440a2f4a99f1d
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-54-50-578Z_14f440a2f4a99f1d.jsonl]]
+#+CUSTOM_ID: FUP-035-replace-timer-sleep-in-liveview-tests-wi
+
+* Initial Message
+
+ok dude can you tell me what your structural solution to FUP-034 is?
+
+* Observation (2026-05-29, false-green sweep)
+
+Several LiveView/component tests use =:timer.sleep/1= to wait for async work,
+violating the project test guideline ("Avoid Process.sleep; use
+Process.monitor / :sys.get_state"). Sleeps are flaky (pass/fail by timing) and
+slow the suite. Remaining offenders after the BUG-065 sweep:
+
+- test/concept_web/live/ask_selection_test.exs
+- test/concept_web/live/lock_indicator_test.exs
+- test/concept_web/live/workspace_chat_panel_test.exs (palette_ask test)
+- test/concept_web/components/live_citation_rail_test.exs
+- test/concept_web/components/indexing_pill_test.exs
+
+(Already cleaned: the scope/profile dropdown tests in workspace_chat_panel.)
+
+* Decision
+
+Replace each =:timer.sleep= with a deterministic barrier:
+- after a =send(view.pid, msg)=: =_ = :sys.get_state(view.pid)= to flush the
+  mailbox before asserting.
+- for assign_async work: =render_async(view)=.
+- for PubSub round-trips: assert_receive on the broadcast, then render.
+
+* Scope
+- The 5 test files above. No production code.
+
+* Acceptance
+- No =:timer.sleep= / =Process.sleep= remain under test/concept_web/.
+- Tests deterministic; suite green across repeated --seed runs.
+
+* Sweep summary (false-green audit, 2026-05-29)
+
+Audited test/concept_web/live + components for the BUG-058 false-green class
+(assertions satisfied by always-present layout/sidebar text, not the feature's
+own DOM). Findings + dispositions:
+- FIXED: command_palette dedupe test (counted page.title across whole LV HTML)
+  → scoped to #command-palette result rows by data-page-id (commit 3e1a06d).
+- FIXED: chat-panel 'scope dropdown renders 3 options' (=~ generic
+  "workspace"/"page"/"subtree") → assert 3 buttons by phx-value-scope (78368ad).
+- ACCEPTABLE (left as-is): home_live_test "Concept" no-op assertions (the
+  contract is no-crash/no-redirect, which would raise not silently pass);
+  component tests assert unique snippets/CSS classes (no layout leak in
+  isolated render); lock_indicator asserts unique data-locked-by attrs.
+- NO positional-index element clicks found (class absent).

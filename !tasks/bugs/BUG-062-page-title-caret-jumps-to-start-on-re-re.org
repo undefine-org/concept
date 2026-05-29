@@ -1,0 +1,48 @@
+#+TITLE: Page title caret jumps to start on re-render (missing phx-update=ignore)
+#+STATE: DONE
+#+SESSION_ID: 14f440a2f4a99f1d
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-54-50-578Z_14f440a2f4a99f1d.jsonl]]
+#+CUSTOM_ID: BUG-062-page-title-caret-jumps-to-start-on-re-re
+#+COMPLETION_HASH: 8f842cab93ac1e77
+
+* Initial Message
+
+ok dude can you tell me what your structural solution to FUP-034 is?
+
+* Observation (2026-05-29, QoL review M1)
+
+=lib/concept_web/components/page_header.ex= renders the editable title:
+
+#+begin_src heex
+<h1 id={"page-title-#{@page.id}"} class="ora-page-title" contenteditable="true"
+    phx-hook="ContentEditable" phx-target={@myself} data-placeholder="Untitled"
+><%= @page.title || "" %></h1>
+#+end_src
+
+The =ContentEditable= hook (assets/js/hooks/content_editable.js) manages this
+element's DOM directly — the user types into the =contenteditable= h1. Per the
+project's own LiveView guideline, *any hook that manages its own DOM MUST set
+=phx-update="ignore"=*. It does not.
+
+Consequence: the PageHeader live_component re-renders on emoji-picker toggle,
+cover-color change, presence updates, or any parent assign churn. On re-render
+LiveView patches the h1's text content back to =@page.title=, *resetting the
+caret to position 0 mid-edit*. Users typing a long title get their cursor
+yanked to the start intermittently. Classic "unusable for humans" QoL bug.
+
+* Decision
+
+Add =phx-update="ignore"= to the contenteditable h1 so LiveView never patches
+its inner DOM after mount. The hook + =save_title= already own the value
+lifecycle (blur/Enter → push). Server stays source of truth on navigation
+(new mount = new value); in-session edits are owned by the DOM.
+
+* Scope
+- lib/concept_web/components/page_header.ex — add phx-update="ignore" to the h1.
+- Test: render PageHeader, assert the title h1 carries phx-update="ignore".
+
+* Acceptance
+- Title h1 has phx-update="ignore"; caret no longer resets while typing during
+  unrelated re-renders (manual verify). Existing save_title tests stay green.
+
+NOTE [2026-05-29]: Fixed a75b17b: phx-update=ignore on title h1 + data-title canonical + hook updated() sync when unfocused.

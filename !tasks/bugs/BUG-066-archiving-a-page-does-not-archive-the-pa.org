@@ -1,0 +1,60 @@
+#+TITLE: Archiving a page does not archive the page itself only descendants
+#+STATE: DONE
+#+SESSION_ID: 14f440a2f4a99f1d
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-54-50-578Z_14f440a2f4a99f1d.jsonl]]
+#+CUSTOM_ID: BUG-066-archiving-a-page-does-not-archive-the-pa
+#+COMPLETION_HASH: 72ca7b5163b93f87
+
+* Initial Message
+
+ok dude can you tell me what your structural solution to FUP-034 is?
+
+* Observation (2026-05-29, found via BUG-064 TDD)
+
+=lib/concept/pages/page.ex= action =:archive=:
+
+#+begin_src elixir
+update :archive do
+  accept []
+  require_atomic? false
+  change Concept.Pages.Changes.CascadeArchive
+end
+#+end_src
+
+=Concept.Pages.Changes.CascadeArchive= runs in =after_action= and updates
+*only descendants*:
+
+#+begin_src sql
+WITH RECURSIVE descendants AS (
+  SELECT id FROM pages WHERE parent_page_id = $1
+  UNION ALL ...
+)
+UPDATE pages SET archived_at = $2 WHERE id IN (SELECT id FROM descendants) ...
+#+end_src
+
+The action itself never sets =archived_at= on the target page (=accept []=, no
+=set_attribute=). Empirically confirmed: =Pages.archive(page)= returns
+={:ok, page}= but =pages.archived_at= for that row stays =nil=, and the page
+remains readable (=base_filter?(true)= only hides rows WITH =archived_at=).
+
+Net: *clicking Archive removes nothing* — the page persists in the sidebar and
+in all reads. The cascade's =now = page.archived_at || DateTime.utc_now()=
+line betrays the original intent: the action was meant to set the page's own
+=archived_at= first, then cascade that timestamp to descendants.
+
+* Decision
+
+Add =change set_attribute(:archived_at, &DateTime.utc_now/0)= to the =:archive=
+action so the target page is archived; CascadeArchive then propagates the same
+timestamp to descendants (its =page.archived_at || utc_now()= already reads it).
+
+* Scope
+- lib/concept/pages/page.ex — :archive action sets archived_at on the page.
+- Test: Pages.archive then read excludes the page (NotFound) and descendants
+  archived too.
+
+* Acceptance
+- After archive, the page is excluded from default reads and disappears from
+  the sidebar; descendants archived with the same timestamp. Tests green.
+
+NOTE [2026-05-29]: Fixed 3e1a06d: :archive action sets archived_at on the page; removed misconfigured base_filter?(true) so AshArchival FilterArchived re-engages. Domain test added.
