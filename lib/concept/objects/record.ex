@@ -30,7 +30,7 @@ defmodule Concept.Objects.Record do
       index [:workspace_id, :object_type_id, :position]
       index [:workspace_id, :assignee_id]
       index [:workspace_id, :state_id]
-      index [:fields], using: "gin"
+      index [:fields], using: "gin", all_tenants?: true
     end
   end
 
