@@ -40,6 +40,23 @@ defmodule Concept.Integration.MCPParityTest do
                 |> Enum.map_join("\n  ", &inspect/1))
     end
 
+    test "tool names are globally unique across all domains" do
+      # SynthesizeTools dedupes within a single domain, but the MCP router
+      # exposes every domain into one flat tool namespace. Two resources
+      # sharing a last module segment across domains (e.g. a future `*.Page`
+      # or `*.Citation`) would synthesize colliding names that the per-domain
+      # guard cannot see. Assert global uniqueness here.
+      duplicates =
+        all_tools()
+        |> Enum.map(& &1.name)
+        |> Enum.frequencies()
+        |> Enum.filter(fn {_name, count} -> count > 1 end)
+        |> Enum.map(fn {name, count} -> "#{name} (x#{count})" end)
+
+      assert duplicates == [],
+             "Colliding MCP tool names across domains:\n  " <> Enum.join(duplicates, "\n  ")
+    end
+
     test "every exposed tool has a description" do
       for tool <- all_tools() do
         action = Ash.Resource.Info.action(tool.resource, tool.action)

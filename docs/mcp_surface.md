@@ -294,7 +294,7 @@ List messages in a chat conversation, most recent first by default.
 
 ---
 ## Concept.Pages
-### Tools (26)
+### Tools (24)
 
 #### `block_acquire_lock`
 
@@ -312,34 +312,6 @@ Acquire a collaborative-editing lock on the block. Required before mutating cont
 #### `block_ai_answer_evaluate`
 
 Run the AI Answer block's prompt against the workspace and stream cited results into the block.
-
-- **Resource**: `Concept.Pages.Block`
-- **Action**: `:evaluate_ai` (update)
-
-**Arguments:**
-
-  - `prompt` (`String`, required) — Question to answer using workspace content as context.
-  - `scope` (`Atom`, optional) — Retrieval scope. One of :workspace, :page, :subtree.
-  - `profile` (`Atom`, optional) — Knowledge profile. Determines model + retrieval params.
-
-
-#### `block_ai_answer_refresh`
-
-Re-run the AI Answer's prompt against the current workspace state (used when context has drifted).
-
-- **Resource**: `Concept.Pages.Block`
-- **Action**: `:evaluate_ai` (update)
-
-**Arguments:**
-
-  - `prompt` (`String`, required) — Question to answer using workspace content as context.
-  - `scope` (`Atom`, optional) — Retrieval scope. One of :workspace, :page, :subtree.
-  - `profile` (`Atom`, optional) — Knowledge profile. Determines model + retrieval params.
-
-
-#### `block_ai_answer_retry`
-
-Re-run the AI Answer after a failure.
 
 - **Resource**: `Concept.Pages.Block`
 - **Action**: `:evaluate_ai` (update)
@@ -448,7 +420,7 @@ Move a block under a new parent at a given position.
 
 #### `block_update_content`
 
-Update a block's content (lexical state or block-type-specific payload).
+Update a block's content (lexical state or block-type-specific payload). Writes directly; no separate lock step is required. Refuses only when another editor currently holds an active lock on the block.
 
 - **Resource**: `Concept.Pages.Block`
 - **Action**: `:update_content` (update)

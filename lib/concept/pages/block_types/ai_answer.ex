@@ -22,12 +22,13 @@ defmodule Concept.Pages.BlockTypes.AiAnswer do
       retry: [Concept.Pages, :evaluate_ai, [:prompt, :scope, :profile]]
     ],
     mcp: [
+      # refresh/retry both dispatch to the same `evaluate_ai` action; they are
+      # UI affordances (re-run on drift / re-run after failure), not distinct
+      # capabilities. Expose only `evaluate` to MCP to avoid duplicate tools.
+      only: [:evaluate],
       descriptions: [
         evaluate:
-          "Run the AI Answer block's prompt against the workspace and stream cited results into the block.",
-        refresh:
-          "Re-run the AI Answer's prompt against the current workspace state (used when context has drifted).",
-        retry: "Re-run the AI Answer after a failure."
+          "Run the AI Answer block's prompt against the workspace and stream cited results into the block."
       ]
     ]
 
