@@ -1,0 +1,56 @@
+#+TITLE: Chat RAG pipeline not wired — answers ungrounded, no citations, trace empty
+#+STATE: ITEM
+#+SESSION_ID: 14f4437d27b935fb
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
+#+CUSTOM_ID: BUG-052-chat-rag-pipeline-not-wired-answers-ungr
+#+LAYER: knowledge
+
+* Initial Message
+
+Please dude, please. do a deep review of Concept, especially of its user-friendliness. It still has some QoL issues that render it basically unusable for humans. Do a first pass and show it to me
+
+* Intention & Purpose
+
+The chat answer path (~Message.create~ → ~run_oban_trigger(:respond)~ →
+~Concept.Knowledge.Chat.Message.Changes.Respond.do_stream/2~) builds its prompt
+from conversation history ONLY and calls ~AshAi.ToolLoop.stream/2~ with no
+retrieval step. Consequences:
+
+- No ~Concept.Knowledge.Search.search/3~ / Arcana retrieval before generation.
+- Zero ~Concept.Knowledge.Citation~ rows written for chat messages →
+  ~citations_for_message~ always returns ~[]~ → citation rail + AI-block
+  "Sources:" always empty.
+- ~search_trace~ hardcoded ~[]~ ("TODO: integrate with retrieval"),
+  ~rewritten_prompt~ hardcoded ~nil~ → AI Answer "Why this answer?" panel is
+  permanently dead UI.
+
+The RAG producers (ingestion, chunking, embeddings, Search, Citation schema)
+all run correctly but the consumer never queries them.
+
+Relates to prior BUG-006. Correct scope/rewrite logic lives in the dead
+~Concept.Knowledge.Ask~ module (see BUG-057).
+
+* Files
+- ~lib/concept/knowledge/chat/message/changes/respond.ex~ (add retrieval phase)
+- ~lib/concept/knowledge/search.ex~ (consume)
+- ~lib/concept/knowledge/citation.ex~ (write rows via system actor)
+- ~lib/concept/knowledge/prompts.ex~ (rewrite prompt)
+
+* Implementation
+1. In ~do_stream/2~, before building ~prompt_messages~: optionally rewrite query,
+   run ~Search.search(query, tenant, opts)~, inject top-k chunk texts +
+   breadcrumbs into system context.
+2. After ~new_message_id~ known, persist one ~Citation~ per hit
+   (rank/score/snippet/block_id/page_id/breadcrumbs, workspace_id=tenant), actor
+   ~%SystemActor{}~.
+3. Capture ~search_trace~ + ~rewritten_prompt~ into ~force_audit_attributes/3~.
+
+* Acceptance
+- Chat answer creates ≥1 Citation row tied to the response message id.
+- ~search_trace~ non-empty + ~rewritten_prompt~ populated when retrieval hit.
+- ~mix test --exclude integration~ green; regression test asserts citations +
+  non-empty trace.
+
+* Gates
+- gateCmd: ~mix compile --warnings-as-errors~
+- gateCommit: true

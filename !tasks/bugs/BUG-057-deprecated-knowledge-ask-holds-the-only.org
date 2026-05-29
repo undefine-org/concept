@@ -1,0 +1,38 @@
+#+TITLE: Deprecated Knowledge.Ask holds the only correct scope/rewrite logic — harvest then delete
+#+STATE: ITEM
+#+SESSION_ID: 14f4437d27b935fb
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
+#+CUSTOM_ID: BUG-057-deprecated-knowledge-ask-holds-the-only
+#+LAYER: knowledge
+
+* Initial Message
+
+Please dude, please. do a deep review of Concept, especially of its user-friendliness. It still has some QoL issues that render it basically unusable for humans. Do a first pass and show it to me
+
+* Intention & Purpose
+
+~Concept.Knowledge.Ask~ is ~@deprecated~ (FEAT-039), broadcasts on
+~Concept.PubSub~ with a ~{:knowledge_token, …}~ protocol nothing subscribes to
+(live path uses ~ConceptWeb.Endpoint~ "chat:messages:*"). Yet it holds the only
+working ~maybe_filter_by_scope/2~ + prompt-rewrite wiring. Leaving it invites a
+future dev to fix the wrong module.
+
+Blocked by BUG-052 + BUG-054 (harvest scope/rewrite into ~Respond~ first).
+
+* Files
+- ~lib/concept/knowledge/ask.ex~ (delete after harvest)
+- ~lib/concept/knowledge/prompts.ex~ (keep reused fns)
+
+* Implementation
+1. Confirm scope-filter + rewrite landed in ~Respond~.
+2. ~grep~ for ~Knowledge.Ask~ / ~:knowledge_token~ / ~:knowledge_done~ /
+   ~:knowledge_error~ → confirm no live callers.
+3. Delete ~ask.ex~; remove unused ~Prompts~ fns only if unreferenced.
+
+* Acceptance
+- ~Concept.Knowledge.Ask~ removed; compile clean; no dangling references.
+- ~mix test --exclude integration~ green.
+
+* Gates
+- gateCmd: ~mix compile --warnings-as-errors~
+- gateCommit: true

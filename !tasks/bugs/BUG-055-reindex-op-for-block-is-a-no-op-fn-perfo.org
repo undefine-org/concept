@@ -1,0 +1,42 @@
+#+TITLE: Reindex op_for_block is a no-op fn; perform_delete stub leaves archived pages in vector store
+#+STATE: ITEM
+#+SESSION_ID: 14f4437d27b935fb
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
+#+CUSTOM_ID: BUG-055-reindex-op-for-block-is-a-no-op-fn-perfo
+#+LAYER: knowledge
+
+* Initial Message
+
+Please dude, please. do a deep review of Concept, especially of its user-friendliness. It still has some QoL issues that render it basically unusable for humans. Do a first pass and show it to me
+
+* Intention & Purpose
+
+Extends prior BUG-007. Two coupled issues:
+
+1. ~KnowledgeReindex.op_for_block/1~ returns ~:upsert~ for every input (both the
+   ~:archive~ clause and the catch-all) — a no-op abstraction.
+2. ~PerformIngest.perform_delete/3~ is a ~Logger.warning~ stub. Page-archive
+   (~op_for_page(:archive) → :delete~) silently does nothing → embeddings for
+   archived pages persist → deleted pages keep surfacing in search. Once BUG-052
+   makes retrieval matter, this is active, not latent.
+
+* Files
+- ~lib/concept/pages/notifiers/knowledge_reindex.ex~
+- ~lib/concept/knowledge/ingestion_job/changes/perform_ingest.ex~
+
+* Implementation
+1. Collapse ~op_for_block/1~ to one clause (comment: archived blocks excluded by
+   Block base_filter so page re-upsert drops them).
+2. Implement ~perform_delete/3~ via Arcana source-id deletion for
+   ~source_id: "page:#{page_id}"~. If installed Arcana lacks delete, return
+   ~{:error, …}~ (loud failure, job marked failed — no silent success). X-ref
+   FEAT-035.
+
+* Acceptance
+- Archiving a page removes its chunks (or fails visibly).
+- ~op_for_block/1~ no longer pretends to branch.
+- ~mix test --exclude integration~ green.
+
+* Gates
+- gateCmd: ~mix compile --warnings-as-errors~
+- gateCommit: true

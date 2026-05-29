@@ -1,0 +1,36 @@
+#+TITLE: Chat scope and scope_target_id dropped before retrieval — scope controls are no-ops
+#+STATE: ITEM
+#+SESSION_ID: 14f4437d27b935fb
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
+#+CUSTOM_ID: BUG-053-chat-scope-and-scope-target-id-dropped-b
+#+LAYER: knowledge
+
+* Initial Message
+
+Please dude, please. do a deep review of Concept, especially of its user-friendliness. It still has some QoL issues that render it basically unusable for humans. Do a first pass and show it to me
+
+* Intention & Purpose
+
+Chat panel renders scope (workspace/page/subtree) + profile selectors and
+~Message~ persists ~scope~, ~scope_target_id~, ~profile~. ~Respond.do_stream/2~
+reads only ~profile~ and ignores ~scope~/~scope_target_id~ (no retrieval to
+scope). Every scope control is a no-op. Correct ~maybe_filter_by_scope/2~ logic
+exists only in deprecated ~Concept.Knowledge.Ask~.
+
+Depends on BUG-052 (retrieval must exist before it can be scoped).
+
+* Files
+- ~lib/concept/knowledge/chat/message/changes/respond.ex~
+
+* Implementation
+- When BUG-052 adds retrieval, derive the Arcana ~filter~ from ~message.scope~ +
+  ~scope_target_id~: :workspace → none; :page → page_id == target; :subtree →
+  the subtree's page set. Port/adapt ~Ask.maybe_filter_by_scope/2~.
+
+* Acceptance
+- A :page-scoped chat message restricts retrieval to that page (regression test).
+- ~mix test --exclude integration~ green.
+
+* Gates
+- gateCmd: ~mix compile --warnings-as-errors~
+- gateCommit: true

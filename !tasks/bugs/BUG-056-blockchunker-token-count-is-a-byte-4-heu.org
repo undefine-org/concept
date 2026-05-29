@@ -1,0 +1,33 @@
+#+TITLE: BlockChunker token_count is a byte/4 heuristic recomputed in coalesce — chunk drift
+#+STATE: ITEM
+#+SESSION_ID: 14f4437d27b935fb
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
+#+CUSTOM_ID: BUG-056-blockchunker-token-count-is-a-byte-4-heu
+#+LAYER: knowledge
+
+* Initial Message
+
+Please dude, please. do a deep review of Concept, especially of its user-friendliness. It still has some QoL issues that render it basically unusable for humans. Do a first pass and show it to me
+
+* Intention & Purpose
+
+~BlockChunker~ approximates tokens as ~div(byte_size(t), 4)~ and recomputes it
+independently in ~coalesce_small/2~. For multibyte/CJK text this mis-counts,
+skewing ~@target_tokens 512~ / ~@merge_below 128~ coalescing and reported
+~embed_tokens~.
+
+* Files
+- ~lib/concept/knowledge/block_chunker.ex~
+
+* Implementation
+- Compute ~token_count~ once in ~render_block/1~, carry it on the chunk map, sum
+  carried values in ~coalesce_small/2~ instead of recomputing from ~byte_size~.
+
+* Acceptance
+- ~coalesce_small/2~ no longer calls ~byte_size~; merged token_count == sum.
+- Unit test: known token_counts coalesce deterministically.
+- ~mix test --exclude integration~ green.
+
+* Gates
+- gateCmd: ~mix compile --warnings-as-errors~
+- gateCommit: true

@@ -1,0 +1,38 @@
+#+TITLE: AI Answer block ungrounded + 300s completion race in evaluate_ai
+#+STATE: ITEM
+#+SESSION_ID: 14f4437d27b935fb
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
+#+CUSTOM_ID: BUG-054-ai-answer-block-ungrounded-300s-completi
+#+LAYER: knowledge
+
+* Initial Message
+
+Please dude, please. do a deep review of Concept, especially of its user-friendliness. It still has some QoL issues that render it basically unusable for humans. Do a first pass and show it to me
+
+* Intention & Purpose
+
+~Concept.Pages.Block.Changes.EvaluateAi~ rides the same hollow ~Respond~ path
+(BUG-052), so scope_target_id is stored but never used and no citations are
+written. Also ~wait_for_completion/4~ blocks a supervised Task up to 300s in a
+~receive~ loop, and ~ConceptWeb.Endpoint.subscribe(topic)~ runs AFTER
+~Message.create~ (which enqueues ~:respond~). TOCTOU: completion broadcast can
+land before subscribe → missed → 5-min timeout → block never finalizes.
+
+* Files
+- ~lib/concept/pages/block/changes/evaluate_ai.ex~
+
+* Implementation
+1. Subscribe to ~chat:messages:<conversation_id>~ BEFORE ~Message.create~.
+2. On entry to ~wait_for_completion~, poll once for an already-complete response
+   row; finalize if found.
+3. Grounding/citations inherited once BUG-052 lands.
+
+* Acceptance
+- Evaluating an AI block finalizes even when completion lands between create and
+  subscribe (regression test pre-seeds a complete response row).
+- ~decide_completion/1~ semantics unchanged.
+- ~mix test --exclude integration~ green.
+
+* Gates
+- gateCmd: ~mix compile --warnings-as-errors~
+- gateCommit: true
