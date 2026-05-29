@@ -48,7 +48,7 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
     # Press ⌘J to open
     view
     |> element("#workspace-root")
-    |> render_hook("global_key", %{"key" => "j", "metaKey" => true})
+    |> render_hook("toggle_chat", %{})
 
     :timer.sleep(50)
     assert render(view) =~ "ora-chat-panel--open"
@@ -56,7 +56,7 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
     # Press ⌘J again to close
     view
     |> element("#workspace-root")
-    |> render_hook("global_key", %{"key" => "j", "metaKey" => true})
+    |> render_hook("toggle_chat", %{})
 
     :timer.sleep(50)
     refute render(view) =~ "ora-chat-panel--open"
@@ -68,7 +68,7 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
     # Open panel first
     view
     |> element("#workspace-root")
-    |> render_hook("global_key", %{"key" => "j", "metaKey" => true})
+    |> render_hook("toggle_chat", %{})
 
     :timer.sleep(50)
     assert render(view) =~ "ora-chat-panel--open"
@@ -76,7 +76,7 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
     # Press Esc to close
     view
     |> element("#workspace-root")
-    |> render_hook("global_key", %{"key" => "Escape"})
+    |> render_hook("escape", %{})
 
     :timer.sleep(50)
     refute render(view) =~ "ora-chat-panel--open"
@@ -88,7 +88,7 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
     # Open chat panel
     view
     |> element("#workspace-root")
-    |> render_hook("global_key", %{"key" => "j", "metaKey" => true})
+    |> render_hook("toggle_chat", %{})
 
     :timer.sleep(50)
 
@@ -104,7 +104,7 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
     # Open chat panel
     view
     |> element("#workspace-root")
-    |> render_hook("global_key", %{"key" => "j", "metaKey" => true})
+    |> render_hook("toggle_chat", %{})
 
     :timer.sleep(50)
 
@@ -134,7 +134,7 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
     # Open chat panel
     view
     |> element("#workspace-root")
-    |> render_hook("global_key", %{"key" => "j", "metaKey" => true})
+    |> render_hook("toggle_chat", %{})
 
     :timer.sleep(50)
 

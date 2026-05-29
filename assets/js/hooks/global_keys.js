@@ -15,9 +15,14 @@ const GlobalKeys = {
         this.pushEvent("toggle_chat", {});
       }
 
-      if (e.key === "Escape" && this._paletteOpen) {
-        e.preventDefault();
-        this.pushEvent("close_command_palette", {});
+      // GlobalKeys is the sole keyboard authority (FUP-034). Escape priority
+      // (palette before chat) is decided server-side; we only suppress the
+      // browser default when the palette is open, matching prior behaviour.
+      if (e.key === "Escape") {
+        if (this._paletteOpen) {
+          e.preventDefault();
+        }
+        this.pushEvent("escape", {});
       }
     };
 

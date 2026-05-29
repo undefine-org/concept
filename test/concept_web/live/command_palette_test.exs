@@ -96,7 +96,7 @@ defmodule ConceptWeb.CommandPaletteTest do
     html =
       view
       |> element("#workspace-root")
-      |> render_keydown(%{key: "Escape"})
+      |> render_hook("escape", %{})
 
     refute html =~ "Search pages or run a command"
   end
@@ -113,7 +113,7 @@ defmodule ConceptWeb.CommandPaletteTest do
 
     # Open + close to force the catch-all update/2 path, then re-check.
     view |> element("#workspace-root") |> render_hook("open_command_palette", %{})
-    html_after_close = view |> element("#workspace-root") |> render_keydown(%{key: "Escape"})
+    html_after_close = view |> element("#workspace-root") |> render_hook("escape", %{})
     refute html_after_close =~ ~s(phx-window-keydown="palette_key")
   end
 
@@ -319,7 +319,7 @@ defmodule ConceptWeb.CommandPaletteTest do
     html =
       view
       |> element("#workspace-root")
-      |> render_keydown(%{key: "Escape"})
+      |> render_hook("escape", %{})
 
     refute html =~ "Search pages or run a command"
     refute html =~ "Ask answer for"

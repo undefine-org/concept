@@ -162,13 +162,13 @@ defmodule ConceptWeb.WorkspaceLive do
   end
 
   def handle_info({:palette_ask, query}, socket) do
-    {:noreply, assign(socket, chat_open?: true, chat_initial_prompt: query)}
+    {:noreply, socket |> put_chat_open(true) |> assign(chat_initial_prompt: query)}
   end
 
   def handle_info({:palette_ask_with_seed, text, page_id}, socket) do
     prompt = "Tell me more about this excerpt:\n\n" <> text
 
-    socket = assign(socket, chat_open?: true, chat_initial_prompt: prompt)
+    socket = socket |> put_chat_open(true) |> assign(chat_initial_prompt: prompt)
 
     send_update(ConceptWeb.WorkspaceLive.ChatPanel,
       id: "chat-panel",
@@ -180,7 +180,7 @@ defmodule ConceptWeb.WorkspaceLive do
   end
 
   def handle_info(:close_chat_panel, socket) do
-    {:noreply, assign(socket, chat_open?: false)}
+    {:noreply, put_chat_open(socket, false)}
   end
 
   @impl true
@@ -383,36 +383,18 @@ defmodule ConceptWeb.WorkspaceLive do
   end
 
   @impl true
-  def handle_event("global_key", %{"key" => "k", "metaKey" => true}, socket) do
-    toggle_palette(socket)
-  end
-
-  def handle_event("global_key", %{"key" => "k", "ctrlKey" => true}, socket) do
-    toggle_palette(socket)
-  end
-
   def handle_event("toggle_chat", _params, socket) do
-    {:noreply, update(socket, :chat_open?, &(!&1))}
+    {:noreply, put_chat_open(socket, !socket.assigns.chat_open?)}
   end
 
-  def handle_event("global_key", %{"key" => "j", "metaKey" => true}, socket) do
-    {:noreply, update(socket, :chat_open?, &(!&1))}
-  end
-
-  def handle_event("global_key", %{"key" => "j", "ctrlKey" => true}, socket) do
-    {:noreply, update(socket, :chat_open?, &(!&1))}
-  end
-
-  def handle_event("global_key", %{"key" => "Escape"}, socket) do
+  # Escape priority: dismiss the palette first, then the chat panel. Owned by
+  # the GlobalKeys hook (the sole keyboard authority); see FUP-034.
+  def handle_event("escape", _params, socket) do
     cond do
       socket.assigns[:show_palette] -> close_palette(socket)
-      socket.assigns[:chat_open?] -> {:noreply, assign(socket, :chat_open?, false)}
+      socket.assigns[:chat_open?] -> {:noreply, put_chat_open(socket, false)}
       true -> {:noreply, socket}
     end
-  end
-
-  def handle_event("global_key", _params, socket) do
-    {:noreply, socket}
   end
 
   @impl true
@@ -552,12 +534,12 @@ defmodule ConceptWeb.WorkspaceLive do
     end
   end
 
-  defp toggle_palette(socket) do
-    if socket.assigns[:show_palette] do
-      close_palette(socket)
-    else
-      open_palette(socket)
-    end
+  # Single source of truth for chat visibility: assign + mirror to the
+  # GlobalKeys hook (which gates Escape on the open state). See FUP-034.
+  defp put_chat_open(socket, open?) do
+    socket
+    |> assign(:chat_open?, open?)
+    |> push_event("chat_state", %{open: open?})
   end
 
   defp open_palette(socket) do
@@ -582,7 +564,6 @@ defmodule ConceptWeb.WorkspaceLive do
         id="workspace-root"
         class="flex min-h-screen"
         phx-hook="GlobalKeys LiveCitationRail"
-        phx-window-keydown="global_key"
       >
         <.sidebar
           workspace={@workspace}
