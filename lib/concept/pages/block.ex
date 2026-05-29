@@ -82,10 +82,10 @@ defmodule Concept.Pages.Block do
     end
 
     update :update_content do
-      description "Update a block's content (lexical state or block-type-specific payload)."
+      description "Update a block's content (lexical state or block-type-specific payload). Writes directly; no separate lock step is required. Refuses only when another editor currently holds an active lock on the block."
       accept [:content]
       require_atomic? false
-      change Concept.Pages.Block.Changes.RequireOwnLock
+      change Concept.Pages.Block.Changes.EnsureEditableLock
     end
 
     update :update_props do
