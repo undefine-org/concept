@@ -96,6 +96,31 @@ defmodule ConceptWeb.ObjectTypeEditorTest do
       assert updated.config["options"] == ["free", "pro", "enterprise"]
     end
 
+    test "unchecking required persists false (hidden fallback)", %{
+      conn: conn,
+      ws: ws,
+      user: user,
+      type: type
+    } do
+      {:ok, fd} =
+        Objects.create_field_def(type.id, "Owner", :text,
+          actor: user,
+          tenant: ws.id
+        )
+
+      {:ok, fd} = Objects.update_field_def(fd, "Owner", true, %{}, actor: user, tenant: ws.id)
+      assert fd.required? == true
+
+      {:ok, view, _} = live(conn, ~p"/w/#{ws.slug}/types/#{type.id}")
+
+      view
+      |> element("#field-#{fd.id} form")
+      |> render_change(%{"field_id" => fd.id, "name" => "Owner", "required" => "false"})
+
+      {:ok, [updated]} = filter_fields(type, user, ws, "Owner")
+      assert updated.required? == false
+    end
+
     test "reorders fields with the up/down controls", %{
       conn: conn,
       ws: ws,
@@ -120,6 +145,29 @@ defmodule ConceptWeb.ObjectTypeEditorTest do
       a_idx2 = Enum.find_index(after_fields, &(&1.id == a.id))
       b_idx2 = Enum.find_index(after_fields, &(&1.id == b.id))
       assert b_idx2 < a_idx2
+
+      # positions must stay distinct (single-write reorder, no swap collision)
+      positions = Enum.map(after_fields, & &1.position)
+      assert positions == Enum.uniq(positions)
+    end
+
+    test "moving the last field down is a no-op (boundary)", %{
+      conn: conn,
+      ws: ws,
+      user: user,
+      type: type
+    } do
+      {:ok, a} = Objects.create_field_def(type.id, "Aaa", :text, actor: user, tenant: ws.id)
+      {:ok, view, _} = live(conn, ~p"/w/#{ws.slug}/types/#{type.id}")
+
+      {:ok, before} = Objects.list_field_defs(type.id, actor: user, tenant: ws.id)
+
+      view
+      |> element("#field-#{a.id} button[phx-value-dir='down']")
+      |> render_click()
+
+      {:ok, after_fields} = Objects.list_field_defs(type.id, actor: user, tenant: ws.id)
+      assert Enum.map(before, & &1.id) == Enum.map(after_fields, & &1.id)
     end
   end
 

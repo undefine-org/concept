@@ -19,6 +19,7 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
   alias Concept.Accounts
   alias Concept.Objects
   alias Concept.Objects.FieldTypes
+  alias Concept.Pages.FractionalIndex
 
   @impl true
   def mount(%{"workspace_slug" => slug} = params, _session, socket) do
@@ -150,15 +151,14 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
     user = socket.assigns.current_user
     i = Enum.find_index(fields, &(&1.id == id))
 
-    # Adjacent swap: exchange the two siblings' position strings. Robust
-    # against the append-only fractional scheme (no midpoint math), and
-    # always yields distinct valid positions. Two writes via a temp marker
-    # avoid a transient unique-collision if positions are ever constrained.
-    with j when is_integer(j) <- sibling_index(fields, i, dir),
-         a <- Enum.at(fields, i),
-         b <- Enum.at(fields, j),
-         {:ok, _} <- Objects.reorder_field_def(a, b.position, actor: user, tenant: ws.id),
-         {:ok, _} <- Objects.reorder_field_def(b, a.position, actor: user, tenant: ws.id) do
+    # Single atomic write: compute one fractional position between the new
+    # neighbours (LexoRank via FractionalIndex) and move the field there. One
+    # write = no partial-failure corruption (the prior swap could leave two
+    # fields sharing a position if the second write failed; the position index
+    # is non-unique so that would silently corrupt order).
+    with fd when not is_nil(fd) <- (is_integer(i) && Enum.at(fields, i)) || nil,
+         pos when is_binary(pos) <- target_position(fields, i, dir),
+         {:ok, _} <- Objects.reorder_field_def(fd, pos, actor: user, tenant: ws.id) do
       {:noreply, load_fields(socket)}
     else
       _ -> {:noreply, socket}
@@ -234,11 +234,31 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
 
   defp parse_config(_ft, _params, prev), do: prev || %{}
 
-  defp sibling_index(_fields, nil, _dir), do: nil
-  defp sibling_index(_fields, 0, "up"), do: nil
-  defp sibling_index(fields, i, "up") when i > 0 and i < length(fields), do: i - 1
-  defp sibling_index(fields, i, "down") when i >= 0 and i + 1 < length(fields), do: i + 1
-  defp sibling_index(_fields, _i, _dir), do: nil
+  # Position the field between its new neighbours after a one-step move.
+  # "up": it lands above the field currently at i-1, i.e. between i-2 and i-1.
+  # "down": below the field at i+1, i.e. between i+1 and i+2. nil neighbour at
+  # an edge → before_/after_. Returns nil (no-op) when already at the boundary.
+  defp target_position(_fields, nil, _dir), do: nil
+
+  defp target_position(fields, i, "up") when i > 0 do
+    above = Enum.at(fields, i - 1)
+    above_above = if i - 2 >= 0, do: Enum.at(fields, i - 2)
+
+    if above_above,
+      do: FractionalIndex.between(above_above.position, above.position),
+      else: FractionalIndex.before_(above.position)
+  end
+
+  defp target_position(fields, i, "down") when i + 1 < length(fields) do
+    below = Enum.at(fields, i + 1)
+    below_below = if i + 2 < length(fields), do: Enum.at(fields, i + 2)
+
+    if below_below,
+      do: FractionalIndex.between(below.position, below_below.position),
+      else: FractionalIndex.after_(below.position)
+  end
+
+  defp target_position(_fields, _i, _dir), do: nil
 
   defp type_options do
     Enum.map(FieldTypes.all(), fn mod ->
@@ -397,7 +417,10 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
                     class="flex-1 rounded border border-notion-divider px-2 py-1 text-sm"
                   />
                   <label class="flex items-center gap-1 text-xs text-notion-text-light">
-                    <input type="checkbox" name="required" checked={fd.required?} /> required
+                    <%!-- hidden fallback so unchecking submits "false" (an
+                    unchecked checkbox sends no param) --%>
+                    <input type="hidden" name="required" value="false" />
+                    <input type="checkbox" name="required" value="true" checked={fd.required?} /> required
                   </label>
                 </div>
                 <div class="pl-6">
