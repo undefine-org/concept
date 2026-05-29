@@ -97,4 +97,10 @@ defmodule ConceptWeb.HomeLive do
   def handle_event("close_command_palette", _params, socket) do
     {:noreply, socket}
   end
+
+  # GlobalKeys also pushes toggle_chat on Cmd-J. HomeLive has no chat panel,
+  # so this is a safe no-op rather than a missing-clause crash (BUG-059).
+  def handle_event("toggle_chat", _params, socket) do
+    {:noreply, socket}
+  end
 end

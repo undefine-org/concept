@@ -77,4 +77,19 @@ defmodule ConceptWeb.HomeLiveTest do
       assert html =~ "Concept"
     end
   end
+
+  describe "toggle_chat hook (BUG-059)" do
+    test "signed-out user → no-op, no crash", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      # GlobalKeys pushes toggle_chat on Cmd-J. HomeLive has no chat panel;
+      # the keystroke must be a safe no-op, not a missing-clause crash.
+      html =
+        view
+        |> element("#home-root")
+        |> render_hook("toggle_chat", %{})
+
+      assert html =~ "Concept"
+    end
+  end
 end

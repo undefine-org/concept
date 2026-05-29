@@ -1,0 +1,41 @@
+#+TITLE: Cmd-J on landing page crashes HomeLive — no toggle_chat handler
+#+STATE: ITEM
+#+SESSION_ID: 14f440a2f4a99f1d
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T12-54-50-578Z_14f440a2f4a99f1d.jsonl]]
+#+CUSTOM_ID: BUG-059-cmd-j-on-landing-page-crashes-homelive-n
+
+* Initial Message
+
+Please dude, please. do a deep review of Concept, especially of its user-friendliness. It still has some QoL issues that render it basically unusable for humans. Do a first pass and show it to me
+
+* Intention & Purpose
+
+A bare keystroke must never crash a LiveView. Cmd-J (chat toggle) has no meaning on the landing page, so it should be a safe no-op — exactly as BUG-025 made Cmd-K safe there.
+
+* Symptom (confirmed live, 2026-05-29)
+
+=HomeLive= mounts =phx-hook="GlobalKeys"= on =#home-root=. =assets/js/hooks/global_keys.js= pushes =toggle_chat= on Cmd/Ctrl-J (and =open_command_palette= on Cmd-K). BUG-025 added =open_command_palette= + =close_command_palette= handlers to HomeLive, but **no =toggle_chat= clause exists**. Pressing Cmd-J on =/= (signed-out, or the brief pre-redirect window for signed-in) raises =Phoenix.LiveView.handle_event/3= no-clause → LV crash + reconnect.
+
+* Root cause
+
+GlobalKeys is a shared hook that emits three events (open_command_palette, toggle_chat, close_command_palette). Any LiveView mounting it must handle all three. HomeLive covers two. This is the same class as BUG-025 — a shared-hook contract gap.
+
+NB structural: the hook's event set is an implicit contract. Consider a follow-up to make GlobalKeys' chat binding opt-in (e.g. =data-global-keys="palette"= vs ="palette chat"=) so a host that has no chat doesn't receive toggle_chat at all. Out of scope for this rescue; file FUP if pursued.
+
+* Scope
+
+- IN: =lib/concept_web/live/home_live.ex= — add =handle_event("toggle_chat", _, socket)= → ={:noreply, socket}= (no-op; no chat on landing).
+- OUT: rendering a chat panel on landing; reworking the hook contract (FUP).
+
+* Existing Patterns
+
+- =home_live.ex= already stubs =close_command_palette= as a no-op for the same reason — mirror it.
+
+* Tests (TDD — write first, must fail on current code)
+
+- =test/concept_web/live/home_live_test.exs=: =render_hook(view, "home-root", "toggle_chat", %{})= does not raise and returns the view unchanged (signed-out). Current code raises (red).
+
+* Acceptance
+
+- Cmd-J on landing is a silent no-op; no crash.
+- Test green; =mix precommit= green.
