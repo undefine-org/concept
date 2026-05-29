@@ -26,17 +26,14 @@ defmodule Concept.Objects do
     end
 
     resource Concept.Objects.FieldDef do
-      define :create_field_def,
-        action: :create,
-        args: [:object_type_id, :name, :field_type]
-
+      define :create_field_def, action: :create, args: [:object_type_id, :name, :field_type]
       define :update_field_def, args: [:name, :required?, :config], action: :update_def
       define :reorder_field_def, args: [:position], action: :reorder
       define :list_field_defs, args: [:object_type_id], action: :list_for_type
     end
 
     resource Concept.Objects.Record do
-      define :create_record, action: :create, args: [:object_type_id]
+      define :create_record, action: :create, args: [:object_type_id, {:optional, :fields}]
       define :update_record_fields, args: [:fields], action: :update_fields
       define :transition_record, args: [:to_state_id], action: :transition
       define :assign_record, args: [:assignee_id], action: :assign
@@ -44,6 +41,7 @@ defmodule Concept.Objects do
       define :archive_record, action: :archive
       define :list_records, args: [:object_type_id], action: :list_for_type
       define :ready_records, args: [:object_type_id], action: :ready
+      define :board_records, args: [:object_type_id], action: :board
       define :my_records, action: :mine
       define :get_record, action: :read, get_by: :id
     end
@@ -66,6 +64,7 @@ defmodule Concept.Objects do
       define :update_workflow_state, action: :update_state, args: [:name, :category]
       define :reorder_workflow_state, action: :reorder, args: [:position]
       define :list_workflow_states, action: :list_for_workflow, args: [:workflow_id]
+      define :get_workflow_state, action: :read, get_by: :id
     end
 
     resource Concept.Objects.Transition do
@@ -74,5 +73,67 @@ defmodule Concept.Objects do
       define :list_transitions, action: :list_for_workflow, args: [:workflow_id]
       define :transitions_from_state, action: :from_state, args: [:from_state_id]
     end
+  end
+
+  @doc """
+  Board view for the workspace's built-in Task type: states (ordered) +
+  records grouped by their state's category. Returns
+  `{:ok, %{type: ObjectType, states: [WorkflowState], columns: %{category => [Record]}}}`
+  or `{:error, :no_task_type}`.
+
+  Pure orchestration over code-interface fns so LiveViews stay query-free
+  (Concept.Credo.Check.LiveViewPurity / EX9001).
+  """
+  def task_board(opts) do
+    actor = Keyword.fetch!(opts, :actor)
+    tenant = Keyword.fetch!(opts, :tenant)
+
+    with {:ok, types} <- list_object_types(actor: actor, tenant: tenant),
+         %{} = task <- Enum.find(types, &(&1.key == "task")) || {:error, :no_task_type},
+         {:ok, states} <-
+           list_workflow_states(task.workflow_id, actor: actor, tenant: tenant),
+         {:ok, records} <- board_records(task.id, actor: actor, tenant: tenant) do
+      columns =
+        Enum.group_by(records, fn r ->
+          case r.state do
+            %{category: c} -> c
+            _ -> :backlog
+          end
+        end)
+
+      {:ok, %{type: task, states: states, columns: columns}}
+    else
+      {:error, _} = err -> err
+      _ -> {:error, :no_task_type}
+    end
+  end
+
+  @doc """
+  Transitions available from `record`'s current state (for rendering move
+  buttons). Returns `[%{to_state: WorkflowState, transition: Transition}]`.
+  """
+  def available_moves(record, opts) do
+    actor = Keyword.fetch!(opts, :actor)
+    tenant = Keyword.fetch!(opts, :tenant)
+
+    if is_nil(record.state_id) do
+      []
+    else
+      case transitions_from_state(record.state_id, actor: actor, tenant: tenant) do
+        {:ok, transitions} -> resolve_targets(transitions, actor, tenant)
+        _ -> []
+      end
+    end
+  end
+
+  defp resolve_targets(transitions, actor, tenant) do
+    transitions
+    |> Enum.map(fn t ->
+      case get_workflow_state(t.to_state_id, actor: actor, tenant: tenant) do
+        {:ok, to_state} -> %{to_state: to_state, transition: t}
+        _ -> nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
   end
 end

@@ -116,6 +116,17 @@ defmodule Concept.Objects.Record do
       filter expr(assignee_id == ^actor(:id))
       prepare build(sort: [updated_at: :desc])
     end
+
+    read :board do
+      description "List an object type's records with workflow state loaded, for board/list views."
+
+      argument :object_type_id, :uuid,
+        allow_nil?: false,
+        description: "Object type whose records to list."
+
+      filter expr(object_type_id == ^arg(:object_type_id))
+      prepare build(sort: [position: :asc], load: [:state])
+    end
   end
 
   policies do
