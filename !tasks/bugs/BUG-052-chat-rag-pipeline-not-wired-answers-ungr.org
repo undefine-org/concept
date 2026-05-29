@@ -1,9 +1,10 @@
 #+TITLE: Chat RAG pipeline not wired — answers ungrounded, no citations, trace empty
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14f4437d27b935fb
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
 #+CUSTOM_ID: BUG-052-chat-rag-pipeline-not-wired-answers-ungr
 #+LAYER: knowledge
+#+COMPLETION_HASH: ff8c71262e7212f1
 
 * Initial Message
 
@@ -54,3 +55,5 @@ Relates to prior BUG-006. Correct scope/rewrite logic lives in the dead
 * Gates
 - gateCmd: ~mix compile --warnings-as-errors~
 - gateCommit: true
+
+NOTE [2026-05-29]: Fixed in 4914bd9. Respond.do_stream now runs a retrieval phase (rewrite→Search→inject chunks), persists Citation rows for the assistant response, and threads search_trace+rewritten_prompt into audit columns. Degrades gracefully when tenant is nil (pending BUG-061). retrieve_context/3 unit-tested.

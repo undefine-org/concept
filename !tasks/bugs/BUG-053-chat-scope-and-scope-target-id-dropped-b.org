@@ -1,9 +1,10 @@
 #+TITLE: Chat scope and scope_target_id dropped before retrieval — scope controls are no-ops
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14f4437d27b935fb
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
 #+CUSTOM_ID: BUG-053-chat-scope-and-scope-target-id-dropped-b
 #+LAYER: knowledge
+#+COMPLETION_HASH: d9533f31a37d246e
 
 * Initial Message
 
@@ -34,3 +35,5 @@ Depends on BUG-052 (retrieval must exist before it can be scoped).
 * Gates
 - gateCmd: ~mix compile --warnings-as-errors~
 - gateCommit: true
+
+NOTE [2026-05-29]: Fixed in 4914bd9. scope_opts/2 derives Arcana source_id ("page:<id>") from message.scope/scope_target_id (page+subtree); Search.search now forwards :source_id to Arcana.

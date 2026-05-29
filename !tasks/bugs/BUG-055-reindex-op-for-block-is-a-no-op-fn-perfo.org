@@ -1,9 +1,10 @@
 #+TITLE: Reindex op_for_block is a no-op fn; perform_delete stub leaves archived pages in vector store
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14f4437d27b935fb
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
 #+CUSTOM_ID: BUG-055-reindex-op-for-block-is-a-no-op-fn-perfo
 #+LAYER: knowledge
+#+COMPLETION_HASH: 8572ae1ff7235a17
 
 * Initial Message
 
@@ -40,3 +41,5 @@ Extends prior BUG-007. Two coupled issues:
 * Gates
 - gateCmd: ~mix compile --warnings-as-errors~
 - gateCommit: true
+
+NOTE [2026-05-29]: Fixed in 28f5741. perform_delete resolves the page's Arcana documents by source_id within the workspace collection and deletes each (cascades to chunks); loud {:error} on failure. op_for_block collapsed to one clause. MockArcana.delete/2 + delete-op test added.

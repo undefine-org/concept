@@ -1,9 +1,10 @@
 #+TITLE: AI Answer block ungrounded + 300s completion race in evaluate_ai
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14f4437d27b935fb
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
 #+CUSTOM_ID: BUG-054-ai-answer-block-ungrounded-300s-completi
 #+LAYER: knowledge
+#+COMPLETION_HASH: 610c154cfe04a897
 
 * Initial Message
 
@@ -36,3 +37,5 @@ land before subscribe → missed → 5-min timeout → block never finalizes.
 * Gates
 - gateCmd: ~mix compile --warnings-as-errors~
 - gateCommit: true
+
+NOTE [2026-05-29]: Fixed in fa7016f. evaluate_ai subscribes to the chat topic before Message.create and polls once for an already-complete response before the receive loop, closing the TOCTOU. Grounding inherited from BUG-052.

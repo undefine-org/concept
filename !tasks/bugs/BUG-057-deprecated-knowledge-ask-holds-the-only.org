@@ -1,9 +1,10 @@
 #+TITLE: Deprecated Knowledge.Ask holds the only correct scope/rewrite logic — harvest then delete
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14f4437d27b935fb
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-29T13-07-18-302Z_14f4437d27b935fb.jsonl]]
 #+CUSTOM_ID: BUG-057-deprecated-knowledge-ask-holds-the-only
 #+LAYER: knowledge
+#+COMPLETION_HASH: 6670ed160f04b8cc
 
 * Initial Message
 
@@ -36,3 +37,5 @@ Blocked by BUG-052 + BUG-054 (harvest scope/rewrite into ~Respond~ first).
 * Gates
 - gateCmd: ~mix compile --warnings-as-errors~
 - gateCommit: true
+
+NOTE [2026-05-29]: Fixed in 4bd059a. Discovered Ask was NOT dead — it backed the answer_question MCP tool but returned an async handle + broadcast on an unsubscribed topic (broken tool). Replaced with synchronous grounded Tools.answer_question/2 (Search + one-shot cited answer), then deleted ask.ex.
