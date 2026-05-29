@@ -90,7 +90,11 @@ defmodule ConceptWeb.ObjectTypeEditorTest do
 
       view
       |> element("#field-#{fd.id} form")
-      |> render_change(%{"field_id" => fd.id, "name" => "Tier", "options" => "free\npro\nenterprise"})
+      |> render_change(%{
+        "field_id" => fd.id,
+        "name" => "Tier",
+        "options" => "free\npro\nenterprise"
+      })
 
       {:ok, [updated]} = filter_fields(type, user, ws, "Tier")
       assert updated.config["options"] == ["free", "pro", "enterprise"]
