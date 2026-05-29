@@ -59,7 +59,7 @@ defmodule Concept.Accounts.Membership do
     uuid_primary_key :id
 
     attribute :role, :atom,
-      constraints: [one_of: [:owner, :member]],
+      constraints: [one_of: [:owner, :member, :agent]],
       default: :member,
       public?: true
 

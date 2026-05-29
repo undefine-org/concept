@@ -176,5 +176,13 @@ defmodule Concept.Objects.Record do
       attribute_writable?: true,
       source_attribute: :page_id,
       destination_attribute: :id
+
+    belongs_to :state, Concept.Objects.WorkflowState,
+      attribute_writable?: true,
+      source_attribute: :state_id,
+      destination_attribute: :id
+
+    has_many :outgoing_links, Concept.Objects.RecordLink,
+      destination_attribute: :from_record_id
   end
 end
