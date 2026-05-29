@@ -11,7 +11,7 @@ caller sees.
 ---
 
 ## Concept.Accounts
-### Tools (12)
+### Tools (13)
 
 #### `api_key_create`
 
@@ -43,6 +43,18 @@ Add a user to a workspace with a given role.
 
 - **Resource**: `Concept.Accounts.Membership`
 - **Action**: `:create` (create)
+
+
+#### `membership_for_workspace`
+
+List all memberships (members) of a workspace.
+
+- **Resource**: `Concept.Accounts.Membership`
+- **Action**: `:for_workspace` (read)
+
+**Arguments:**
+
+  - `workspace_id` (`UUID`, required) — Workspace whose members to list.
 
 
 #### `membership_read`
@@ -262,6 +274,10 @@ Start a new chat conversation in the workspace.
 
 - **Resource**: `Concept.Knowledge.Chat.Conversation`
 - **Action**: `:create` (create)
+
+**Arguments:**
+
+  - `workspace_id` (`UUID`, required) — Workspace the conversation belongs to.
 
 
 #### `conversation_my_conversations`

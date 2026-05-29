@@ -68,7 +68,10 @@ defmodule Concept.Objects do
     end
 
     resource Concept.Objects.Transition do
-      define :create_transition, action: :create, args: [:workflow_id, :from_state_id, :to_state_id]
+      define :create_transition,
+        action: :create,
+        args: [:workflow_id, :from_state_id, :to_state_id]
+
       define :set_transition_guards, action: :set_guards, args: [:guards]
       define :list_transitions, action: :list_for_workflow, args: [:workflow_id]
       define :transitions_from_state, action: :from_state, args: [:from_state_id]
@@ -92,16 +95,35 @@ defmodule Concept.Objects do
          %{} = task <- Enum.find(types, &(&1.key == "task")) || {:error, :no_task_type},
          {:ok, states} <-
            list_workflow_states(task.workflow_id, actor: actor, tenant: tenant),
+         {:ok, transitions} <-
+           list_transitions(task.workflow_id, actor: actor, tenant: tenant),
+         {:ok, field_defs} <- list_field_defs(task.id, actor: actor, tenant: tenant),
          {:ok, records} <- board_records(task.id, actor: actor, tenant: tenant) do
+      states = Enum.sort_by(states, & &1.position)
+      states_by_id = Map.new(states, &{&1.id, &1})
+      initial = Enum.find(states, & &1.is_initial?)
+
+      # Columns ARE the workflow's states (grouped by state id), so any
+      # workflow renders correctly and empty categories don't force phantom
+      # columns. Stateless records fall under the initial state.
       columns =
         Enum.group_by(records, fn r ->
-          case r.state do
-            %{category: c} -> c
-            _ -> :backlog
+          cond do
+            is_map(r.state) and is_binary(Map.get(r.state, :id)) -> r.state.id
+            initial -> initial.id
+            true -> nil
           end
         end)
 
-      {:ok, %{type: task, states: states, columns: columns}}
+      {:ok,
+       %{
+         type: task,
+         states: states,
+         states_by_id: states_by_id,
+         transitions: transitions,
+         field_defs: field_defs,
+         columns: columns
+       }}
     else
       {:error, _} = err -> err
       _ -> {:error, :no_task_type}
@@ -109,31 +131,30 @@ defmodule Concept.Objects do
   end
 
   @doc """
-  Transitions available from `record`'s current state (for rendering move
-  buttons). Returns `[%{to_state: WorkflowState, transition: Transition}]`.
+  Available moves for a record computed *purely* over a preloaded board graph
+  (`board.transitions` + `board.states_by_id`) — no per-card queries. Returns
+  `[%{transition, to_state, requirements}]` where `requirements` are the
+  human-legible guard descriptions (shown before the move is attempted).
   """
-  def available_moves(record, opts) do
-    actor = Keyword.fetch!(opts, :actor)
-    tenant = Keyword.fetch!(opts, :tenant)
-
-    if is_nil(record.state_id) do
-      []
-    else
-      case transitions_from_state(record.state_id, actor: actor, tenant: tenant) do
-        {:ok, transitions} -> resolve_targets(transitions, actor, tenant)
-        _ -> []
-      end
-    end
-  end
-
-  defp resolve_targets(transitions, actor, tenant) do
+  def moves_for(record, %{transitions: transitions, states_by_id: by_id}) do
     transitions
+    |> Enum.filter(&(&1.from_state_id == record.state_id))
     |> Enum.map(fn t ->
-      case get_workflow_state(t.to_state_id, actor: actor, tenant: tenant) do
-        {:ok, to_state} -> %{to_state: to_state, transition: t}
-        _ -> nil
+      case Map.get(by_id, t.to_state_id) do
+        nil -> nil
+        to_state -> %{transition: t, to_state: to_state, requirements: requirements(t)}
       end
     end)
     |> Enum.reject(&is_nil/1)
   end
+
+  @doc """
+  Human-legible descriptions of a transition's guards, via `Guard.describe/1`
+  (delegated to the `Guards` registry). Reused by the board move affordance,
+  the workflow editor, and MCP tool descriptions.
+  """
+  def requirements(%{guards: guards}) when is_list(guards),
+    do: Concept.Objects.Guards.describe_all(guards)
+
+  def requirements(_), do: []
 end

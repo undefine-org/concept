@@ -19,6 +19,7 @@ defmodule Concept.Accounts.Membership do
   code_interface do
     define :create, args: [:workspace_id, :user_id, :role]
     define :update_role, args: [:role]
+    define :list_for_workspace, action: :for_workspace, args: [:workspace_id]
   end
 
   actions do
@@ -27,6 +28,16 @@ defmodule Concept.Accounts.Membership do
     read :read do
       primary? true
       description "List the actor's workspace memberships."
+    end
+
+    read :for_workspace do
+      description "List all memberships (members) of a workspace."
+
+      argument :workspace_id, :uuid,
+        allow_nil?: false,
+        description: "Workspace whose members to list."
+
+      filter expr(workspace_id == ^arg(:workspace_id))
     end
 
     create :create do

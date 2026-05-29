@@ -126,7 +126,7 @@ defmodule ConceptWeb.Objects.FieldTypeComponentTest do
         )
 
       assert html =~ "<select"
-      assert html =~ ">low<"
+      assert html =~ ~s|value="low"|
       # the selected option carries both its value and the boolean attr
       assert html =~ ~r/value="high"\s+selected/
     end

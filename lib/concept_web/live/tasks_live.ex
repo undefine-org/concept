@@ -11,8 +11,8 @@ defmodule ConceptWeb.TasksLive do
 
   alias Concept.Accounts
   alias Concept.Objects
+  alias ConceptWeb.Objects.FieldTypeComponent
 
-  @columns [:backlog, :todo, :doing, :review, :done, :canceled]
 
   @impl true
   def mount(%{"workspace_slug" => slug}, _session, socket) do
@@ -25,7 +25,7 @@ defmodule ConceptWeb.TasksLive do
          |> assign(:workspace, ws)
          |> assign(:page_title, "Tasks")
          |> assign(:new_title, "")
-         |> assign(:columns, @columns)
+         |> assign(:assignee_field_def, %{field_type: :user, config: %{}, key: "assignee"})
          |> load_board()}
 
       _ ->
@@ -87,19 +87,46 @@ defmodule ConceptWeb.TasksLive do
           board.columns
           |> Map.values()
           |> List.flatten()
-          |> Map.new(fn r -> {r.id, Objects.available_moves(r, actor: user, tenant: ws.id)} end)
+          |> Map.new(fn r -> {r.id, Objects.moves_for(r, board)} end)
 
         socket
         |> assign(:board, board)
         |> assign(:moves, moves)
+        |> assign(:members, load_members(ws.id, user))
+        |> assign(:card_fields, card_fields(board.field_defs))
         |> assign(:board_error, nil)
 
       {:error, :no_task_type} ->
-        assign(socket, board: nil, moves: %{}, board_error: "No Task type in this workspace yet.")
+        empty_board(socket, "No Task type in this workspace yet.")
 
       {:error, _other} ->
-        assign(socket, board: nil, moves: %{}, board_error: "Could not load the task board.")
+        empty_board(socket, "Could not load the task board.")
     end
+  end
+
+  defp empty_board(socket, message) do
+    assign(socket, board: nil, moves: %{}, members: [], card_fields: [], board_error: message)
+  end
+
+  # Members feed the :user field renderer + assignee avatars. Defensive: the
+  # board still renders if membership loading fails.
+  defp load_members(ws_id, user) do
+    case Accounts.Membership.list_for_workspace(ws_id, actor: user, load: [:user]) do
+      {:ok, memberships} ->
+        memberships |> Enum.map(& &1.user) |> Enum.reject(&is_nil/1)
+
+      _ ->
+        []
+    end
+  end
+
+  # Heuristic (design doc §3.3): show select + user fields on cards (priority,
+  # etc.), excluding the title (the card heading). A dedicated
+  # `show_on_card?` FieldDef attribute is a later refinement.
+  defp card_fields(field_defs) do
+    field_defs
+    |> Enum.reject(& &1.is_title?)
+    |> Enum.filter(&(&1.field_type in [:select, :user]))
   end
 
   defp move_error(%Ash.Error.Invalid{errors: errors}) do
@@ -140,34 +167,61 @@ defmodule ConceptWeb.TasksLive do
               value={@new_title}
               placeholder="New task…"
               autocomplete="off"
-              class="flex-1 max-w-md rounded-md border border-notion-divider px-3 py-1.5 text-sm"
+              class="flex-1 max-w-md rounded-md border border-notion-divider px-3 py-1.5 text-sm focus:border-notion-text focus:outline-none"
             />
             <button
               type="submit"
-              class="rounded-md bg-notion-text px-3 py-1.5 text-sm font-medium text-white"
+              class="rounded-md bg-notion-text px-3 py-1.5 text-sm font-medium text-white transition hover:opacity-80"
             >
               Add
             </button>
           </form>
 
-          <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-            <div :for={cat <- @columns} class="rounded-lg bg-notion-gray/40 p-2" id={"col-#{cat}"}>
+          <div class="flex gap-3 overflow-x-auto pb-4">
+            <div
+              :for={state <- @board.states}
+              class="w-64 shrink-0 rounded-lg bg-notion-gray/40 p-2"
+              id={"col-#{state.category}"}
+              data-state-id={state.id}
+            >
               <div class="mb-2 flex items-center justify-between px-1">
-                <span class="text-xs font-semibold uppercase tracking-wide text-notion-text-light">
-                  {column_label(@board.states, cat)}
+                <span class="inline-flex items-center gap-1.5">
+                  <span class={["h-2 w-2 rounded-full", category_dot(state.category)]} />
+                  <span class="text-xs font-semibold uppercase tracking-wide text-notion-text-light">
+                    {state.name}
+                  </span>
                 </span>
                 <span class="text-xs text-notion-text-light">
-                  {length(Map.get(@board.columns, cat, []))}
+                  {length(Map.get(@board.columns, state.id, []))}
                 </span>
               </div>
 
-              <div class="space-y-2">
+              <div class="space-y-2 min-h-[2rem]">
                 <div
-                  :for={record <- Map.get(@board.columns, cat, [])}
+                  :for={record <- Map.get(@board.columns, state.id, [])}
                   id={"task-#{record.id}"}
-                  class="rounded-md border border-notion-divider bg-white p-2 shadow-sm"
+                  class="group rounded-md border border-notion-divider bg-white p-2.5 shadow-sm transition hover:shadow-md"
                 >
-                  <div class="text-sm text-notion-text">{record_title(record)}</div>
+                  <div class="text-sm font-medium text-notion-text">{record_title(record)}</div>
+
+                  <div
+                    :if={@card_fields != [] or record.assignee_id}
+                    class="mt-1.5 flex flex-wrap items-center gap-1.5"
+                  >
+                    <FieldTypeComponent.value
+                      :for={fd <- @card_fields}
+                      :if={Map.get(record.fields || %{}, fd.key) not in [nil, "", []]}
+                      field_def={fd}
+                      value={Map.get(record.fields || %{}, fd.key)}
+                      members={@members}
+                    />
+                    <FieldTypeComponent.value
+                      :if={record.assignee_id}
+                      field_def={@assignee_field_def}
+                      value={record.assignee_id}
+                      members={@members}
+                    />
+                  </div>
 
                   <div :if={@moves[record.id] != []} class="mt-2 flex flex-wrap gap-1">
                     <button
@@ -176,12 +230,20 @@ defmodule ConceptWeb.TasksLive do
                       phx-click="move"
                       phx-value-record={record.id}
                       phx-value-to={move.to_state.id}
-                      class="rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text hover:bg-notion-divider"
+                      title={requirements_title(move)}
+                      class="inline-flex items-center gap-1 rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text transition hover:bg-notion-divider"
                     >
-                      → {move.to_state.name}
+                      → {move.to_state.name}<span :if={move.requirements != []} class="text-notion-text-light">🔒</span>
                     </button>
                   </div>
                 </div>
+
+                <p
+                  :if={Map.get(@board.columns, state.id, []) == []}
+                  class="px-1 py-2 text-xs text-notion-text-light/60"
+                >
+                  No tasks
+                </p>
               </div>
             </div>
           </div>
@@ -191,15 +253,19 @@ defmodule ConceptWeb.TasksLive do
     """
   end
 
-  defp column_label(states, cat) do
-    case Enum.find(states, &(&1.category == cat)) do
-      %{name: name} -> name
-      _ -> cat |> to_string() |> String.capitalize()
-    end
-  end
-
   defp record_title(%{title: t}) when is_binary(t) and t != "", do: t
   defp record_title(_), do: "Untitled"
+
+  defp requirements_title(%{requirements: []}), do: nil
+  defp requirements_title(%{requirements: reqs}), do: "Requires: " <> Enum.join(reqs, "; ")
+
+  defp category_dot(:backlog), do: "bg-notion-text-light/40"
+  defp category_dot(:todo), do: "bg-blue-400"
+  defp category_dot(:doing), do: "bg-yellow-400"
+  defp category_dot(:review), do: "bg-purple-400"
+  defp category_dot(:done), do: "bg-green-500"
+  defp category_dot(:canceled), do: "bg-notion-text-light/30"
+  defp category_dot(_), do: "bg-notion-text-light/40"
 
   @impl true
   def handle_params(_params, _uri, socket), do: {:noreply, socket}
