@@ -293,6 +293,290 @@ List messages in a chat conversation, most recent first by default.
 
 
 ---
+## Concept.Objects
+### Tools (31)
+
+#### `field_def_create`
+
+Add a field to an object type.
+
+- **Resource**: `Concept.Objects.FieldDef`
+- **Action**: `:create` (create)
+
+
+#### `field_def_list_for_type`
+
+List all fields of an object type, in display order.
+
+- **Resource**: `Concept.Objects.FieldDef`
+- **Action**: `:list_for_type` (read)
+
+**Arguments:**
+
+  - `object_type_id` (`UUID`, required) — Object type whose fields to list.
+
+
+#### `field_def_reorder`
+
+Reorder a field within its object type.
+
+- **Resource**: `Concept.Objects.FieldDef`
+- **Action**: `:reorder` (update)
+
+
+#### `field_def_update_def`
+
+Update a field definition's name, required flag, or config.
+
+- **Resource**: `Concept.Objects.FieldDef`
+- **Action**: `:update_def` (update)
+
+
+#### `object_type_create`
+
+Create a new object type (a kind of record) in the workspace.
+
+- **Resource**: `Concept.Objects.ObjectType`
+- **Action**: `:create` (create)
+
+
+#### `object_type_list`
+
+List all object types defined in the workspace.
+
+- **Resource**: `Concept.Objects.ObjectType`
+- **Action**: `:list` (read)
+
+
+#### `object_type_rename`
+
+Rename an object type.
+
+- **Resource**: `Concept.Objects.ObjectType`
+- **Action**: `:rename` (update)
+
+
+#### `object_type_set_workflow`
+
+Set the workflow (lifecycle) used by records of this type.
+
+- **Resource**: `Concept.Objects.ObjectType`
+- **Action**: `:set_workflow` (update)
+
+
+#### `record_archive`
+
+Archive a record (soft-delete).
+
+- **Resource**: `Concept.Objects.Record`
+- **Action**: `:archive` (update)
+
+
+#### `record_assign`
+
+Assign a record to a user (human or agent), or clear with nil.
+
+- **Resource**: `Concept.Objects.Record`
+- **Action**: `:assign` (update)
+
+
+#### `record_create`
+
+Create a record of a given object type with an optional initial field map.
+
+- **Resource**: `Concept.Objects.Record`
+- **Action**: `:create` (create)
+
+
+#### `record_link_create`
+
+Link one record to another along a relation field.
+
+- **Resource**: `Concept.Objects.RecordLink`
+- **Action**: `:create` (create)
+
+
+#### `record_link_destroy`
+
+Remove a link between two records.
+
+- **Resource**: `Concept.Objects.RecordLink`
+- **Action**: `:destroy` (destroy)
+
+
+#### `record_link_from_record`
+
+List all links originating from a record.
+
+- **Resource**: `Concept.Objects.RecordLink`
+- **Action**: `:from_record` (read)
+
+**Arguments:**
+
+  - `from_record_id` (`UUID`, required) — The source record whose outgoing links to list.
+
+
+#### `record_list_for_type`
+
+List all records of an object type, in order.
+
+- **Resource**: `Concept.Objects.Record`
+- **Action**: `:list_for_type` (read)
+
+**Arguments:**
+
+  - `object_type_id` (`UUID`, required) — Object type whose records to list.
+
+
+#### `record_mine`
+
+List records assigned to the current actor.
+
+- **Resource**: `Concept.Objects.Record`
+- **Action**: `:mine` (read)
+
+
+#### `record_ready`
+
+List records that are ready to pick up: in a :todo-category state, unblocked, and unassigned.
+
+- **Resource**: `Concept.Objects.Record`
+- **Action**: `:ready` (read)
+
+**Arguments:**
+
+  - `object_type_id` (`UUID`, required) — Object type whose ready records to list.
+
+
+#### `record_reorder`
+
+Reorder a record within its object type.
+
+- **Resource**: `Concept.Objects.Record`
+- **Action**: `:reorder` (update)
+
+
+#### `record_transition`
+
+Move a record to a new workflow state, enforcing the transition's guards.
+
+- **Resource**: `Concept.Objects.Record`
+- **Action**: `:transition` (update)
+
+**Arguments:**
+
+  - `to_state_id` (`UUID`, required) — Target workflow state. Must be reachable from the current state.
+
+
+#### `record_update_fields`
+
+Update a record's field values (validated against its type's fields).
+
+- **Resource**: `Concept.Objects.Record`
+- **Action**: `:update_fields` (update)
+
+
+#### `transition_create`
+
+Define an allowed transition between two workflow states, with optional guards.
+
+- **Resource**: `Concept.Objects.Transition`
+- **Action**: `:create` (create)
+
+
+#### `transition_from_state`
+
+List transitions leaving a given state.
+
+- **Resource**: `Concept.Objects.Transition`
+- **Action**: `:from_state` (read)
+
+**Arguments:**
+
+  - `from_state_id` (`UUID`, required) — Source state whose outgoing transitions to list.
+
+
+#### `transition_list_for_workflow`
+
+List a workflow's transitions.
+
+- **Resource**: `Concept.Objects.Transition`
+- **Action**: `:list_for_workflow` (read)
+
+**Arguments:**
+
+  - `workflow_id` (`UUID`, required) — Workflow whose transitions to list.
+
+
+#### `transition_set_guards`
+
+Replace the guard list on a transition.
+
+- **Resource**: `Concept.Objects.Transition`
+- **Action**: `:set_guards` (update)
+
+
+#### `workflow_create`
+
+Create a workflow (a lifecycle) in the workspace.
+
+- **Resource**: `Concept.Objects.Workflow`
+- **Action**: `:create` (create)
+
+
+#### `workflow_list`
+
+List all workflows defined in the workspace.
+
+- **Resource**: `Concept.Objects.Workflow`
+- **Action**: `:list` (read)
+
+
+#### `workflow_rename`
+
+Rename a workflow.
+
+- **Resource**: `Concept.Objects.Workflow`
+- **Action**: `:rename` (update)
+
+
+#### `workflow_state_create`
+
+Add a state to a workflow. Each state maps to one fixed category.
+
+- **Resource**: `Concept.Objects.WorkflowState`
+- **Action**: `:create` (create)
+
+
+#### `workflow_state_list_for_workflow`
+
+List a workflow's states in order.
+
+- **Resource**: `Concept.Objects.WorkflowState`
+- **Action**: `:list_for_workflow` (read)
+
+**Arguments:**
+
+  - `workflow_id` (`UUID`, required) — Workflow whose states to list.
+
+
+#### `workflow_state_reorder`
+
+Reorder a state within its workflow.
+
+- **Resource**: `Concept.Objects.WorkflowState`
+- **Action**: `:reorder` (update)
+
+
+#### `workflow_state_update_state`
+
+Update a workflow state's name or category.
+
+- **Resource**: `Concept.Objects.WorkflowState`
+- **Action**: `:update_state` (update)
+
+
+---
 ## Concept.Pages
 ### Tools (24)
 
