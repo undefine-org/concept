@@ -24,7 +24,9 @@ defmodule Concept.Pages.BlockContainerTest do
     {:ok, [ws | _]} = Concept.Accounts.Workspace.for_user(user.id, actor: user)
 
     {:ok, conv} = Chat.create_conversation(%{workspace_id: ws.id}, actor: user, tenant: ws.id)
-    {:ok, msg} = Chat.create_message(%{text: "see table", addresses_host: false}, actor: user, tenant: ws.id)
+
+    {:ok, msg} =
+      Chat.create_message(%{text: "see table", addresses_host: false}, actor: user, tenant: ws.id)
 
     %{user: user, workspace: ws, conversation: conv, message: msg}
   end
@@ -72,7 +74,13 @@ defmodule Concept.Pages.BlockContainerTest do
              Pages.Block
              |> Ash.Changeset.for_create(
                :create_block,
-               %{page_id: page.id, message_id: msg.id, type: :paragraph, content: %{}, workspace_id: ws.id},
+               %{
+                 page_id: page.id,
+                 message_id: msg.id,
+                 type: :paragraph,
+                 content: %{},
+                 workspace_id: ws.id
+               },
                actor: u,
                tenant: ws.id
              )

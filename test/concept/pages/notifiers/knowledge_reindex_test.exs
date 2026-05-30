@@ -90,8 +90,11 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindexTest do
         )
 
       # Should have jobs for both pages
-      assert_enqueued worker: IngestPage, args: %{source_type: "page", source_id: page_a.id, op: :upsert}
-      assert_enqueued worker: IngestPage, args: %{source_type: "page", source_id: page_b.id, op: :upsert}
+      assert_enqueued worker: IngestPage,
+                      args: %{source_type: "page", source_id: page_a.id, op: :upsert}
+
+      assert_enqueued worker: IngestPage,
+                      args: %{source_type: "page", source_id: page_b.id, op: :upsert}
     end
 
     test "archiving a page enqueues job with op: :delete", %{user: user, workspace: workspace} do

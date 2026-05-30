@@ -111,13 +111,15 @@ defmodule Concept.Knowledge.Chat.ParticipantTest do
       {:ok, page} = Concept.Pages.create_page("Topic", ws.id, nil, actor: u, tenant: ws.id)
 
       {:ok, m1} =
-        Chat.create_message(%{text: "one", host_type: :page, host_id: page.id, addresses_host: false},
+        Chat.create_message(
+          %{text: "one", host_type: :page, host_id: page.id, addresses_host: false},
           actor: u,
           tenant: ws.id
         )
 
       {:ok, m2} =
-        Chat.create_message(%{text: "two", host_type: :page, host_id: page.id, addresses_host: false},
+        Chat.create_message(
+          %{text: "two", host_type: :page, host_id: page.id, addresses_host: false},
           actor: u,
           tenant: ws.id
         )
