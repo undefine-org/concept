@@ -62,6 +62,7 @@ defmodule ConceptWeb.WorkspaceLive do
            show_indexing_details: false,
            chat_open?: false,
            chat_initial_prompt: nil,
+           chat_conversation_id: nil,
            link_modal_state: nil,
            live_rail_results: [],
            live_rail_show: false,
@@ -102,6 +103,7 @@ defmodule ConceptWeb.WorkspaceLive do
                show_indexing_details: false,
                chat_open?: false,
                chat_initial_prompt: nil,
+               chat_conversation_id: nil,
                link_modal_state: nil,
                live_rail_results: [],
                live_rail_show: false,
@@ -128,6 +130,31 @@ defmodule ConceptWeb.WorkspaceLive do
       {:ok, ws} when not is_nil(ws) -> {:ok, ws}
       _ -> {:error, :not_found}
     end
+  end
+
+  # Chat: a new conversation was created (first message to a host) — track its id
+  # so the panel re-renders showing the loaded conversation. nil resets to a
+  # fresh "new chat" surface (PLAN-010 §6).
+  def handle_info({:chat_component_navigate, conversation_id}, socket) do
+    {:noreply,
+     socket
+     |> put_chat_open(true)
+     |> assign(:chat_conversation_id, conversation_id)}
+  end
+
+  # Chat → page: a conversation was crystallized onto a page; refresh the tree so
+  # the (possibly current) page reflects the cloned blocks.
+  def handle_info({:conversation_crystallized, _page_id}, socket) do
+    user = socket.assigns.current_user
+    ws = socket.assigns.workspace
+
+    socket =
+      case Pages.list_tree(actor: user, tenant: ws.id) do
+        {:ok, pages} -> assign(socket, :pages, pages)
+        _ -> socket
+      end
+
+    {:noreply, put_flash(socket, :info, "Conversation crystallized into the page.")}
   end
 
   def handle_info({:new_child_page, parent_id}, socket) do
@@ -638,6 +665,7 @@ defmodule ConceptWeb.WorkspaceLive do
         current_user={@current_user}
         open={@chat_open?}
         initial_prompt={@chat_initial_prompt}
+        conversation_id={@chat_conversation_id}
       />
 
       <.live_component

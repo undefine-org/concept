@@ -4,6 +4,23 @@ defmodule ConceptWeb.ChatComponent do
   @chat_ui_tools AshAi.ChatUI.Tools
 
   @impl true
+  def mount(socket) do
+    # Component-instance defaults set ONCE, before any update/2 (incl. the
+    # broadcast clause). Guarantees host addressing + composer assigns exist at
+    # render even on the first streamed message or a broadcast-first update.
+    {:ok,
+     socket
+     |> assign(:host_type, :workspace)
+     |> assign(:host_id, nil)
+     |> assign(:participants, [])
+     |> assign(:pending_mentions, [])
+     |> assign(:addresses_host, true)
+     |> assign(:mention_query, nil)
+     |> assign(:mention_suggestions, [])
+     |> assign(:draft_text, "")}
+  end
+
+  @impl true
   def update(%{broadcast: broadcast}, socket) do
     {:ok, handle_broadcast(socket, broadcast)}
   end
@@ -564,6 +581,11 @@ defmodule ConceptWeb.ChatComponent do
       socket
       |> maybe_warn_tool_data(messages)
       |> assign(:conversation, conversation)
+      # Reflect the loaded conversation's actual host (a page/thread convo keeps
+      # its host voice + crystallize affordance), falling back to :workspace.
+      |> assign(:host_type, conversation.host_type || :workspace)
+      |> assign(:host_id, conversation.host_id)
+      |> assign(:participants, load_participants(socket, conversation.id))
       |> assign(:agent_responding, agent_response_pending?(messages))
       |> assign(:has_messages, messages != [])
       |> stream(:messages, messages, reset: true)

@@ -145,9 +145,37 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
     assert render(view) =~ "Send"
   end
 
-  # Tests 2 and 8 require full chat integration with LLM stubbing, which is complex.
-  # Skipping for now to meet delivery timeline. The integration is tested manually.
-  # These would verify:
-  # - Message creation with scope+profile
-  # - LLM request uses the selected profile's model
+  test "sending a message renders it without crashing (PLAN-010 §6.1)", %{conn: conn, ws: ws} do
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}")
+
+    view
+    |> element("#workspace-root")
+    |> render_hook("toggle_chat", %{})
+
+    :timer.sleep(50)
+
+    # First workspace message find-or-creates a conversation and the LiveView
+    # navigates to it (?c=<id>). Following navigation re-mounts the component on
+    # the now-loaded conversation, which is what previously crashed render when
+    # a broadcast-clause update bypassed the host/composer assigns.
+    result =
+      view
+      |> element("[id$=-composer] form")
+      |> render_submit(%{"form" => %{"text" => "Hello host"}})
+
+    {:ok, view, html} =
+      case result do
+        {:error, {:live_redirect, %{to: to}}} -> live(conn, to)
+        {:error, {:redirect, %{to: to}}} -> live(conn, to)
+        html when is_binary(html) -> {:ok, view, html}
+      end
+
+    :timer.sleep(50)
+    html = if html =~ "Hello host", do: html, else: render(view)
+
+    # The message renders (human bubble) and the host-aware rail is present
+    # without raising in the sender_kind / participant helpers.
+    assert html =~ "Hello host"
+    assert has_element?(view, "[id$=-participant-rail]")
+  end
 end
