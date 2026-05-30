@@ -82,10 +82,38 @@ defmodule Concept.Objects do
   end
 
   @doc """
-  Board view for the workspace's built-in Task type: states (ordered) +
-  records grouped by their state's category. Returns
-  `{:ok, %{type: ObjectType, states: [WorkflowState], columns: %{category => [Record]}}}`
-  or `{:error, :no_task_type}`.
+  Create a **usable** object type (default workflow + title field) and return
+  it — the human "Create type" path. Unlike the bare `create_object_type/1`
+  primitive, a scaffolded type is immediately functional on a board and via
+  the `create_<type>` MCP tool. Single source of truth:
+  `Concept.Objects.Scaffold` (shared with the Task `Seeder`).
+  """
+  def scaffold_object_type(name, opts) do
+    Concept.Objects.Scaffold.object_type(name, opts)
+  end
+
+  @doc """
+  Board view for **any** object type: states (ordered) + records grouped by
+  state id, with the preloaded transition graph and field defs. Returns
+  `{:ok, %{type, states, states_by_id, transitions, field_defs, columns,
+  blocked_ids}}` or `{:error, reason}`.
+
+  The generic projection behind every type's board; `task_board/1` is the
+  built-in Task instance of it. Pure orchestration over code-interface fns so
+  LiveViews stay query-free (EX9001 / LiveViewPurity).
+  """
+  def object_board(type_id, opts) do
+    actor = Keyword.fetch!(opts, :actor)
+    tenant = Keyword.fetch!(opts, :tenant)
+
+    with {:ok, type} <- get_object_type(type_id, actor: actor, tenant: tenant) do
+      build_board(type, actor, tenant)
+    end
+  end
+
+  @doc """
+  Board view for the workspace's built-in Task type — the seeded instance of
+  `object_board/2`. Same shape, or `{:error, :no_task_type}` when absent.
 
   Pure orchestration over code-interface fns so LiveViews stay query-free
   (Concept.Credo.Check.LiveViewPurity / EX9001).
@@ -95,20 +123,29 @@ defmodule Concept.Objects do
     tenant = Keyword.fetch!(opts, :tenant)
 
     with {:ok, types} <- list_object_types(actor: actor, tenant: tenant),
-         %{} = task <- Enum.find(types, &(&1.key == "task")) || {:error, :no_task_type},
-         {:ok, states} <-
-           list_workflow_states(task.workflow_id, actor: actor, tenant: tenant),
+         %{} = task <- Enum.find(types, &(&1.key == "task")) || {:error, :no_task_type} do
+      build_board(task, actor, tenant)
+    else
+      {:error, _} = err -> err
+      _ -> {:error, :no_task_type}
+    end
+  end
+
+  # Shared board builder: load a resolved type's workflow graph, fields, and
+  # records, then group records into columns keyed by state id so any workflow
+  # renders correctly (empty categories don't force phantom columns; stateless
+  # records fall under the initial state).
+  defp build_board(type, actor, tenant) do
+    with {:ok, states} <-
+           list_workflow_states(type.workflow_id, actor: actor, tenant: tenant),
          {:ok, transitions} <-
-           list_transitions(task.workflow_id, actor: actor, tenant: tenant),
-         {:ok, field_defs} <- list_field_defs(task.id, actor: actor, tenant: tenant),
-         {:ok, records} <- board_records(task.id, actor: actor, tenant: tenant) do
+           list_transitions(type.workflow_id, actor: actor, tenant: tenant),
+         {:ok, field_defs} <- list_field_defs(type.id, actor: actor, tenant: tenant),
+         {:ok, records} <- board_records(type.id, actor: actor, tenant: tenant) do
       states = Enum.sort_by(states, & &1.position)
       states_by_id = Map.new(states, &{&1.id, &1})
       initial = Enum.find(states, & &1.is_initial?)
 
-      # Columns ARE the workflow's states (grouped by state id), so any
-      # workflow renders correctly and empty categories don't force phantom
-      # columns. Stateless records fall under the initial state.
       columns =
         Enum.group_by(records, fn r ->
           cond do
@@ -122,7 +159,7 @@ defmodule Concept.Objects do
 
       {:ok,
        %{
-         type: task,
+         type: type,
          states: states,
          states_by_id: states_by_id,
          transitions: transitions,
@@ -130,9 +167,6 @@ defmodule Concept.Objects do
          columns: columns,
          blocked_ids: blocked_ids
        }}
-    else
-      {:error, _} = err -> err
-      _ -> {:error, :no_task_type}
     end
   end
 
