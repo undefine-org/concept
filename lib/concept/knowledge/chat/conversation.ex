@@ -79,6 +79,24 @@ defmodule Concept.Knowledge.Chat.Conversation do
       accept [:crystallized_page_id]
     end
 
+    action :crystallize, {:array, :uuid} do
+      description "Crystallize this conversation into a durable page: clone its message blocks onto the page with provenance links, then mark it crystallized."
+
+      argument :conversation_id, :uuid,
+        allow_nil?: false,
+        description: "The conversation to crystallize."
+
+      argument :target_page_id, :uuid,
+        allow_nil?: false,
+        description: "The page to crystallize the conversation into."
+
+      argument :workspace_id, :uuid,
+        allow_nil?: false,
+        description: "Workspace tenant."
+
+      run Concept.Knowledge.Chat.Reactors.Crystallize
+    end
+
     read :my_conversations do
       description "List the actor's chat conversations in the workspace, most recent first."
       filter expr(user_id == ^actor(:id))

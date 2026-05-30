@@ -46,15 +46,21 @@ defmodule Concept.Knowledge.Chat.InboxTest do
   test "creating a message broadcasts inbox activity to participant's topic" do
     {u, ws} = register("inbox-bcast")
 
-    # Seed a conversation + participant (first message).
-    {:ok, m1} = Chat.create_message(%{text: "one", addresses_host: false}, actor: u, tenant: ws.id)
+    # Seed a page-hosted conversation + participant (first message).
+    {:ok, page} = Concept.Pages.create_page("P", ws.id, nil, actor: u, tenant: ws.id)
 
-    # Now subscribe to this user's inbox and send another message.
+    {:ok, m1} =
+      Chat.create_message(%{text: "one", host_type: :page, host_id: page.id, addresses_host: false},
+        actor: u,
+        tenant: ws.id
+      )
+
+    # Subscribe to this user's inbox, then post again into the same conversation.
     Phoenix.PubSub.subscribe(Concept.PubSub, "inbox:#{u.id}")
 
     {:ok, _m2} =
       Chat.create_message(
-        %{text: "two", host_type: :workspace, addresses_host: false},
+        %{text: "two", host_type: :page, host_id: page.id, addresses_host: false},
         actor: u,
         tenant: ws.id
       )

@@ -123,7 +123,7 @@ defmodule Concept.Knowledge.Link do
     attribute :kind, :atom,
       allow_nil?: false,
       public?: true,
-      constraints: [one_of: [:relates_to, :cites, :contradicts, :see_also]]
+      constraints: [one_of: [:relates_to, :cites, :contradicts, :see_also, :crystallized_from]]
 
     attribute :note, :string, public?: true
     attribute :created_by_user_id, :uuid, allow_nil?: false, public?: true

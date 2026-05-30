@@ -13,6 +13,11 @@ defmodule Concept.Knowledge.Chat do
       define :thread_for_seed, action: :for_seed, args: [:seed_message_id]
       define :decrement_budget, action: :decrement_budget
       define :replenish_budget, action: :replenish_budget
+      define :mark_crystallized, action: :mark_crystallized
+
+      define :crystallize_conversation,
+        action: :crystallize,
+        args: [:conversation_id, :target_page_id, :workspace_id]
     end
 
     resource Concept.Knowledge.Chat.Message do
