@@ -64,10 +64,11 @@ defmodule ConceptWeb.WorkspaceSettingsLiveTest do
     assert html =~ "No user with that email"
   end
 
-  test "switch to API keys tab; issue a key → plaintext shown once; list shows the key; revoke removes it", %{
-    conn: conn,
-    ws: ws
-  } do
+  test "switch to API keys tab; issue a key → plaintext shown once; list shows the key; revoke removes it",
+       %{
+         conn: conn,
+         ws: ws
+       } do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/settings")
 
     # Switch to API keys tab

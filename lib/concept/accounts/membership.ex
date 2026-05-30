@@ -65,7 +65,12 @@ defmodule Concept.Accounts.Membership do
     end
 
     policy action(:update_role) do
-      authorize_if expr(exists(workspace.memberships, user_id == ^actor(:id) and role in [:owner, :admin]))
+      authorize_if expr(
+                     exists(
+                       workspace.memberships,
+                       user_id == ^actor(:id) and role in [:owner, :admin]
+                     )
+                   )
     end
 
     policy action_type([:create, :update, :destroy]) do
@@ -122,13 +127,22 @@ defmodule Concept.Accounts.Membership do
           changeset
 
         current_role == :owner and not actor_owner?(actor, workspace_id) ->
-          Ash.Changeset.add_error(changeset, field: :role, message: "only an owner may change an owner's role")
+          Ash.Changeset.add_error(changeset,
+            field: :role,
+            message: "only an owner may change an owner's role"
+          )
 
         new_role == :owner and not actor_owner?(actor, workspace_id) ->
-          Ash.Changeset.add_error(changeset, field: :role, message: "only an owner may promote to owner")
+          Ash.Changeset.add_error(changeset,
+            field: :role,
+            message: "only an owner may promote to owner"
+          )
 
         current_role == :owner and new_role != :owner and last_owner?(workspace_id) ->
-          Ash.Changeset.add_error(changeset, field: :role, message: "cannot demote the last owner")
+          Ash.Changeset.add_error(changeset,
+            field: :role,
+            message: "cannot demote the last owner"
+          )
 
         true ->
           changeset
@@ -139,7 +153,9 @@ defmodule Concept.Accounts.Membership do
       actor_id = actor.id
 
       Concept.Accounts.Membership
-      |> Ash.Query.filter(workspace_id == ^workspace_id and user_id == ^actor_id and role == :owner)
+      |> Ash.Query.filter(
+        workspace_id == ^workspace_id and user_id == ^actor_id and role == :owner
+      )
       |> Ash.read_one(authorize?: false)
       |> case do
         {:ok, nil} -> false

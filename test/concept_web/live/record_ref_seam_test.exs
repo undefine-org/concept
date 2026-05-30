@@ -65,7 +65,11 @@ defmodule ConceptWeb.RecordRefSeamTest do
   } do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
     editor = find_live_child(view, "page-editor-#{page.id}")
-    assert has_element?(editor, ~s([phx-click="open_record_picker"][phx-value-block="#{block.id}"]))
+
+    assert has_element?(
+             editor,
+             ~s([phx-click="open_record_picker"][phx-value-block="#{block.id}"])
+           )
   end
 
   test "opening the picker and selecting a record links it and renders live state", %{

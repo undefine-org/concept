@@ -71,7 +71,9 @@ defmodule Concept.Objects.FieldTypes.User do
         </span>
         <span class="text-sm text-notion-text">{@name}</span>
         <%= if @is_agent do %>
-          <span class="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">🤖 agent</span>
+          <span class="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
+            🤖 agent
+          </span>
         <% end %>
       </span>
     <% else %>
@@ -120,7 +122,9 @@ defmodule Concept.Objects.FieldTypes.User do
       </span>
       <span class="text-sm text-notion-text">{@name}</span>
       <%= if @is_agent do %>
-        <span class="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">🤖 agent</span>
+        <span class="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
+          🤖 agent
+        </span>
       <% end %>
     </span>
     """

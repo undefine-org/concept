@@ -185,9 +185,9 @@ defmodule ConceptWeb.WorkspaceSettingsLive do
 
         <%= case @tab do %>
           <% "members" -> %>
-            <%= members_tab(assigns) %>
+            {members_tab(assigns)}
           <% "api_keys" -> %>
-            <%= api_keys_tab(assigns) %>
+            {api_keys_tab(assigns)}
           <% _ -> %>
             <div></div>
         <% end %>
@@ -237,7 +237,14 @@ defmodule ConceptWeb.WorkspaceSettingsLive do
                 class="rounded border border-notion-divider px-2 py-1 text-xs bg-white"
               >
                 <option
-                  :for={{label, val} <- [{"Owner", "owner"}, {"Admin", "admin"}, {"Member", "member"}, {"Agent", "agent"}]}
+                  :for={
+                    {label, val} <- [
+                      {"Owner", "owner"},
+                      {"Admin", "admin"},
+                      {"Member", "member"},
+                      {"Agent", "agent"}
+                    ]
+                  }
                   value={val}
                   selected={to_string(member.role) == val}
                 >

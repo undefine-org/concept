@@ -225,6 +225,7 @@ defmodule Concept.Objects do
       {:ok, %{mine: mine, ready: ready, blocked_ids: blocked_ids}}
     end
   end
+
   @doc """
   Search a workspace's records by title — the candidate source for the
   non-redundancy **seam** (the `record_ref` block picker) and for `:relation`
