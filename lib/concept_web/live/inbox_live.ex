@@ -55,10 +55,16 @@ defmodule ConceptWeb.InboxLive do
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   defp list_inbox(user, ws) do
-    Chat.inbox(actor: user, tenant: ws.id)
-    |> case do
-      {:ok, conversations} -> conversations
-      _ -> []
+    case Chat.inbox(actor: user, tenant: ws.id) do
+      {:ok, conversations} ->
+        conversations
+
+      {:error, reason} ->
+        # An empty inbox and a failed read look identical to the user; log so a
+        # policy/tenant regression is visible rather than silently swallowed.
+        require Logger
+        Logger.warning("inbox read failed for user=#{user.id}: #{inspect(reason)}")
+        []
     end
   end
 

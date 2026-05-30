@@ -103,8 +103,12 @@ defmodule ConceptWeb.ChatComponent do
 
     socket =
       if is_nil(socket.assigns[:conversation]) and socket.assigns[:message_form_host_key] != host_key do
+        # Preserve any half-typed draft across the host-driven form rebuild.
+        draft = socket.assigns[:draft_text]
+
         socket
         |> assign(:message_form_host_key, host_key)
+        |> then(fn s -> if draft not in [nil, ""], do: assign(s, :initial_text, draft), else: s end)
         |> assign_message_form()
       else
         socket
