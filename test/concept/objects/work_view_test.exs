@@ -37,6 +37,15 @@ defmodule Concept.Objects.WorkViewTest do
     {:ok, _} = Objects.set_object_type_workflow(type_a.id, wf.id, actor: user, tenant: ws)
     {:ok, _} = Objects.set_object_type_workflow(type_b.id, wf.id, actor: user, tenant: ws)
 
+    # Each type needs a title field so records accept a "title" value.
+    for t <- [type_a, type_b] do
+      {:ok, _} =
+        Objects.create_field_def(t.id, "Title", :text, %{is_title?: true},
+          actor: user,
+          tenant: ws
+        )
+    end
+
     %{user: user, ws: ws, type_a: type_a, type_b: type_b, todo: todo, done: done}
   end
 
@@ -91,13 +100,7 @@ defmodule Concept.Objects.WorkViewTest do
     {:ok, _} = Objects.assign_record(blocked, ctx.user.id, actor: ctx.user, tenant: ctx.ws)
 
     {:ok, rel} =
-      Objects.create_field_def(
-        %{
-          object_type_id: ctx.type_a.id,
-          name: "Blocked by",
-          key: "blocked_by",
-          field_type: :relation
-        },
+      Objects.create_field_def(ctx.type_a.id, "Blocked by", :relation, %{key: "blocked_by"},
         actor: ctx.user,
         tenant: ctx.ws
       )
