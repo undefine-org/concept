@@ -130,7 +130,13 @@ defmodule Concept.Knowledge.Chat.Conversation do
         allow_nil?: true,
         description: "The host record id; nil for the :workspace host."
 
-      filter expr(host_type == ^arg(:host_type) and host_id == ^arg(:host_id))
+      # Exclude threads (child conversations) so host addressing find-or-creates
+      # the canonical ROOT conversation, not a thread spawned from a message.
+      filter expr(
+               host_type == ^arg(:host_type) and host_id == ^arg(:host_id) and
+                 is_nil(parent_conversation_id)
+             )
+
       prepare build(sort: [inserted_at: :desc])
     end
   end
