@@ -36,7 +36,7 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindexTest do
         )
 
       # Assert exactly one job was enqueued for this page
-      assert_enqueued worker: IngestPage, args: %{page_id: page.id, op: :upsert}
+      assert_enqueued worker: IngestPage, args: %{source_type: "page", source_id: page.id, op: :upsert}
     end
 
     test "two page updates within debounce window collapse to one job", %{
@@ -54,7 +54,7 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindexTest do
       {:ok, _} = Pages.set_icon(page, "🔥", actor: user, tenant: workspace.id)
 
       # Due to Oban unique constraint with 5-second period and same keys, should only have 1 job
-      jobs = all_enqueued(worker: IngestPage, args: %{page_id: page.id, op: :upsert})
+      jobs = all_enqueued(worker: IngestPage, args: %{source_type: "page", source_id: page.id, op: :upsert})
       assert length(jobs) == 1
     end
 
@@ -114,7 +114,7 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindexTest do
       {:ok, _} = Pages.rename_page(page, "New Title", actor: user, tenant: workspace.id)
 
       # Should enqueue upsert job for page update
-      assert_enqueued worker: IngestPage, args: %{page_id: page.id, op: :upsert}
+      assert_enqueued worker: IngestPage, args: %{source_type: "page", source_id: page.id, op: :upsert}
     end
 
     test "archiving a block enqueues upsert (not delete)", %{user: user, workspace: workspace} do
@@ -133,7 +133,7 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindexTest do
       {:ok, _} = Pages.archive_block(block, actor: user, tenant: workspace.id)
 
       # Block archive should trigger page upsert, not delete
-      assert_enqueued worker: IngestPage, args: %{page_id: page.id, op: :upsert}
+      assert_enqueued worker: IngestPage, args: %{source_type: "page", source_id: page.id, op: :upsert}
     end
   end
 end
