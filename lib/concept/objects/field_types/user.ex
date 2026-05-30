@@ -61,6 +61,7 @@ defmodule Concept.Objects.FieldTypes.User do
       |> assign(:member, member)
       |> assign(:name, member && member_name(member))
       |> assign(:initial, member && initial(member_name(member)))
+      |> assign(:is_agent, member && member_role(member) == :agent)
 
     ~H"""
     <%= if @member do %>
@@ -69,6 +70,9 @@ defmodule Concept.Objects.FieldTypes.User do
           {@initial}
         </span>
         <span class="text-sm text-notion-text">{@name}</span>
+        <%= if @is_agent do %>
+          <span class="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">🤖 agent</span>
+        <% end %>
       </span>
     <% else %>
       <span class="text-sm text-notion-text-light">Unassigned</span>
@@ -107,6 +111,7 @@ defmodule Concept.Objects.FieldTypes.User do
       assigns
       |> assign(:name, member_name(assigns.member))
       |> assign(:initial, initial(member_name(assigns.member)))
+      |> assign(:is_agent, member_role(assigns.member) == :agent)
 
     ~H"""
     <span class="inline-flex items-center gap-1.5">
@@ -114,6 +119,9 @@ defmodule Concept.Objects.FieldTypes.User do
         {@initial}
       </span>
       <span class="text-sm text-notion-text">{@name}</span>
+      <%= if @is_agent do %>
+        <span class="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">🤖 agent</span>
+      <% end %>
     </span>
     """
   end
@@ -139,4 +147,10 @@ defmodule Concept.Objects.FieldTypes.User do
   defp initial(name) do
     name |> String.trim() |> String.first() |> Kernel.||("?") |> String.upcase()
   end
+
+  defp member_role(%{role: :agent}), do: :agent
+  defp member_role(%{role: "agent"}), do: :agent
+  defp member_role(%{"role" => "agent"}), do: :agent
+  defp member_role(%{"role" => :agent}), do: :agent
+  defp member_role(_), do: nil
 end
