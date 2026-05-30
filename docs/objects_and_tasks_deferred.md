@@ -72,7 +72,7 @@ then compose those same components. Do not hand-roll per-type widgets.
 | Record detail view (open card → edit fields) | ✓ | W4: slide-over; pr_url editable → satisfies requires_proof in-UI |
 | Guard-aware move affordance (why a move is blocked) | ✓ | W2/W4: requirements shown inline before the click |
 | Empty / loading / error states polish | ◐ | bare empty columns; plain `board_error` sentence; no skeleton |
-| `my_records` / `ready_records` views (pull model) | ☐ | actions exist; no UI consumes them |
+| `my_records` / `ready_records` views (pull model) | ✓ | `WorkLive` @ `/w/:slug/work`: cross-type My-work + Ready-to-pick + Claim; `Objects.work_view/1` |
 | Filtering / grouping / sorting | ☐ | board is single fixed grouping (category) |
 | `available_moves` N+1 per card per render | ✓ | W2: preloaded graph; `moves_for/2` pure |
 | Canceled column always rendered, equal width | ✓ | W2: columns are workflow states, lane layout |
@@ -94,7 +94,7 @@ then compose those same components. Do not hand-roll per-type widgets.
 
 | Item | Status | Note |
 |---|---|---|
-| Pull-model UI (agent "ready work" surface) | ☐ | `ready_records` exists; nothing consumes it |
+| Pull-model UI (agent "ready work" surface) | ✓ | `WorkLive` (W-thread): cross-type Ready-to-pick over `:ready_all`; Claim = `assign_record` self. Same data MCP agents see via `record_ready_all`/`record_mine` |
 | Mark a member as `:agent` in UI | ☐ | role enum has `:agent`; no UI |
 | Human vs agent assignee distinction on board | ☐ | — |
 | Agent→agent acceptor gap (no human creator) | ☐ | documented §6 trade-off; `requires_approval{by:creator}` can't pass |
