@@ -36,7 +36,8 @@ defmodule Concept.Knowledge.Chat.InboxTest do
     {owner, ws} = register("inbox-owner")
     {outsider, _} = register("inbox-outsider")
 
-    {:ok, _m} = Chat.create_message(%{text: "private", addresses_host: false}, actor: owner, tenant: ws.id)
+    {:ok, _m} =
+      Chat.create_message(%{text: "private", addresses_host: false}, actor: owner, tenant: ws.id)
 
     # Outsider is not a member of this workspace → empty inbox there.
     {:ok, inbox} = Chat.inbox(actor: outsider, tenant: ws.id)
@@ -50,7 +51,8 @@ defmodule Concept.Knowledge.Chat.InboxTest do
     {:ok, page} = Concept.Pages.create_page("P", ws.id, nil, actor: u, tenant: ws.id)
 
     {:ok, m1} =
-      Chat.create_message(%{text: "one", host_type: :page, host_id: page.id, addresses_host: false},
+      Chat.create_message(
+        %{text: "one", host_type: :page, host_id: page.id, addresses_host: false},
         actor: u,
         tenant: ws.id
       )

@@ -25,19 +25,32 @@ defmodule Concept.Knowledge.Chat.CrystallizeTest do
     {:ok, page} = Pages.create_page("Target", ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, conv} = Chat.create_conversation(%{workspace_id: ws.id}, actor: user, tenant: ws.id)
-    {:ok, msg} = Chat.create_message(%{text: "decision", addresses_host: false}, actor: user, tenant: ws.id)
+
+    {:ok, msg} =
+      Chat.create_message(%{text: "decision", addresses_host: false}, actor: user, tenant: ws.id)
 
     {:ok, src_block} =
       Pages.Block
       |> Ash.Changeset.for_create(
         :create_block,
-        %{message_id: msg.id, type: :paragraph, content: %{"text" => "ship it"}, workspace_id: ws.id},
+        %{
+          message_id: msg.id,
+          type: :paragraph,
+          content: %{"text" => "ship it"},
+          workspace_id: ws.id
+        },
         actor: user,
         tenant: ws.id
       )
       |> Ash.create()
 
-    %{user: user, workspace: ws, page: page, conversation: msg.conversation_id, src_block: src_block}
+    %{
+      user: user,
+      workspace: ws,
+      page: page,
+      conversation: msg.conversation_id,
+      src_block: src_block
+    }
   end
 
   test "crystallize clones message blocks onto the page and marks the conversation", ctx do
