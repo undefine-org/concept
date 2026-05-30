@@ -278,7 +278,7 @@ Hybrid vector+graph search over the workspace's pages and blocks.
 
 ---
 ## Concept.Knowledge.Chat
-### Tools (11)
+### Tools (13)
 
 #### `conversation_create`
 
@@ -323,6 +323,22 @@ Find the thread (child conversation) spawned from a given seed message, if any.
 **Arguments:**
 
   - `seed_message_id` (`UUID`, required) — The message a thread was spawned from.
+
+
+#### `conversation_inbox`
+
+List conversations the current actor participates in, most recently active first (the inbox projection).
+
+- **Resource**: `Concept.Knowledge.Chat.Conversation`
+- **Action**: `:inbox` (read)
+
+
+#### `conversation_mark_crystallized`
+
+Record that this conversation was crystallized into a durable page.
+
+- **Resource**: `Concept.Knowledge.Chat.Conversation`
+- **Action**: `:mark_crystallized` (update)
 
 
 #### `conversation_my_conversations`

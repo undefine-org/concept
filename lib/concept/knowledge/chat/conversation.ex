@@ -74,9 +74,20 @@ defmodule Concept.Knowledge.Chat.Conversation do
       change set_attribute(:agent_turn_budget, @default_budget)
     end
 
+    update :mark_crystallized do
+      description "Record that this conversation was crystallized into a durable page."
+      accept [:crystallized_page_id]
+    end
+
     read :my_conversations do
       description "List the actor's chat conversations in the workspace, most recent first."
       filter expr(user_id == ^actor(:id))
+    end
+
+    read :inbox do
+      description "List conversations the current actor participates in, most recently active first (the inbox projection)."
+      filter expr(exists(participants, membership.user_id == ^actor(:id)))
+      prepare build(sort: [updated_at: :desc])
     end
 
     read :for_seed do
@@ -192,6 +203,14 @@ defmodule Concept.Knowledge.Chat.Conversation do
     # depth (PLAN-010 §B, §22). Each host/agent turn decrements it; a human
     # message replenishes it (human attention is the rate-limiter). When 0, the
     # needs_host_response calc goes false and the respond trigger stops firing.
+    # Set when the conversation has been crystallized into a durable page
+    # (PLAN-010 §20, §46): talk became document. Nil while still live.
+    attribute :crystallized_page_id, :uuid do
+      public? true
+      allow_nil? true
+      description "The page this conversation was crystallized into, if any."
+    end
+
     attribute :agent_turn_budget, :integer do
       public? true
       allow_nil? false

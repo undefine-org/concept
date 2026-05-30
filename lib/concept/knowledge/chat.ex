@@ -8,6 +8,7 @@ defmodule Concept.Knowledge.Chat do
       define :create_conversation, action: :create
       define :get_conversation, action: :read, get_by: [:id]
       define :my_conversations
+      define :inbox
       define :conversations_for_host, action: :for_host, args: [:host_type, :host_id]
       define :thread_for_seed, action: :for_seed, args: [:seed_message_id]
       define :decrement_budget, action: :decrement_budget
