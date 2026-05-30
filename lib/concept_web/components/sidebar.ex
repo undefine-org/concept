@@ -77,6 +77,14 @@ defmodule ConceptWeb.Components.Sidebar do
         <span class="flex-1 text-left">My work</span>
       </.link>
 
+      <.link
+        navigate={~p"/w/#{@workspace.slug}/settings"}
+        class="ora-sidebar-row mb-2 text-notion-text-light flex items-center gap-2 no-underline"
+      >
+        <.icon name="hero-cog-6-tooth-micro" class="size-4" />
+        <span class="flex-1 text-left">Settings</span>
+      </.link>
+
       <div class="flex-1 overflow-y-auto">
         <.live_component
           module={ConceptWeb.Components.PageTree}
