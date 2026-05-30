@@ -213,7 +213,16 @@ defmodule ConceptWeb.TasksLive do
                   phx-value-record={record.id}
                   class="group cursor-pointer rounded-md border border-notion-divider bg-white p-2.5 shadow-sm transition hover:shadow-md"
                 >
-                  <div class="text-sm font-medium text-notion-text">{record_title(record)}</div>
+                  <div class="flex items-start justify-between gap-2">
+                    <span class="text-sm font-medium text-notion-text">{record_title(record)}</span>
+                    <span
+                      :if={MapSet.member?(@board.blocked_ids, record.id)}
+                      class="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-600"
+                      title="Waiting on an unfinished dependency"
+                    >
+                      🚧
+                    </span>
+                  </div>
 
                   <div
                     :if={@card_fields != [] or record.assignee_id}
