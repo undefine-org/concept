@@ -139,10 +139,10 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
 
     :timer.sleep(50)
 
-    # Should have chat form
-    html = render(view)
-    assert html =~ "Type your message"
-    assert html =~ "Send"
+    # Should have the host-aware composer (PLAN-010 §6.3): assert on the stable
+    # composer element id rather than placeholder copy, which now varies by host.
+    assert has_element?(view, "[id$=-composer]")
+    assert render(view) =~ "Send"
   end
 
   # Tests 2 and 8 require full chat integration with LLM stubbing, which is complex.
