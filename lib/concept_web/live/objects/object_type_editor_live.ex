@@ -337,12 +337,20 @@ defmodule ConceptWeb.ObjectTypeEditorLive do
                 system
               </span>
             </span>
-            <.link
-              navigate={~p"/w/#{@workspace.slug}/types/#{type.id}"}
-              class="text-sm text-blue-600 hover:text-blue-800"
-            >
-              Edit →
-            </.link>
+            <span class="inline-flex items-center gap-3">
+              <.link
+                navigate={~p"/w/#{@workspace.slug}/o/#{type.id}"}
+                class="text-sm text-notion-text-light hover:text-notion-text"
+              >
+                Open board →
+              </.link>
+              <.link
+                navigate={~p"/w/#{@workspace.slug}/types/#{type.id}"}
+                class="text-sm text-blue-600 hover:text-blue-800"
+              >
+                Edit →
+              </.link>
+            </span>
           </li>
           <li :if={@types == []} class="px-4 py-6 text-center text-sm text-notion-text-light">
             No types yet. Create one above.

@@ -54,7 +54,8 @@ defmodule ConceptWeb.Router do
       live "/w/:workspace_slug", WorkspaceLive, :workspace
       live "/w/:workspace_slug/p/:page_id", WorkspaceLive, :page
       live "/w/:workspace_slug/graph", WorkspaceGraphLive
-      live "/w/:workspace_slug/tasks", TasksLive
+      live "/w/:workspace_slug/tasks", ObjectBoardLive, :tasks
+      live "/w/:workspace_slug/o/:type_id", ObjectBoardLive, :board
       live "/w/:workspace_slug/work", WorkLive
       live "/w/:workspace_slug/types", ObjectTypeEditorLive, :index
       live "/w/:workspace_slug/types/:type_id", ObjectTypeEditorLive, :edit

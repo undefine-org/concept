@@ -1,11 +1,21 @@
-defmodule ConceptWeb.TasksLive do
+defmodule ConceptWeb.ObjectBoardLive do
   @moduledoc """
-  Tasks board for a workspace's built-in Task type: columns by workflow
-  category, create a task into Backlog, and move a task along its workflow's
-  guarded transitions.
+  The generic record board for **any** object type: columns by workflow state,
+  create a record into the initial state, move records along their workflow's
+  guarded transitions, and open a record in the detail slide-over.
 
-  LiveView purity (EX9001): all data access goes through `Concept.Objects`
-  code-interface fns — no `Ash.Query` / `Ash.Changeset` here.
+  Two live actions, one surface:
+
+    * `:tasks` @ `/w/:slug/tasks` — the built-in Task type (`Objects.task_board/1`).
+    * `:board` @ `/w/:slug/o/:type_id` — any type (`Objects.object_board/2`).
+
+  This is the database-builder thesis made reachable by humans: invent a type
+  in the editor, and it gets a working board here — the same `Objects` actions
+  the `create_<type>` MCP tool drives, same policies, same data. The Task board
+  is just the seeded instance of this one surface (no parallel implementation).
+
+  LiveView purity (EX9001): all data access goes through `Concept.Objects` /
+  `Concept.Accounts` code-interface fns — no `Ash.Query` / `Ash.Changeset`.
   """
   use ConceptWeb, :live_view
 
@@ -14,7 +24,7 @@ defmodule ConceptWeb.TasksLive do
   alias ConceptWeb.Objects.FieldTypeComponent
 
   @impl true
-  def mount(%{"workspace_slug" => slug}, _session, socket) do
+  def mount(%{"workspace_slug" => slug} = params, _session, socket) do
     user = socket.assigns.current_user
 
     case Accounts.Workspace.by_slug(slug, actor: user) do
@@ -22,7 +32,7 @@ defmodule ConceptWeb.TasksLive do
         {:ok,
          socket
          |> assign(:workspace, ws)
-         |> assign(:page_title, "Tasks")
+         |> assign(:type_id, params["type_id"])
          |> assign(:new_title, "")
          |> assign(:assignee_field_def, %{field_type: :user, config: %{}, key: "assignee"})
          |> assign(:open_record_id, nil)
@@ -54,7 +64,7 @@ defmodule ConceptWeb.TasksLive do
           {:noreply, socket |> assign(:new_title, "") |> load_board()}
 
         {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Could not create task")}
+          {:noreply, put_flash(socket, :error, "Could not create #{type_label(type)}")}
       end
     end
   end
@@ -75,17 +85,24 @@ defmodule ConceptWeb.TasksLive do
         {:noreply, put_flash(socket, :error, move_error(err))}
 
       _ ->
-        {:noreply, put_flash(socket, :error, "Could not move task")}
+        {:noreply, put_flash(socket, :error, "Could not move record")}
     end
   end
 
   # ── data loading (code-interface only) ───────────────────────────────
 
   defp load_board(socket) do
-    %{workspace: ws} = socket.assigns
+    %{workspace: ws, type_id: type_id} = socket.assigns
     user = socket.assigns.current_user
 
-    case Objects.task_board(actor: user, tenant: ws.id) do
+    result =
+      if is_binary(type_id) do
+        Objects.object_board(type_id, actor: user, tenant: ws.id)
+      else
+        Objects.task_board(actor: user, tenant: ws.id)
+      end
+
+    case result do
       {:ok, board} ->
         moves =
           board.columns
@@ -95,6 +112,7 @@ defmodule ConceptWeb.TasksLive do
 
         socket
         |> assign(:board, board)
+        |> assign(:page_title, board.type.name)
         |> assign(:moves, moves)
         |> assign(:members, load_members(ws.id, user))
         |> assign(:card_fields, card_fields(board.field_defs))
@@ -104,21 +122,19 @@ defmodule ConceptWeb.TasksLive do
         empty_board(socket, "No Task type in this workspace yet.")
 
       {:error, _other} ->
-        empty_board(socket, "Could not load the task board.")
+        empty_board(socket, "Could not load this board.")
     end
   end
 
   defp empty_board(socket, message) do
-    assign(socket, board: nil, moves: %{}, members: [], card_fields: [], board_error: message)
+    socket
+    |> assign(board: nil, moves: %{}, members: [], card_fields: [], board_error: message)
+    |> assign_new(:page_title, fn -> "Board" end)
   end
 
   # Members feed the :user field renderer + assignee avatars. Defensive: the
   # board still renders if membership loading fails.
   defp load_members(ws_id, user) do
-    # Authorizing the membership read proves the actor belongs to this
-    # workspace; the User resource read policy is self-only, so resolve the
-    # (already-authorized) member ids directly for display. Co-members seeing
-    # each other's name is the intended behaviour.
     with {:ok, memberships} <- Accounts.Membership.list_for_workspace(ws_id, actor: user),
          ids = Enum.map(memberships, & &1.user_id),
          {:ok, users} <- Accounts.list_users_by_ids(ids) do
@@ -129,8 +145,7 @@ defmodule ConceptWeb.TasksLive do
   end
 
   # Heuristic (design doc §3.3): show select + user fields on cards (priority,
-  # etc.), excluding the title (the card heading). A dedicated
-  # `show_on_card?` FieldDef attribute is a later refinement.
+  # etc.), excluding the title (the card heading).
   defp card_fields(field_defs) do
     field_defs
     |> Enum.reject(& &1.is_title?)
@@ -148,6 +163,9 @@ defmodule ConceptWeb.TasksLive do
     end
   end
 
+  defp type_label(%{name: name}) when is_binary(name), do: String.downcase(name)
+  defp type_label(_), do: "record"
+
   # ── render ───────────────────────────────────────────────────────────
 
   @impl true
@@ -156,7 +174,9 @@ defmodule ConceptWeb.TasksLive do
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div id="tasks-root" class="p-6">
         <div class="flex items-center justify-between mb-6">
-          <h1 class="text-2xl font-bold text-notion-text">Tasks</h1>
+          <h1 class="text-2xl font-bold text-notion-text">
+            {(@board && @board.type.name) || @page_title}
+          </h1>
           <.link
             navigate={~p"/w/#{@workspace.slug}"}
             class="text-sm text-notion-text-light hover:text-notion-text"
@@ -173,7 +193,7 @@ defmodule ConceptWeb.TasksLive do
               type="text"
               name="title"
               value={@new_title}
-              placeholder="New task…"
+              placeholder={"New #{type_label(@board.type)}…"}
               autocomplete="off"
               class="flex-1 max-w-md rounded-md border border-notion-divider px-3 py-1.5 text-sm focus:border-notion-text focus:outline-none"
             />
@@ -266,7 +286,7 @@ defmodule ConceptWeb.TasksLive do
                   :if={Map.get(@board.columns, state.id, []) == []}
                   class="px-1 py-2 text-xs text-notion-text-light/60"
                 >
-                  No tasks
+                  No {type_label(@board.type)}s
                 </p>
               </div>
             </div>
