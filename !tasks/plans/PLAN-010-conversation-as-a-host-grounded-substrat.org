@@ -1,0 +1,181 @@
+#+TITLE: Conversation as a Host-grounded substrate (Notion + Slack fusion)
+#+STATE: ITEM
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: PLAN-010-conversation-as-a-host-grounded-substrat
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+* Initial Message
+
+Replace Concept's needs for both Notion AND Slack. Today's messaging is 1:1
+human↔single-AI. Redesign so humans, external agents, and the internal Concept
+AI all converse as first-class participants. Design the messaging model from
+first principles, leveraging Ash/Spark maximally so the implementation is clean
+from the start. Truly Concept-ual.
+
+Full design (8 parts, pressure-tested against the live codebase):
+[[file:../../docs/messaging_design.md][docs/messaging_design.md]]
+
+* PLAN Conversation as a Host-grounded substrate
+
+** Principle
+
+#+begin_quote
+Concept has one substrate — authored blocks under a host — and one principle —
+every host is conversable and every action is a tool. Pages, tasks, chats,
+threads, notifications, decisions, and agent delegation are not separate
+features; they are projections of that substrate seen through the host.
+Identity is always a Membership; voice is always a Host.
+#+end_quote
+
+Messaging is not a new feature. It is MCP-parity-by-construction applied to
+conversation: the same described Ash action serves LiveView (humans) and MCP
+(agents) on the same data, policies, and tenancy. Agents become participants
+for free.
+
+** Why this shape (design decisions, validated against code)
+
+- *Host = subject AND participant.* Every conversation is ABOUT a host
+  (Page | Record | Workspace | User). The host's "voice" is the grounded AI,
+  scoped to the host's own subgraph — NOT a global singleton. Today's workspace
+  chat is the degenerate case (host = Workspace). ~{host_type, host_id}~ is a
+  registry-backed tagged reference (the ~block_types~ / ~AutoTools~ pattern).
+- *Identity vs Voice (the authz keystone).* ~:user~ and ~:agent~ are identities
+  (Memberships; agents auth via workspace-bound ApiKey over /mcp). ~:host~ is a
+  VOICE, not an identity — it borrows the addresser's actor (leak-safe deputy;
+  grounding = host.subgraph ∩ addresser visibility). This is exactly what
+  ~upsert_response~ + ~AiAgentActorPersister~ already do (display ≠ authz).
+  Participant = Membership × Conversation, carrying the unread cursor (= inbox).
+  Host needs no Participant row.
+- *Membrane: content dissolves, container holds.* Conversation ≠ Page (opposite
+  invariants: append-only/temporal/multi-writer vs mutable/ordered/lock-FSM).
+  But a Message CONTAINS Blocks (Block gains nullable ~message_id~; belongs to a
+  page OR a message). Agents reply with real table/code/ai_answer blocks; humans
+  compose via the same slash menu; ingestion reuses the block chunker.
+- *Threads & channels are projections.* Thread = Conversation with
+  ~parent_conversation_id~ (inherits host + lineage). Channel = conversations
+  sharing a host. Notification = unread message addressed to me. DM = User-hosted
+  conversation. Five concepts (Page, Conversation, Message, Block, Hostable),
+  six projections.
+- *discuss = ONE action.* Creation is an impl detail of posting — the codebase
+  already chose this via ~CreateConversationIfNotProvided~. Per host →
+  ~AutoTools~ emits ~page_discuss~ / ~record_discuss~ / ~workspace_discuss~ free.
+- *Turn-budget folds into the trigger.* Generalized ~needs_host_response~ calc:
+  host-addressed AND no reply yet AND ~conversation.agent_turn_budget > 0~.
+  Exhausted thread → trigger silently doesn't fire (no scheduler). Atomic
+  decrement on ~:respond~; human messages replenish. Caps chatter AND delegation.
+- *source_id generalization is load-bearing (proven by crystallization test).*
+  The page-keyed ingest pipeline (~source_id: "page:<id>"~) cannot index
+  message-blocks. Generalizing to ~{source_type, id}~ (page | message |
+  conversation) is the SAME shape as host_type/container AND the SAME union the
+  GraphRAG design needs — one piece of work paying off three features
+  (message ingestion, conversation-scoped RAG, crystallize provenance).
+- *Crystallize = clone + provenance (copy, not move).* A small Reactor: clone
+  selected message blocks onto the host page (AssignAfterLastSibling for
+  ordering), author provenance Links, mark conversation ~:crystallized~. Reuses
+  reparent/clone + KnowledgeReindex dual-side path + Link + workflow.
+
+** Trade-offs accepted
+
+1. Host borrows addresser identity (reactive deputy). Proactive/autonomous
+   agents need their own Membership(role :agent) — supported, separate path.
+2. Block belongs to exactly one container (page XOR message) — a CHECK invariant;
+   crystallize copies (clones) rather than moves to keep scrollback intact.
+3. Conversation/Message gain real policies (currently none — all authorize?:false).
+4. source_id generalization is required infra, not optional — build deliberately.
+5. Append-only messages; edits = new rows (audit trail for RAG/compliance).
+
+** Execution waves
+
+*** Wave 0 — The keystone slice (validate Hostable against Spark)
+~Concept.Hostable~ extension (mixin: subgraph_scope/1 + defoverridable;
+transformer InstallConversations: registry + has_many :conversations +
+synthesized ~discuss~ action). ~use~ it on Page only. Conversation gains
+host_type/host_id; backfill existing rows to :workspace; drop the hardcoded 1:1
+~belongs_to :user, allow_nil?: false~ reflex. Point existing chat panel at a
+Page-hosted conversation; RAG scopes via existing ~source_id: "page:<id>"~.
+GATE: ~page_discuss~ reachable as MCP tool (mcp_parity_test). ~3 files + migration.
+
+*** Wave 1 — Participants (identity vs voice) + policies + addressed response
+~Participant~ resource (belongs_to conversation + membership; last_read cursor;
+kind derived from membership.role). ~Message.sender_participant_id~ nullable
+(set ⇒ user/agent, nil ⇒ host). Migrate binary ~source~ (:user ⇒ participant,
+:agent ⇒ nil/host). Generalized ~needs_host_response~ calc (host-addressed +
+no reply + budget). ~mentions~ array + registry dispatch (member→notify,
+hostable→link). Real policies on Conversation/Message (reuse WorkspaceMember).
+
+*** Wave 2 — Message contains Blocks + source_id generalization (the spine)
+~Block~ gains nullable ~message_id~ + CHECK(num_nonnulls(page_id,message_id)=1).
+~Message.blocks~ has_many; keep ~text~ as fast-path shim. Generalize ingest key
+~page:<id>~ → ~{source_type,id}~: KnowledgeReindex dispatches on container;
+~IngestSource~ over message/conversation; Search.scope_opts gains
+~conversation:<id>~ (≡ the GraphRAG union term); debounce key gains source_type.
+
+*** Wave 3 — Threads + GraphRAG over lineage
+~Conversation.parent_conversation_id~ + ~seed_message_id~ (self-ref tree).
+~discuss(host, text, reply_to_message_id:)~ spawns child conversation inheriting
+host + lineage. RAG union: host.subgraph ∪ this convo ∪ ancestor convos ∪
+extra-host scopes. Title via fast model (today's generate_name) or creator.
+
+*** Wave 4 — Inbox + turn-budget
+~Conversation.agent_turn_budget~ integer; atomic decrement on :respond; human
+message replenishes. Inbox projection: conversations where I'm a participant
+with unread; one recipient-keyed PubSub topic (~inbox:<user_id>~) fanned out
+over mentions. Agent results + human mentions = one inbox.
+
+*** Wave 5 — Crystallize + retire ai_answer hand-rolled plumbing
+~Crystallize~ Reactor (clone message-blocks → host page + provenance Links +
+convo :crystallized workflow). Retire EvaluateAi's bespoke
+~get_or_create_conversation~ → ai_answer becomes a Hostable block using ~discuss~.
+Net deletion at call sites.
+
+*** Wave 6 — UI (host conversation, participants, crystallize, inbox)
+Host-conversation view (document + thread one surface). Participant rail
+(humans, agents, host voice). @-mention composer with registry dispatch.
+Crystallize selection UI. Inbox LiveView. Code-interface only (LiveViewPurity).
+
+** Children
+- Wave 0 :: [[id:FEAT-074-hostable-extension-and-page-host-keyston]]
+- Wave 1 :: [[id:FEAT-076-participants-identity-vs-voice-policies]]
+- Wave 2 :: [[id:FEAT-075-message-contains-blocks-source-id-genera]]
+- Wave 3 :: [[id:FEAT-077-threads-and-graphrag-over-conversation-l]]
+- Wave 4 :: [[id:FEAT-078-inbox-projection-and-agent-turn-budget]]
+- Wave 5 :: [[id:FEAT-079-crystallize-reactor-and-retire-ai-answer]]
+- Wave 6 :: [[id:FEAT-080-messaging-ui-host-conversation-participa]]
+
+** Acceptance
+
+End state: a user opens a Page and talks to it; the Page answers grounded in
+itself, citing its own blocks. A human @-mentions an external agent who replies
+with a table block and moves a Task. A thread spawns from a message. The
+conversation crystallizes into durable page blocks with provenance. An agent
+finishing async work lands in the human's inbox. Every ~discuss~/send is an MCP
+tool (parity test green). Each wave ends green against ~mix precommit~ (Credo
+EX9001 LiveView-purity, MCP surface drift, tests).
+
+** Process model (every wave)
+- *Main-thread execution.* Implement on the main thread; no isolated worktrees.
+- *Dual verification, both REQUIRED:* (1) TDD red→green — failing test first
+  (Ash action tests, calc tests, mcp_parity harness, Reactor tests).
+  (2) Manual BROWSER testing via puppeteer once a wave has an observable surface.
+- *Reviewer waves interleaved.* After each wave, before the next: a ~reviewer~
+  pass audits the diff (correctness, policy/tenancy/leak, LiveView purity EX9001,
+  contract drift). Next wave blocks on findings resolved/deferred.
+- *Mid-flight report between waves:* Work done (+ proving tests) · Work to do
+  (next-wave assumptions, risks) · Process learnings (codebase surprises,
+  patterns to reuse).
+- *Wave gate.* Green ~mix precommit~ AND reviewer sign-off AND mid-flight report.
+
+** Highest-risk items (build deliberately)
+- *Hostable transformer composing with Ash resource compilation* (Wave 0) — the
+  keystone; if ~use Concept.Hostable~ on Page isn't as clean as
+  ~use BlockType.Interactive~, reconsider before proceeding.
+- *source_id generalization* (Wave 2) — load-bearing for three features; the
+  crystallization test proved it is the spine of "conversation is knowledge."
+- *Host borrowed-identity grounding ∩ visibility* (Wave 1) — leak-safe by
+  construction only if RAG scope is intersected with the addresser's visibility.

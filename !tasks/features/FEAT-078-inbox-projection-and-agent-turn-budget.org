@@ -1,0 +1,55 @@
+#+TITLE: Inbox projection and agent-turn budget
+#+STATE: ITEM
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: FEAT-078-inbox-projection-and-agent-turn-budget
+#+LAYER: domain
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Parent: [[id:PLAN-010-conversation-as-a-host-grounded-substrat]] (Wave 4)
+Blocked by: Wave 1 [[id:FEAT-076-participants-identity-vs-voice-policies]]
+
+* Goal
+The inbox (the one genuinely new feed) as a projection, and the agent-turn
+budget that bounds chatter AND delegation depth.
+
+* Scope
+1. ~Conversation.agent_turn_budget :integer~ (default small, e.g. 5).
+   - decrement: atomically inside the ~:respond~ action as a host turn starts
+     (~atomic_update(:agent_turn_budget, expr(budget - 1))~ — same pattern as
+     ~upsert_response~'s atomic text append; the ~where~ re-checks at execution
+     so concurrent turns serialize on the row).
+   - replenish: a ~:user~-sourced message from a HUMAN participant resets it
+     (human attention is the rate-limiter).
+   - the budget conjunct in ~needs_host_response~ (landed Wave 1) now reads a
+     real attr → exhausted thread silently stops firing the trigger.
+2. Inbox projection (NO new table — derived from the unread cursor):
+   ~INBOX(me) = conversations where exists(participant p: p.membership.user_id
+   == me and p.last_read_message_id < conversation.last_message_id)~. A read
+   action / calc.
+3. One recipient-keyed PubSub topic: ~Message.pub_sub~ adds
+   ~publish :create, ["inbox", :mentioned_user_id]~ — one publish per addressee,
+   fanned out over the ~mentions~ array. A LiveView subscribes to
+   ~inbox:<my_user_id>~ once.
+4. Agent results land in the same inbox: an agent @-mentioning a human in any
+   host's conversation → same fan-out → one inbox (no agent-specific code).
+
+* Edge cases
+- Atomicity: two agent messages arriving together must not both fire when budget
+  == 1 — the decrement+check is one SQL statement; assert with a concurrency test.
+- Agent↔agent loop: A @s B → B's turn decrements → B @s A → decrements → 0 →
+  trigger stops → awaits human. Verify the loop halts.
+- last_message_id derivation: a cursor calc or denormalized pointer — avoid N+1.
+
+* Acceptance
+- ~mix precommit~ green.
+- Budget exhaustion halts an agent↔agent loop; a human message revives it.
+- @-mention to a human pushes to their inbox topic in real time; inbox query
+  returns the unread conversation.
+- TDD red→green (atomic budget decrement under concurrency; inbox projection;
+  fan-out); reviewer sign-off; mid-flight report.

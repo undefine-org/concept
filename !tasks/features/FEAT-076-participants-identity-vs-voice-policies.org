@@ -1,0 +1,63 @@
+#+TITLE: Participants (identity vs voice), policies, addressed response
+#+STATE: ITEM
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: FEAT-076-participants-identity-vs-voice-policies
+#+LAYER: domain
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Parent: [[id:PLAN-010-conversation-as-a-host-grounded-substrat]] (Wave 1)
+Blocked by: Wave 0 [[id:FEAT-074-hostable-extension-and-page-host-keyston]]
+
+* Goal
+Replace the binary ~Message.source~ with the Participant model, resolving the
+identity-vs-voice distinction, and add real policies + mention-addressed
+response (killing the "every message summons the AI" reflex).
+
+* Scope
+1. ~Concept.Knowledge.Chat.Participant~ resource (WorkspaceTenanted):
+   ~belongs_to :conversation~, ~belongs_to :membership~ (THE identity),
+   ~last_read_message_id~ (inbox cursor), notify prefs. ~kind~ calc DERIVED from
+   ~membership.role~ (not stored).
+2. ~Message~: add ~belongs_to :sender_participant~ (NULLABLE). set ⇒ user/agent
+   spoke (sender_kind from membership.role); nil ⇒ HOST spoke (sender_kind :host,
+   grounding from Conversation.host). ~sender_kind~ as a calc.
+3. Migrate binary ~source~: ~:user~ ⇒ sender_participant set; ~:agent~ ⇒ nil
+   (host). Keep ~source~ writable as a shim until Wave 2 fully cuts over.
+4. ~mentions {:array, :uuid}~ on Message + registry dispatch at send:
+   membership target → fan to inbox (Wave 4 wires the topic; here just record);
+   hostable target → author Knowledge.Link (provenance/graph edge).
+5. Generalized response calc replacing ~needs_response~:
+   ~needs_host_response = host_addressed? and not exists(response) and
+   conversation.agent_turn_budget > 0~ (budget attr lands Wave 4; gate on a
+   constant until then or land the attr here defaulted). Update the ~:respond~
+   trigger ~where~.
+6. Real policies on Conversation + Message (currently NONE; all authorize?:false):
+   - Conversation read: ~exists(participants, membership.user_id == ^actor(:id))~
+     OR ~WorkspaceMember~ (reuse existing checks).
+   - Message create: member may post to a conversation they can read.
+   - Host turns keep ~authorize?: false~ from the Oban respond worker, bounded by
+     the BORROWED addresser actor passed into RAG/tools (leak-safe).
+
+* Edge cases
+- Borrowed identity: the host turn's RAG scope = host.subgraph ∩ addresser
+  visibility. Today ACL is binary (member sees all) so intersection is moot, but
+  do NOT foreclose it — thread the addresser actor through retrieve_context.
+- Host acting on itself (future Record.transition) authorizes as the addresser,
+  not a god-actor — viewer cannot move a task they lack permission on.
+- ~AiAgentActorPersister~ already resolves the asker as actor + tags
+  ~chat_agent?: true~ — generalize from "the one asker" to "the addresser".
+
+* Acceptance
+- ~mix precommit~ green.
+- Human↔human message (no host mention) does NOT trigger a host response.
+- @-mention of host voice DOES trigger a grounded host response.
+- Policies: a non-participant non-member cannot read a private conversation;
+  a member can. Regression test for the borrowed-identity scope.
+- Migration: existing :user/:agent messages map to participant/host correctly.
+- TDD red→green; reviewer sign-off; mid-flight report.

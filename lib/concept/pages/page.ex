@@ -12,6 +12,8 @@ defmodule Concept.Pages.Page do
     extensions: [AshArchival.Resource],
     notifiers: [Ash.Notifier.PubSub, Concept.Pages.Notifiers.KnowledgeReindex]
 
+  use Concept.Hostable, type: :page, scope: :subtree, persona: "this page"
+
   postgres do
     table "pages"
     repo Concept.Repo

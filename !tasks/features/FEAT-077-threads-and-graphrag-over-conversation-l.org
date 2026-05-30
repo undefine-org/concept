@@ -1,0 +1,48 @@
+#+TITLE: Threads and GraphRAG over conversation lineage
+#+STATE: ITEM
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: FEAT-077-threads-and-graphrag-over-conversation-l
+#+LAYER: domain
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Parent: [[id:PLAN-010-conversation-as-a-host-grounded-substrat]] (Wave 3)
+Blocked by: Wave 2 [[id:FEAT-075-message-contains-blocks-source-id-genera]]
+
+* Goal
+Threads as child conversations (self-referential tree), and GraphRAG assembled
+as a union over the host subgraph + the conversation lineage.
+
+* Scope
+1. ~Conversation~: add ~parent_conversation_id~ (self-ref) + ~seed_message_id~
+   (the message a thread spawned from). A thread inherits the parent's host.
+2. ~discuss~ gains the third resolution arm: ~reply_to_message_id~ → spawn a
+   child conversation (same host, parent + seed set). This is the arm that
+   provably writes two resources → promote ~discuss~ to a Reactor here
+   (AGENTS.md rule 3).
+3. GraphRAG union in retrieve_context: ~host.subgraph_scope(record)~ ∪
+   ~conversation:<this>~ ∪ ~conversation:<each ancestor>~ (walk
+   parent_conversation_id) ∪ extra-host scopes (future internal agents). Requires
+   ~Search~ to accept a UNION of source scopes (extend search.ex — the one
+   genuinely new retrieval capability, foreshadowed in design §32).
+4. Title: fast-model generation (reuse today's ~generate_name~ /
+   ~needs_title~ trigger) OR creator-set; threads inherit/derive a subject.
+
+* Edge cases
+- Lineage walk must be bounded (max depth) to avoid pathological ancestor chains.
+- A thread's host = parent's host; do not re-resolve from scratch.
+- Union retrieval must dedupe chunks shared across scopes and respect limit.
+
+* Acceptance
+- ~mix precommit~ green.
+- Spawning a thread from a message creates a child conversation with correct
+  host + parent + seed; it appears nested in the UI later (Wave 6).
+- A child thread's host voice retrieves context from the parent thread's
+  messages (lineage union verified by test).
+- TDD red→green (lineage walk; union scope; Reactor over create-conversation +
+  create-message); reviewer sign-off; mid-flight report.

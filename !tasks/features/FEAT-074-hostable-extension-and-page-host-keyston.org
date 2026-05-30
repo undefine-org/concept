@@ -1,0 +1,74 @@
+#+TITLE: Hostable extension and Page-host keystone slice
+#+STATE: DOING
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: FEAT-074-hostable-extension-and-page-host-keyston
+#+LAYER: foundation
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Parent: [[id:PLAN-010-conversation-as-a-host-grounded-substrat]] (Wave 0)
+
+* Goal
+Validate the ~Concept.Hostable~ keystone against Spark reality with the smallest
+slice. If ~use Concept.Hostable~ on Page is as clean as ~use BlockType.Interactive~,
+the whole design holds; if not, reconsider before any further wave.
+
+* Scope (3 files + 1 migration)
+1. ~Concept.Hostable~ Spark extension, two halves mirroring repo idioms:
+   - mixin (~__using__~): ~@behaviour~ + ~subgraph_scope/1~ callback with
+     ~defoverridable~ (like ~BlockType~), default derived from ~scope:~ opt;
+     ~__hostable__/0~ introspection.
+   - transformer ~Concept.Hostable.Transformers.InstallConversations~ (like
+     ~AutoTools.SynthesizeTools~): register host in a config-backed registry
+     (feeds ~Conversation.host_type~ one_of); add ~has_many :conversations~
+     filtered to this host_type; synthesize the described ~discuss~ update
+     action (so AutoTools projects it to MCP — outcome is FREE).
+   - ~Concept.Hostable.registered/0~ reads the registry for the ~one_of~.
+   - ~resolve_scope/2~: :subtree→"page:<id>", {:self,_}→"record:<id>",
+     :workspace→:workspace, {:union,refs}→passthrough.
+2. ~use Concept.Hostable, scope: :subtree~ on ~Concept.Pages.Page~ only.
+3. ~Conversation~: add ~host_type :atom~ (one_of: Hostable.registered),
+   ~host_id :uuid~ (nil ⇔ :workspace). Migration backfills existing rows to
+   ~host_type: :workspace, host_id: nil~. DROP the 1:1 reflex:
+   ~belongs_to :user, allow_nil?: false~ + ~relate_actor(:user)~ +
+   ~my_conversations~ filter ~user_id == actor.id~ (replace with host-scoped read).
+4. ~discuss~ action resolver (3-arm, but only find-or-create + post arms this
+   wave): resolve the host's default conversation, post a message. Plain change
+   now; Reactor deferred to when thread-spawn lands (Wave 3).
+5. Point the existing ChatPanel at a Page-hosted conversation; confirm RAG
+   scopes to the page via the EXISTING ~source_id: "page:<id>"~ path (no new
+   retrieval code).
+
+* Non-goals (deferred to later waves)
+Participant table (keep binary ~source~ shim) · Message.blocks (keep ~text~) ·
+threads · inbox · turn-budget · source_id generalization · crystallize.
+
+* Edge cases
+- AshAI tool-registry build calls ~Ash.can?~ with empty input (see
+  AssignAfterLastSibling) — ~discuss~ resolver must no-op safely without tenant.
+- Backfill must run before the ~one_of~ constraint is enforced (additive first,
+  constrain second) to avoid rejecting legacy rows.
+- ~discuss~ as an ~update~ on the host: the host record is the subject; ensure
+  tenant/actor thread through to the created Conversation/Message.
+
+* Acceptance
+- ~mix precommit~ green (Credo EX9001, MCP surface drift, tests).
+- ~page_discuss~ appears in ~docs/mcp_surface.md~ and is reachable via
+  mcp_parity_test (described action → tool).
+- A Page-hosted conversation works in the existing ChatPanel; the host voice
+  answers grounded in the page (existing source_id path).
+- TDD: failing test first for (a) Hostable registry contains Page, (b)
+  Conversation accepts host_type/host_id and rejects unregistered host_type,
+  (c) page_discuss tool synthesized.
+- Reviewer sign-off + mid-flight report before Wave 1.
+
+* GATE
+This wave is the go/no-go for the architecture. The mid-flight report MUST
+answer: did the transformer compose cleanly, or did Ash resource-compile
+ordering fight it? Is ~use Concept.Hostable~ ergonomically on par with the
+BlockType mixins?

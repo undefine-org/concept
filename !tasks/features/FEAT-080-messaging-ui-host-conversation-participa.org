@@ -1,0 +1,49 @@
+#+TITLE: Messaging UI: host conversation, participants, crystallize, inbox
+#+STATE: ITEM
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: FEAT-080-messaging-ui-host-conversation-participa
+#+LAYER: ui
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Parent: [[id:PLAN-010-conversation-as-a-host-grounded-substrat]] (Wave 6)
+Blocked by: Wave 3 [[id:FEAT-077-threads-and-graphrag-over-conversation-l]], Wave 4 [[id:FEAT-078-inbox-projection-and-agent-turn-budget]], Wave 5 [[id:FEAT-079-crystallize-reactor-and-retire-ai-answer]]
+
+* Goal
+The human-facing surface for the host-conversation model. Mockups in
+docs/messaging_design.md (host conversation; crystallize). LiveView code-interface
+ONLY (Credo LiveViewPurity EX9001 — no Ash.Query in lib/concept_web/).
+
+* Scope
+1. Host-conversation view: the document blocks and the thread are ONE continuous
+   surface ("Conversation about this page" divider). Append-only message stream
+   with mixed senders.
+2. Participant rail: humans (avatars), external agents (violet robot badge),
+   and the host voice ("This page" / "This task", violet sparkle — NOT a person).
+3. @-mention composer: registry dispatch (member → notify chip; hostable →
+   link chip); ~/~ slash menu so a message can contain blocks (reuse editor).
+4. Crystallize UI: select messages → "Crystallize N → page"; promoted blocks
+   show green "just added" + provenance chip "from conversation".
+5. Inbox LiveView: subscribes to ~inbox:<user_id>~; lists unread conversations,
+   each context-rich (shows its host). Agent results + human mentions in one list.
+6. Threads: a message can spawn/show a child thread (nested).
+
+* Constraints
+- All data access via domain code-interface fns (define in the Chat/Pages
+  domains); NO ~Ash.Query~/~Ash.Changeset.for_*~/~Ecto.Query~ in web layer.
+- Real-time via existing PubSub topics + the new ~inbox:~ topic.
+- Reuse ChatPanel / BlockRender / slash menu; do not fork the editor.
+
+* Acceptance
+- ~mix precommit~ green (EX9001 clean).
+- Manual BROWSER test via puppeteer: open a Page, talk to it, host voice answers
+  grounded + cited; @-mention an agent; spawn a thread; crystallize a selection;
+  see an agent result land in the inbox.
+- TDD: LiveView tests via Phoenix.LiveViewTest keyed on element IDs (composer,
+  participant rail, crystallize button, inbox list).
+- Reviewer sign-off; final report.

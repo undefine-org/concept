@@ -152,6 +152,10 @@ config :concept, :block_types, [
   Concept.Pages.BlockTypes.RecordRef
 ]
 
+config :concept, :hostables, [
+  Concept.Pages.Page
+]
+
 config :concept, :field_types, [
   Concept.Objects.FieldTypes.Text,
   Concept.Objects.FieldTypes.Number,

@@ -1,0 +1,56 @@
+#+TITLE: Crystallize Reactor and retire ai_answer hand-rolled plumbing
+#+STATE: ITEM
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: FEAT-079-crystallize-reactor-and-retire-ai-answer
+#+LAYER: domain
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Parent: [[id:PLAN-010-conversation-as-a-host-grounded-substrat]] (Wave 5)
+Blocked by: Wave 2 [[id:FEAT-075-message-contains-blocks-source-id-genera]]
+
+* Goal
+Talk becomes durable document: crystallize selected messages' blocks onto the
+host page (copy + provenance, NOT move). And the payoff that proves the design —
+retire the AI Answer block's hand-rolled conversation plumbing, since it becomes
+just a Hostable block using ~discuss~. Net deletion at the call sites.
+
+* Scope
+1. ~Crystallize~ Reactor (AGENTS.md rule 3 — cross-resource):
+   ~crystallize(conversation, message_ids, target_page)~ → for each selected
+   message, for each block: CLONE the block onto target_page
+   (~AssignAfterLastSibling~ → trailing fractional index), author a
+   ~Knowledge.Link~ (promoted_from: message_block → page_block) for provenance
+   (also feeds the knowledge graph), and mark the conversation
+   ~:crystallized~ → page (Conversation workflow state — reuse Objects FSM grain).
+   COPY semantics: the message keeps its blocks (scrollback intact); the
+   provenance chip "from conversation" reflects this.
+2. KnowledgeReindex dual-side: cloning onto a page re-ingests the page source
+   (existing path); the conversation source is unchanged (copy, not move).
+3. Retire ~Block.Changes.EvaluateAi.get_or_create_conversation~: the ai_answer
+   block becomes a Hostable (or uses host=Block) and calls ~discuss~ /
+   find-or-create owned by Hostable (design §33 step 6). DELETE the bespoke
+   props["conversation_id"] plumbing; the block's conversation is now the
+   general mechanism.
+
+* Edge cases
+- Cloning must deep-copy block ~content~ + ~props~ (incl. nested lexical state).
+- Order preservation across multiple selected messages: clone in (message order,
+  block position) order so the page tail reflects conversation order.
+- ai_answer retirement must preserve the existing AI-answer UX (4 states) and
+  the citation/staleness behavior — this is a refactor-cutover, not a rewrite.
+
+* Acceptance
+- ~mix precommit~ green.
+- Selecting 3 messages and crystallizing appends their blocks to the page with
+  provenance Links; citations on those blocks survive; conversation marked
+  :crystallized.
+- ai_answer block works exactly as before but with ZERO bespoke conversation
+  code (diff is a net deletion).
+- TDD red→green (clone+provenance Reactor; order preservation; ai_answer parity
+  after retirement); reviewer sign-off; mid-flight report.

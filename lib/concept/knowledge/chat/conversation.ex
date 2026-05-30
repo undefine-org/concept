@@ -34,13 +34,16 @@ defmodule Concept.Knowledge.Chat.Conversation do
 
     create :create do
       description "Start a new chat conversation in the workspace."
-      accept [:title]
+      accept [:title, :host_type, :host_id]
 
       argument :workspace_id, :uuid,
         allow_nil?: false,
         description: "Workspace the conversation belongs to."
 
       change set_attribute(:workspace_id, arg(:workspace_id))
+      # Transitional: the creator is still related as `user` until the
+      # Participant model lands (Wave 1, FEAT-076). Host defaults to
+      # :workspace (the degenerate, workspace-wide conversation).
       change relate_actor(:user)
     end
 
@@ -84,6 +87,20 @@ defmodule Concept.Knowledge.Chat.Conversation do
     end
 
     attribute :workspace_id, :uuid, allow_nil?: false, public?: true
+
+    attribute :host_type, :atom do
+      public? true
+      allow_nil? false
+      default :workspace
+      constraints one_of: Concept.Hostable.types()
+      description "What this conversation is about: :workspace (whole tenant) or a registered host type (e.g. :page)."
+    end
+
+    attribute :host_id, :uuid do
+      public? true
+      allow_nil? true
+      description "The host record id. Nil for the :workspace host (the conversation is about the whole workspace)."
+    end
 
     timestamps()
   end

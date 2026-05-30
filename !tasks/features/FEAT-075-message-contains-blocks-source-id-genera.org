@@ -1,0 +1,65 @@
+#+TITLE: Message contains Blocks + source_id generalization (the spine)
+#+STATE: ITEM
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: FEAT-075-message-contains-blocks-source-id-genera
+#+LAYER: domain
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Parent: [[id:PLAN-010-conversation-as-a-host-grounded-substrat]] (Wave 2)
+Blocked by: Wave 1 [[id:FEAT-076-participants-identity-vs-voice-policies]]
+
+* Goal
+Dissolve the content-layer membrane (a Message contains Blocks) AND generalize
+the page-keyed ingest pipeline to a ~{source_type, id}~ ref. The crystallization
+pressure-test (docs/messaging_design.md Part VIII) proved this generalization is
+LOAD-BEARING for three features at once: message ingestion, conversation-scoped
+RAG, and crystallize provenance. This is the spine of "conversation is knowledge".
+
+* Scope
+1. ~Block~ gains nullable ~message_id~ + ~belongs_to :message~. Postgres CHECK
+   ~num_nonnulls(page_id, message_id) = 1~ (a block lives under a page XOR a
+   message). ~references~ + index on ~[:workspace_id, :message_id, :position]~.
+2. ~Message.blocks~ has_many (destination ~message_id~). Keep ~Message.text~ as
+   a fast-path shim (plain-text mirror) for now; ~blocks~ is the rich body.
+3. ~AssignAfterLastSibling~: generalize sibling query to key off the container
+   (page_id OR message_id), not page_id alone.
+4. source_id generalization (page → container ref):
+   - ~KnowledgeReindex~ block clause dispatches on container: page_id →
+     ~enqueue(:page, id)~; message_id → ~enqueue(:conversation, conv_id)~
+     (conversation is the natural ingest grain). Guard the nil-page_id crash.
+   - ~IngestPage~ → ~IngestSource~ (or sibling worker): for a conversation
+     source, list the conversation's message-blocks instead of ~list_for_page~;
+     ~source_id: "conversation:<id>"~.
+   - ~Search.scope_opts~ gains ~conversation:<id>~ (≡ the GraphRAG union term).
+   - debounce ~unique~ key: ~[:page_id, :op]~ → ~[:source_type, :source_id, :op]~
+     so non-page sources dedupe per-source (nil-page collision fix).
+   - ~Citation~ block/page FKs already on_delete:delete; grounding citations are
+     block-addressed and unaffected.
+
+* Edge cases
+- ~BlockChunker~ (chunker_opts: page/blocks) must accept a conversation/message
+  source shape; verify Arcana.Document non-blank-content requirement still met.
+- A message-block reparented to a page (Wave 5 crystallize) crosses container
+  type — KnowledgeReindex must re-ingest BOTH the old conversation source and
+  the new page source (extend the existing cross-page dual-ingest path).
+- ~render_kind~ dispatch + lexical editor must render message-blocks (reuse the
+  BlockRender dispatcher; messages render the same block kinds as pages).
+
+* Acceptance
+- ~mix precommit~ green.
+- A message with a table + code block round-trips (create, render, ingest).
+- Search with ~source_id: "conversation:<id>"~ returns message-block chunks.
+- CHECK rejects a block with both/neither container.
+- TDD red→green (chunker over conversation source; scope_opts conversation;
+  debounce dedup per source_type); reviewer sign-off; mid-flight report.
+
+* Risk
+Highest-infra wave. The source_id generalization touches ingest, search, and
+debounce together — land it deliberately with tests at each seam, not as a
+drive-by. It pays off Wave 3 (RAG union), Wave 5 (crystallize), and Pillar 2.
