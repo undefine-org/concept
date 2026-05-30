@@ -16,6 +16,8 @@ defmodule Concept.Knowledge.Workers.IngestPageTest do
   alias Concept.{Accounts, Pages}
   alias Concept.Knowledge.Workers.IngestPage
 
+  require Ash.Query
+
   defp fixtures do
     {:ok, user} =
       Accounts.User
@@ -85,6 +87,40 @@ defmodule Concept.Knowledge.Workers.IngestPageTest do
       blocks = Keyword.fetch!(chunker_opts, :blocks)
       assert is_list(blocks)
       refute Enum.empty?(blocks)
+    end
+
+    test "ingests a message's blocks as a message: source (conversation is knowledge)" do
+      %{user: user, workspace: ws} = fixtures()
+
+      {:ok, msg} =
+        Concept.Knowledge.Chat.create_message(%{text: "see table", addresses_host: false},
+          actor: user,
+          tenant: ws.id
+        )
+
+      {:ok, _block} =
+        Concept.Pages.Block
+        |> Ash.Changeset.for_create(
+          :create_block,
+          %{message_id: msg.id, type: :paragraph, content: %{}, workspace_id: ws.id},
+          actor: user,
+          tenant: ws.id
+        )
+        |> Ash.create()
+
+      job = %Oban.Job{
+        args: %{
+          "workspace_id" => ws.id,
+          "source_type" => "message",
+          "source_id" => msg.id,
+          "op" => "upsert"
+        }
+      }
+
+      assert :ok = IngestPage.perform(job)
+      assert_receive {:ingest_called, _text, opts}, 500
+      assert opts[:source_id] == "message:#{msg.id}"
+      assert Keyword.fetch!(opts, :chunker_opts)[:message_id] == msg.id
     end
   end
 end

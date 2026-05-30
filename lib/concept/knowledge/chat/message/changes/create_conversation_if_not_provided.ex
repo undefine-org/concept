@@ -3,8 +3,10 @@ defmodule Concept.Knowledge.Chat.Message.Changes.CreateConversationIfNotProvided
   Routes a message to its conversation. Resolution order:
 
     1. explicit `conversation_id` argument → post there;
-    2. else find the host's conversation (`host_type`/`host_id`) → post there;
-    3. else create the host's conversation, then post there.
+    2. else `reply_to_message_id` → spawn/continue a thread (child conversation
+       seeded from that message, inheriting the parent's host) → post there;
+    3. else find the host's conversation (`host_type`/`host_id`) → post there;
+    4. else create the host's conversation, then post there.
 
   This is the host-model generalization of the original behaviour (which only
   knew the `:workspace` host). It is what lets EVERY registered `Concept.Hostable`
@@ -25,10 +27,49 @@ defmodule Concept.Knowledge.Chat.Message.Changes.CreateConversationIfNotProvided
       )
     else
       Ash.Changeset.before_action(changeset, fn changeset ->
-        conversation = resolve_host_conversation(changeset, context)
+        conversation = resolve_conversation(changeset, context)
         Ash.Changeset.force_change_attribute(changeset, :conversation_id, conversation.id)
       end)
     end
+  end
+
+  defp resolve_conversation(changeset, context) do
+    case Ash.Changeset.get_argument(changeset, :reply_to_message_id) do
+      nil -> resolve_host_conversation(changeset, context)
+      seed_id when is_binary(seed_id) -> resolve_thread(changeset, seed_id, context)
+    end
+  end
+
+  # A thread is a child conversation seeded from a message, inheriting the
+  # parent conversation's host (PLAN-010 §13). Find-or-create by seed message.
+  defp resolve_thread(changeset, seed_message_id, context) do
+    opts = Ash.Context.to_opts(context)
+    workspace_id = Ash.ToTenant.to_tenant(changeset.tenant, Concept.Knowledge.Chat.Conversation)
+
+    case Concept.Knowledge.Chat.thread_for_seed(seed_message_id, opts) do
+      {:ok, [thread | _]} ->
+        thread
+
+      _ ->
+        parent = parent_conversation_of(seed_message_id, opts)
+
+        Concept.Knowledge.Chat.create_conversation!(
+          %{
+            workspace_id: workspace_id,
+            host_type: parent.host_type,
+            host_id: parent.host_id,
+            parent_conversation_id: parent.id,
+            seed_message_id: seed_message_id
+          },
+          opts
+        )
+    end
+  end
+
+  defp parent_conversation_of(message_id, opts) do
+    {:ok, message} = Concept.Knowledge.Chat.get_message(message_id, opts)
+    {:ok, conversation} = Concept.Knowledge.Chat.get_conversation(message.conversation_id, opts)
+    conversation
   end
 
   # Find-or-create the conversation for the addressed host. Defaults to the

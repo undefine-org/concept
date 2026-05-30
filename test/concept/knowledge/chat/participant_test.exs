@@ -6,6 +6,7 @@ defmodule Concept.Knowledge.Chat.ParticipantTest do
   """
   use Concept.DataCase, async: true
   require Ash.Query
+  require Ash.Query
 
   alias Concept.Knowledge.Chat
 

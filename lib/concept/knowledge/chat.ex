@@ -9,6 +9,9 @@ defmodule Concept.Knowledge.Chat do
       define :get_conversation, action: :read, get_by: [:id]
       define :my_conversations
       define :conversations_for_host, action: :for_host, args: [:host_type, :host_id]
+      define :thread_for_seed, action: :for_seed, args: [:seed_message_id]
+      define :decrement_budget, action: :decrement_budget
+      define :replenish_budget, action: :replenish_budget
     end
 
     resource Concept.Knowledge.Chat.Message do
@@ -18,6 +21,7 @@ defmodule Concept.Knowledge.Chat do
         default_options: [query: [sort: [inserted_at: :desc]]]
 
       define :create_message, action: :create
+      define :get_message, action: :read, get_by: [:id]
     end
 
     resource Concept.Knowledge.Chat.Participant do

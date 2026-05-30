@@ -7,6 +7,9 @@ defmodule Concept.Knowledge.Chat.Conversation do
     authorizers: [Ash.Policy.Authorizer],
     notifiers: [Ash.Notifier.PubSub]
 
+  # Default automatic agent/host turns before a human must re-engage (PLAN-010 §B).
+  @default_budget 5
+
   oban do
     triggers do
       trigger :name_conversation do
@@ -35,7 +38,7 @@ defmodule Concept.Knowledge.Chat.Conversation do
 
     create :create do
       description "Start a new chat conversation in the workspace."
-      accept [:title, :host_type, :host_id]
+      accept [:title, :host_type, :host_id, :parent_conversation_id, :seed_message_id]
 
       argument :workspace_id, :uuid,
         allow_nil?: false,
@@ -55,9 +58,31 @@ defmodule Concept.Knowledge.Chat.Conversation do
       change Concept.Knowledge.Chat.Conversation.Changes.GenerateName
     end
 
+    update :decrement_budget do
+      description "Atomically consume one automatic agent/host turn from the budget (floored at 0)."
+      accept []
+      change atomic_update(:agent_turn_budget, expr(max(agent_turn_budget - 1, 0)))
+    end
+
+    update :replenish_budget do
+      description "Reset the agent-turn budget when a human re-engages the conversation."
+      accept []
+      change atomic_update(:agent_turn_budget, expr(^@default_budget))
+    end
+
     read :my_conversations do
       description "List the actor's chat conversations in the workspace, most recent first."
       filter expr(user_id == ^actor(:id))
+    end
+
+    read :for_seed do
+      description "Find the thread (child conversation) spawned from a given seed message, if any."
+
+      argument :seed_message_id, :uuid,
+        allow_nil?: false,
+        description: "The message a thread was spawned from."
+
+      filter expr(seed_message_id == ^arg(:seed_message_id))
     end
 
     read :for_host do
@@ -143,6 +168,32 @@ defmodule Concept.Knowledge.Chat.Conversation do
       description "The host record id. Nil for the :workspace host (the conversation is about the whole workspace)."
     end
 
+    # Threads: a thread is a child conversation spawned from a message. It
+    # inherits the parent's host and links back via these pointers (PLAN-010
+    # §13). nil for a root conversation.
+    attribute :parent_conversation_id, :uuid do
+      public? true
+      allow_nil? true
+      description "Parent conversation, if this is a thread spawned from a message. Nil for a root conversation."
+    end
+
+    attribute :seed_message_id, :uuid do
+      public? true
+      allow_nil? true
+      description "The message this thread was spawned from. Nil for a root conversation."
+    end
+
+    # Bounds agent turns to prevent runaway agent↔agent loops AND delegation
+    # depth (PLAN-010 §B, §22). Each host/agent turn decrements it; a human
+    # message replenishes it (human attention is the rate-limiter). When 0, the
+    # needs_host_response calc goes false and the respond trigger stops firing.
+    attribute :agent_turn_budget, :integer do
+      public? true
+      allow_nil? false
+      default 5
+      description "Remaining automatic agent/host turns before a human must re-engage. Replenished when a human posts."
+    end
+
     timestamps()
   end
 
@@ -167,6 +218,17 @@ defmodule Concept.Knowledge.Chat.Conversation do
     belongs_to :user, Concept.Accounts.User do
       public? true
       allow_nil? false
+    end
+
+    belongs_to :parent_conversation, __MODULE__ do
+      public? true
+      define_attribute? false
+      source_attribute :parent_conversation_id
+      destination_attribute :id
+    end
+
+    has_many :threads, __MODULE__ do
+      destination_attribute :parent_conversation_id
     end
   end
 

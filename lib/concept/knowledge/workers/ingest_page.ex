@@ -16,7 +16,6 @@ defmodule Concept.Knowledge.Workers.IngestPage do
   require Logger
 
   alias Concept.Knowledge.Config
-  alias Concept.Knowledge.Chat
   alias Concept.Pages
 
   @impl Oban.Worker
@@ -66,7 +65,7 @@ defmodule Concept.Knowledge.Workers.IngestPage do
   defp ingest("message", message_id, workspace_id) do
     actor = %{system?: true}
 
-    case Chat.message_blocks(message_id, actor: actor, tenant: workspace_id) do
+    case Pages.list_for_message(message_id, actor: actor, tenant: workspace_id) do
       {:ok, []} ->
         # No rich blocks (text-only message): nothing to ingest as blocks.
         :ok

@@ -72,6 +72,12 @@ defmodule Concept.Knowledge.Chat.Message do
         description "The host record id (e.g. the page id). Omit for the :workspace host."
       end
 
+      argument :reply_to_message_id, :uuid do
+        public? true
+        allow_nil? true
+        description "Spawn (or continue) a thread: a child conversation seeded from this message, inheriting the parent's host. Omit to post in the conversation directly."
+      end
+
       change Concept.Knowledge.Chat.Message.Changes.CreateConversationIfNotProvided
       change Concept.Knowledge.Chat.Message.Changes.JoinSenderAsParticipant
       change run_oban_trigger(:respond)
@@ -357,7 +363,11 @@ defmodule Concept.Knowledge.Chat.Message do
     # old `needs_response` (which fired on EVERY user message — the reflex).
     # The agent-turn budget conjunct lands in Wave 4 (FEAT-078).
     calculate :needs_host_response, :boolean do
-      calculation expr(source == :user and addresses_host and not exists(response))
+      calculation
+        expr(
+          source == :user and addresses_host and not exists(response) and
+            conversation.agent_turn_budget > 0
+        )
     end
   end
 end

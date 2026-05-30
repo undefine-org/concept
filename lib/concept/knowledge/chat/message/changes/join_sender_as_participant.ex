@@ -40,11 +40,35 @@ defmodule Concept.Knowledge.Chat.Message.Changes.JoinSenderAsParticipant do
         actor: actor,
         tenant: tenant
       )
+
+      # A human re-engaging replenishes the conversation's agent-turn budget
+      # (human attention is the rate-limiter; PLAN-010 §B.3). Agent senders do
+      # not replenish — that would defeat the loop bound.
+      maybe_replenish(membership, message, actor, tenant)
     end
 
     :ok
   rescue
     _ -> :ok
+  end
+
+  defp maybe_replenish(%{role: :agent}, _message, _actor, _tenant), do: :ok
+
+  defp maybe_replenish(_human_membership, message, actor, tenant) do
+    with {:ok, conversation} <-
+           Concept.Knowledge.Chat.get_conversation(message.conversation_id,
+             actor: actor,
+             tenant: tenant,
+             authorize?: false
+           ) do
+      Concept.Knowledge.Chat.replenish_budget(conversation,
+        actor: actor,
+        tenant: tenant,
+        authorize?: false
+      )
+    end
+
+    :ok
   end
 
   defp membership_for(user_id, workspace_id) do
