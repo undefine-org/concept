@@ -524,15 +524,14 @@ Reorder a record within its object type.
 
 #### `record_transition`
 
-Move a record to a new workflow state by id or name, enforcing the transition's guards.
+Move a record to a new workflow state, enforcing the transition's guards.
 
 - **Resource**: `Concept.Objects.Record`
 - **Action**: `:transition` (update)
 
 **Arguments:**
 
-  - `to_state_id` (`UUID`, optional) — Target workflow state id, reachable from the current state. Provide this or `to`.
-  - `to` (`String`, optional) — Target workflow state name (alternative to to_state_id), resolved within the record's workflow.
+  - `to_state_id` (`UUID`, required) — Target workflow state. Must be reachable from the current state.
 
 
 #### `record_update_fields`
