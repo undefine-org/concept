@@ -4,7 +4,7 @@ defmodule ConceptWeb.WorkLiveTest do
   (unassigned, unblocked, todo) across all object types, with a Claim action
   and a blocked badge.
   """
-  use ConceptWeb.ConnCase, async: true
+  use ConceptWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
 
@@ -39,7 +39,11 @@ defmodule ConceptWeb.WorkLiveTest do
         tenant: ws.id
       )
 
-    conn = log_in_user(conn, user)
+    conn =
+      conn
+      |> Plug.Test.init_test_session(%{})
+      |> AshAuthentication.Plug.Helpers.store_in_session(user)
+
     %{conn: conn, user: user, ws: ws, type: type, todo: todo, done: done}
   end
 

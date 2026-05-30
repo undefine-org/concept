@@ -118,6 +118,8 @@ defmodule Concept.Objects do
           end
         end)
 
+      blocked_ids = Concept.Objects.Record.Blocking.blocked_ids(records, tenant)
+
       {:ok,
        %{
          type: task,
@@ -125,7 +127,8 @@ defmodule Concept.Objects do
          states_by_id: states_by_id,
          transitions: transitions,
          field_defs: field_defs,
-         columns: columns
+         columns: columns,
+         blocked_ids: blocked_ids
        }}
     else
       {:error, _} = err -> err
