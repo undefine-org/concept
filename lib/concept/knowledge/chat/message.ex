@@ -81,6 +81,7 @@ defmodule Concept.Knowledge.Chat.Message do
 
       change Concept.Knowledge.Chat.Message.Changes.CreateConversationIfNotProvided
       change Concept.Knowledge.Chat.Message.Changes.JoinSenderAsParticipant
+      change Concept.Knowledge.Chat.Message.Changes.BroadcastInbox
       change run_oban_trigger(:respond)
     end
 
