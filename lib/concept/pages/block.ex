@@ -203,6 +203,17 @@ defmodule Concept.Pages.Block do
       prepare build(sort: [parent_block_id: :asc, position: :asc])
     end
 
+    read :list_for_message do
+      description "List all non-archived blocks in a message (a conversation turn's rich body), in render order."
+
+      argument :message_id, :uuid,
+        allow_nil?: false,
+        description: "Message whose blocks to list."
+
+      filter expr(message_id == ^arg(:message_id) and is_nil(archived_at))
+      prepare build(sort: [parent_block_id: :asc, position: :asc])
+    end
+
     read :first_for_page do
       description "Read the first (topmost) non-archived block of a page."
       get? true

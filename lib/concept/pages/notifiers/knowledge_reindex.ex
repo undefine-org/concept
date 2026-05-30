@@ -9,7 +9,7 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindex do
 
   @impl true
   def notify(%Ash.Notifier.Notification{resource: Concept.Pages.Page, data: page, action: action}) do
-    enqueue(page.workspace_id, page.id, op_for_page(action.name))
+    enqueue(page.workspace_id, "page", page.id, op_for_page(action.name))
     {:ok, page}
   end
 
@@ -44,24 +44,36 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindex do
         action: %{name: name}
       })
       when name in [:create_block, :update_content, :update_props, :archive] do
-    maybe_enqueue(block.workspace_id, block.page_id, op_for_block(name))
+    enqueue_block_source(block)
     {:ok, block}
   end
 
   def notify(notification), do: {:ok, notification}
 
-  # Page-source ingestion only fires when the block belongs to a page. A
-  # message-owned block (page_id == nil) is ingested via its conversation
-  # source by a separate path (PLAN-010 §45); skip the page ingest here rather
-  # than enqueue a `page:nil` job.
-  defp maybe_enqueue(_workspace_id, nil, _op), do: :ok
-  defp maybe_enqueue(workspace_id, page_id, op), do: enqueue(workspace_id, page_id, op)
+  # A block lives under a page XOR a message. Dispatch the ingest to whichever
+  # container source it carries (PLAN-010 §45).
+  defp enqueue_block_source(%{page_id: page_id} = block) when is_binary(page_id),
+    do: enqueue(block.workspace_id, "page", page_id, :upsert)
 
-  defp enqueue(workspace_id, page_id, op) do
+  defp enqueue_block_source(%{message_id: msg_id} = block) when is_binary(msg_id),
+    do: enqueue(block.workspace_id, "message", msg_id, :upsert)
+
+  defp enqueue_block_source(_block), do: :ok
+
+  # Page-source ingestion only fires when the block belongs to a page.
+  defp maybe_enqueue(_workspace_id, nil, _op), do: :ok
+  defp maybe_enqueue(workspace_id, page_id, op), do: enqueue(workspace_id, "page", page_id, op)
+
+  defp enqueue(workspace_id, source_type, source_id, op) do
     Concept.Knowledge.Workers.IngestPage.new(
-      %{workspace_id: workspace_id, page_id: page_id, op: op},
+      %{
+        workspace_id: workspace_id,
+        source_type: source_type,
+        source_id: source_id,
+        op: op
+      },
       scheduled_at: DateTime.add(DateTime.utc_now(), 2, :second),
-      unique: [period: 5, fields: [:args], keys: [:page_id, :op]]
+      unique: [period: 5, fields: [:args], keys: [:source_type, :source_id, :op]]
     )
     |> Oban.insert()
   end

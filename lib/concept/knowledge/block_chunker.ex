@@ -12,9 +12,11 @@ defmodule Concept.Knowledge.BlockChunker do
   @impl true
   def chunk(_ignored, opts) do
     blocks = Keyword.fetch!(opts, :blocks)
-    page = Keyword.fetch!(opts, :page)
     workspace_id = Keyword.fetch!(opts, :workspace_id)
-    breadcrumbs = Keyword.get(opts, :breadcrumbs, page.title || "Untitled")
+    # `page` is present for page sources, absent for message (conversation)
+    # sources. Chunk metadata keys off whichever container the blocks carry.
+    page = Keyword.get(opts, :page)
+    breadcrumbs = Keyword.get(opts, :breadcrumbs, (page && page.title) || "Untitled")
 
     tree = build_tree(blocks)
 
@@ -29,7 +31,8 @@ defmodule Concept.Knowledge.BlockChunker do
         chunk_index: idx,
         token_count: tc,
         metadata: %{
-          "page_id" => page.id,
+          "page_id" => page && page.id,
+          "message_id" => Keyword.get(opts, :message_id),
           "workspace_id" => workspace_id,
           "block_id" => pid,
           "block_ids" => ids,
