@@ -78,6 +78,14 @@ defmodule ConceptWeb.Components.Sidebar do
       </.link>
 
       <.link
+        navigate={~p"/w/#{@workspace.slug}/inbox"}
+        class="ora-sidebar-row mb-2 text-notion-text-light flex items-center gap-2 no-underline"
+      >
+        <.icon name="hero-bell-micro" class="size-4" />
+        <span class="flex-1 text-left">Inbox</span>
+      </.link>
+
+      <.link
         navigate={~p"/w/#{@workspace.slug}/settings"}
         class="ora-sidebar-row mb-2 text-notion-text-light flex items-center gap-2 no-underline"
       >
