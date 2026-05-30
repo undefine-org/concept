@@ -69,6 +69,14 @@ defmodule ConceptWeb.Components.Sidebar do
         <span class="flex-1 text-left">Object types</span>
       </.link>
 
+      <.link
+        navigate={~p"/w/#{@workspace.slug}/work"}
+        class="ora-sidebar-row mb-2 text-notion-text-light flex items-center gap-2 no-underline"
+      >
+        <.icon name="hero-inbox-arrow-down-micro" class="size-4" />
+        <span class="flex-1 text-left">My work</span>
+      </.link>
+
       <div class="flex-1 overflow-y-auto">
         <.live_component
           module={ConceptWeb.Components.PageTree}
@@ -79,18 +87,6 @@ defmodule ConceptWeb.Components.Sidebar do
         />
       </div>
 
-            <li>
-              <.link
-                navigate={~p"/w/#{@workspace.slug}/work"}
-                class={[
-                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition",
-                  "text-notion-text-light hover:bg-notion-gray hover:text-notion-text"
-                ]}
-              >
-                <.icon name="hero-inbox-arrow-down" class="h-4 w-4" />
-                <span>My work</span>
-              </.link>
-            </li>
       <div class="mt-auto border-t border-notion-divider pt-2 pb-2">
         <button
           type="button"
