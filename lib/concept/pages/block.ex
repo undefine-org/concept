@@ -267,7 +267,14 @@ defmodule Concept.Pages.Block do
   relationships do
     belongs_to :page, Concept.Pages.Page,
       attribute_writable?: true,
+      define_attribute?: false,
       source_attribute: :page_id,
+      destination_attribute: :id
+
+    belongs_to :message, Concept.Knowledge.Chat.Message,
+      attribute_writable?: true,
+      define_attribute?: false,
+      source_attribute: :message_id,
       destination_attribute: :id
 
     belongs_to :message, Concept.Knowledge.Chat.Message,
