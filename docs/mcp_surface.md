@@ -278,7 +278,7 @@ Hybrid vector+graph search over the workspace's pages and blocks.
 
 ---
 ## Concept.Knowledge.Chat
-### Tools (13)
+### Tools (14)
 
 #### `conversation_create`
 
@@ -290,6 +290,20 @@ Start a new chat conversation in the workspace.
 **Arguments:**
 
   - `workspace_id` (`UUID`, required) — Workspace the conversation belongs to.
+
+
+#### `conversation_crystallize`
+
+Crystallize this conversation into a durable page: clone its message blocks onto the page with provenance links, then mark it crystallized.
+
+- **Resource**: `Concept.Knowledge.Chat.Conversation`
+- **Action**: `:crystallize` (action)
+
+**Arguments:**
+
+  - `conversation_id` (`UUID`, required) — The conversation to crystallize.
+  - `target_page_id` (`UUID`, required) — The page to crystallize the conversation into.
+  - `workspace_id` (`UUID`, required) — Workspace tenant.
 
 
 #### `conversation_decrement_budget`
