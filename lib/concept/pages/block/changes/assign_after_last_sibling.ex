@@ -13,27 +13,32 @@ defmodule Concept.Pages.Block.Changes.AssignAfterLastSibling do
       _ ->
         tenant = changeset.tenant || Ash.Changeset.get_attribute(changeset, :workspace_id)
         page_id = Ash.Changeset.get_attribute(changeset, :page_id)
+        message_id = Ash.Changeset.get_attribute(changeset, :message_id)
         parent_id = Ash.Changeset.get_attribute(changeset, :parent_block_id)
 
-        # AshAI's tool-registry build calls `Ash.can?` with empty input;
-        # without `tenant` or `page_id` we cannot meaningfully query siblings.
-        # Skip the position assignment in that case — the real action path
-        # will arrive with both set, or the attribute-level required check
-        # will reject it.
-        cond_skip = is_nil(tenant) or is_nil(page_id)
+        # A block lives under a page XOR a message; siblings are scoped to
+        # whichever container is set. AshAI's tool-registry build calls
+        # `Ash.can?` with empty input; without a tenant or any container we
+        # cannot query siblings, so skip (the real action path arrives with
+        # both set, or the check constraint rejects it).
+        cond_skip = is_nil(tenant) or (is_nil(page_id) and is_nil(message_id))
 
         if cond_skip do
           changeset
         else
-          assign_position(changeset, tenant, page_id, parent_id)
+          assign_position(changeset, tenant, page_id, message_id, parent_id)
         end
     end
   end
 
-  defp assign_position(changeset, tenant, page_id, parent_id) do
+  defp assign_position(changeset, tenant, page_id, message_id, parent_id) do
+    container_filter =
+      if is_nil(message_id),
+        do: Ash.Query.filter(Concept.Pages.Block, page_id == ^page_id),
+        else: Ash.Query.filter(Concept.Pages.Block, message_id == ^message_id)
+
     base =
-      Concept.Pages.Block
-      |> Ash.Query.filter(page_id == ^page_id)
+      container_filter
       |> Ash.Query.sort(position: :desc)
       |> Ash.Query.limit(1)
       |> Ash.Query.set_tenant(tenant)

@@ -20,14 +20,16 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindex do
         changeset: cs
       }) do
     # Reparent: ingest both old and new page if block moved across pages.
-    enqueue(block.workspace_id, block.page_id, :upsert)
+    # A message-owned block (nil page_id) has no page source to ingest;
+    # conversation-source ingestion is handled separately (see maybe_enqueue).
+    maybe_enqueue(block.workspace_id, block.page_id, :upsert)
 
     case Ash.Changeset.get_data(cs, :page_id) do
       nil ->
         :ok
 
       old_page_id when old_page_id != block.page_id ->
-        enqueue(block.workspace_id, old_page_id, :upsert)
+        maybe_enqueue(block.workspace_id, old_page_id, :upsert)
 
       _ ->
         :ok
@@ -42,11 +44,18 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindex do
         action: %{name: name}
       })
       when name in [:create_block, :update_content, :update_props, :archive] do
-    enqueue(block.workspace_id, block.page_id, op_for_block(name))
+    maybe_enqueue(block.workspace_id, block.page_id, op_for_block(name))
     {:ok, block}
   end
 
   def notify(notification), do: {:ok, notification}
+
+  # Page-source ingestion only fires when the block belongs to a page. A
+  # message-owned block (page_id == nil) is ingested via its conversation
+  # source by a separate path (PLAN-010 §45); skip the page ingest here rather
+  # than enqueue a `page:nil` job.
+  defp maybe_enqueue(_workspace_id, nil, _op), do: :ok
+  defp maybe_enqueue(workspace_id, page_id, op), do: enqueue(workspace_id, page_id, op)
 
   defp enqueue(workspace_id, page_id, op) do
     Concept.Knowledge.Workers.IngestPage.new(
