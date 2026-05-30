@@ -19,5 +19,11 @@ defmodule Concept.Knowledge.Chat do
 
       define :create_message, action: :create
     end
+
+    resource Concept.Knowledge.Chat.Participant do
+      define :join_conversation, action: :join
+      define :participants_for_conversation, action: :for_conversation, args: [:conversation_id]
+      define :mark_participant_read, action: :mark_read
+    end
   end
 end

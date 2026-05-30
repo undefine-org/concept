@@ -4,6 +4,7 @@ defmodule Concept.Knowledge.Chat.Conversation do
     domain: Concept.Knowledge.Chat,
     extensions: [AshOban],
     data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer],
     notifiers: [Ash.Notifier.PubSub]
 
   oban do
@@ -76,6 +77,28 @@ defmodule Concept.Knowledge.Chat.Conversation do
     end
   end
 
+  policies do
+    bypass actor_attribute_equals(:system?, true) do
+      authorize_if always()
+    end
+
+    # Read: a participant of the conversation, OR (today's binary workspace ACL)
+    # any workspace member. The participant clause enables private conversations
+    # later without foreclosing today's member-sees-all.
+    policy action_type(:read) do
+      authorize_if expr(exists(participants, membership.user_id == ^actor(:id)))
+      authorize_if Concept.Pages.Checks.WorkspaceMember
+    end
+
+    policy action_type(:create) do
+      authorize_if Concept.Pages.Checks.WorkspaceMemberCreate
+    end
+
+    policy action_type([:update, :destroy]) do
+      authorize_if Concept.Pages.Checks.WorkspaceMember
+    end
+  end
+
   pub_sub do
     module ConceptWeb.Endpoint
     prefix "chat"
@@ -126,6 +149,19 @@ defmodule Concept.Knowledge.Chat.Conversation do
   relationships do
     has_many :messages, Concept.Knowledge.Chat.Message do
       public? true
+    end
+
+    has_many :participants, Concept.Knowledge.Chat.Participant do
+      destination_attribute :conversation_id
+    end
+
+    # Drives Concept.Pages.Checks.WorkspaceMember (a FilterCheck): the EXISTS
+    # subquery fuses into the action SQL. Conversation uses plain Ash.Resource
+    # (not WorkspaceTenanted), so this relationship is declared explicitly
+    # (mirrors what WorkspaceTenanted injects).
+    has_many :workspace_memberships, Concept.Accounts.Membership do
+      no_attributes? true
+      filter expr(workspace_id == parent(workspace_id))
     end
 
     belongs_to :user, Concept.Accounts.User do

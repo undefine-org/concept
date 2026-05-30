@@ -16,7 +16,7 @@ defmodule Concept.Knowledge.Chat.Message do
         scheduler_cron false
         worker_module_name Concept.Knowledge.Chat.Message.Workers.Respond
         scheduler_module_name Concept.Knowledge.Chat.Message.Schedulers.Respond
-        where expr(needs_response)
+        where expr(needs_host_response)
       end
     end
   end
@@ -43,7 +43,7 @@ defmodule Concept.Knowledge.Chat.Message do
 
     create :create do
       description "Send a message to a host (a page, a record, or the workspace). If no conversation exists for that host yet, one is created; the host's grounded AI voice may reply asynchronously."
-      accept [:text, :scope, :scope_target_id, :profile]
+      accept [:text, :scope, :scope_target_id, :profile, :mentions, :addresses_host]
 
       validate match(:text, ~r/\S/) do
         message "Message cannot be empty"
@@ -283,6 +283,40 @@ defmodule Concept.Knowledge.Chat.Message do
       public? false
       allow_nil? true
     end
+
+    # The sender's identity, when a participant (human or agent) spoke.
+    # NULL means the HOST spoke (its voice has no identity of its own; see
+    # Participant moduledoc and docs/messaging_design.md §37). The legacy
+    # `:source` attribute is retained as a transitional shim until the cutover
+    # completes; `sender_kind` (calc) is the forward-looking read.
+    attribute :sender_participant_id, :uuid do
+      public? true
+      allow_nil? true
+
+      description "The participant (member) who sent this message. Null when the host's grounded voice spoke."
+    end
+
+    # Addressed participants/hosts. A mention of a member notifies (inbox); a
+    # mention of the host voice enqueues a grounded response (see needs_host_response).
+    attribute :mentions, {:array, :uuid} do
+      public? true
+      allow_nil? false
+      default []
+      description "Participant ids addressed by this message (@-mentions)."
+    end
+
+    # Whether this message addresses the host's grounded voice (i.e. wants an
+    # AI reply). This is what KILLS the old "every user message summons the AI"
+    # reflex (docs/messaging_design.md §4, §B.2): human↔human messages set this
+    # false and no response is owed. Defaults true to preserve today's
+    # workspace-chat behaviour during the cutover.
+    attribute :addresses_host, :boolean do
+      public? true
+      allow_nil? false
+      default true
+
+      description "True if this message addresses the host's AI voice (an asynchronous grounded reply is owed). Set false for human-to-human messages."
+    end
   end
 
   relationships do
@@ -299,11 +333,22 @@ defmodule Concept.Knowledge.Chat.Message do
       public? true
       destination_attribute :response_to_id
     end
+
+    belongs_to :sender_participant, Concept.Knowledge.Chat.Participant do
+      public? true
+      define_attribute? false
+      source_attribute :sender_participant_id
+      destination_attribute :id
+    end
   end
 
   calculations do
-    calculate :needs_response, :boolean do
-      calculation expr(source == :user and not exists(response))
+    # A host response is owed iff: a member (not the host) sent the message,
+    # the host's voice is addressed, and no reply exists yet. Generalizes the
+    # old `needs_response` (which fired on EVERY user message — the reflex).
+    # The agent-turn budget conjunct lands in Wave 4 (FEAT-078).
+    calculate :needs_host_response, :boolean do
+      calculation expr(source == :user and addresses_host and not exists(response))
     end
   end
 end

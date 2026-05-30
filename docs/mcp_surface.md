@@ -278,7 +278,7 @@ Hybrid vector+graph search over the workspace's pages and blocks.
 
 ---
 ## Concept.Knowledge.Chat
-### Tools (5)
+### Tools (8)
 
 #### `conversation_create`
 
@@ -336,6 +336,40 @@ List messages in a chat conversation, most recent first by default.
 **Arguments:**
 
   - `conversation_id` (`UUID`, required) — Conversation whose messages to load.
+
+
+#### `participant_for_conversation`
+
+List the participants (members) of a conversation.
+
+- **Resource**: `Concept.Knowledge.Chat.Participant`
+- **Action**: `:for_conversation` (read)
+
+**Arguments:**
+
+  - `conversation_id` (`UUID`, required) — Conversation whose participants to load.
+
+
+#### `participant_join`
+
+Add a member (human or agent) as a participant in a conversation.
+
+- **Resource**: `Concept.Knowledge.Chat.Participant`
+- **Action**: `:join` (create)
+
+**Arguments:**
+
+  - `workspace_id` (`UUID`, required) — Workspace the participant belongs to.
+  - `conversation_id` (`UUID`, required) — Conversation the member is joining.
+  - `membership_id` (`UUID`, required) — Membership (identity) of the joining human or agent.
+
+
+#### `participant_mark_read`
+
+Advance this participant's unread cursor to a message they've now seen.
+
+- **Resource**: `Concept.Knowledge.Chat.Participant`
+- **Action**: `:mark_read` (update)
 
 
 ---
@@ -524,14 +558,15 @@ Reorder a record within its object type.
 
 #### `record_transition`
 
-Move a record to a new workflow state, enforcing the transition's guards.
+Move a record to a new workflow state by id or name, enforcing the transition's guards.
 
 - **Resource**: `Concept.Objects.Record`
 - **Action**: `:transition` (update)
 
 **Arguments:**
 
-  - `to_state_id` (`UUID`, required) — Target workflow state. Must be reachable from the current state.
+  - `to_state_id` (`UUID`, optional) — Target workflow state id, reachable from the current state. Provide this or `to`.
+  - `to` (`String`, optional) — Target workflow state name (alternative to to_state_id), resolved within the record's workflow.
 
 
 #### `record_update_fields`
