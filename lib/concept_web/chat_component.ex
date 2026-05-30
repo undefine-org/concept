@@ -17,7 +17,8 @@ defmodule ConceptWeb.ChatComponent do
      |> assign(:addresses_host, true)
      |> assign(:mention_query, nil)
      |> assign(:mention_suggestions, [])
-     |> assign(:draft_text, "")}
+     |> assign(:draft_text, "")
+     |> assign(:message_form_host_key, nil)}
   end
 
   @impl true
@@ -91,6 +92,22 @@ defmodule ConceptWeb.ChatComponent do
 
         true ->
           socket
+      end
+
+    # The message form bakes host_type/host_id into its create args at build
+    # time. When the host changes (e.g. opening chat ON a page flips :workspace →
+    # :page) with no active conversation, rebuild so a new message addresses the
+    # CURRENT host — otherwise the first message would create a workspace
+    # conversation despite the page header (caught in browser).
+    host_key = {socket.assigns[:host_type], socket.assigns[:host_id]}
+
+    socket =
+      if is_nil(socket.assigns[:conversation]) and socket.assigns[:message_form_host_key] != host_key do
+        socket
+        |> assign(:message_form_host_key, host_key)
+        |> assign_message_form()
+      else
+        socket
       end
 
     {:ok, socket}
@@ -751,47 +768,42 @@ defmodule ConceptWeb.ChatComponent do
         do: Map.put(base_args, :text, socket.assigns.initial_text),
         else: base_args
 
-    # Host addressing: include host_type/host_id so a brand-new message routes to
-    # (or creates) the host's ROOT conversation via find-or-create. Once a
-    # conversation is loaded we post into it directly (conversation_id wins in
-    # CreateConversationIfNotProvided's resolution order).
-    base_args =
-      base_args
-      |> Map.put(:host_type, socket.assigns[:host_type] || :workspace)
-      |> Map.put(:host_id, socket.assigns[:host_id])
-
-    # Addressing (PLAN-010 §6.3): `mentions` are the participant ids @-mentioned;
-    # `addresses_host` decides whether the host's AI voice owes a reply. Setting
-    # it false for human↔human is what kills the "every message summons the AI"
-    # reflex (§B.2).
-    base_args =
-      base_args
-      |> Map.put(:mentions, Enum.map(socket.assigns[:pending_mentions] || [], & &1.id))
-      |> Map.put(:addresses_host, socket.assigns[:addresses_host] != false)
+    # Addressing (PLAN-010 §6.1/§6.3) goes via PRIVATE arguments, NOT form params:
+    # `submit(form, params: %{"text" => ...})` replaces the param set, so host_type/
+    # host_id/mentions/addresses_host placed in params would be dropped at submit
+    # and the action's defaults (→ :workspace, addresses_host true) would win.
+    # private_arguments persist across submit (same mechanism as conversation_id).
+    addressing = %{
+      host_type: socket.assigns[:host_type] || :workspace,
+      host_id: socket.assigns[:host_id],
+      mentions: Enum.map(socket.assigns[:pending_mentions] || [], & &1.id),
+      addresses_host: socket.assigns[:addresses_host] != false
+    }
 
     tenant = socket.assigns[:workspace_id]
 
-    form =
+    private_arguments =
       if socket.assigns.conversation do
-        Concept.Knowledge.Chat.form_to_create_message(
-          actor: socket.assigns.current_user,
-          tenant: tenant,
-          params: base_args,
-          private_arguments: %{conversation_id: socket.assigns.conversation.id}
-        )
-        |> to_form()
+        # A loaded conversation wins find-or-create (conversation_id resolves
+        # first); host args are harmless but kept for consistency.
+        Map.put(addressing, :conversation_id, socket.assigns.conversation.id)
       else
-        Concept.Knowledge.Chat.form_to_create_message(
-          actor: socket.assigns.current_user,
-          tenant: tenant,
-          params: base_args
-        )
-        |> to_form()
+        addressing
       end
+
+    form =
+      Concept.Knowledge.Chat.form_to_create_message(
+        actor: socket.assigns.current_user,
+        tenant: tenant,
+        params: base_args,
+        private_arguments: private_arguments
+      )
+      |> to_form()
 
     socket
     |> assign(:message_form, form)
     |> assign(:initial_text, nil)
+    |> assign(:message_form_host_key, {socket.assigns[:host_type], socket.assigns[:host_id]})
   end
 
   defp tool_calls(message), do: safe_extract(message).tool_calls

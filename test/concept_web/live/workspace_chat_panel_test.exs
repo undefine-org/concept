@@ -3,6 +3,7 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
   import Phoenix.LiveViewTest
 
   alias Concept.Accounts
+  alias Concept.Knowledge.Chat
   alias Concept.Knowledge.Profiles
   alias Concept.Repo
   import Ecto.Query
@@ -145,37 +146,47 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
     assert render(view) =~ "Send"
   end
 
-  test "sending a message renders it without crashing (PLAN-010 §6.1)", %{conn: conn, ws: ws} do
+  test "sending a workspace message creates a workspace-hosted conversation (PLAN-010 §6.1)",
+       %{conn: conn, user: user, ws: ws} do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}")
 
+    view |> element("#workspace-root") |> render_hook("toggle_chat", %{})
+    :timer.sleep(50)
+
+    # Submitting the composer must not raise (the broadcast-clause render-crash
+    # regression) and must route to the WORKSPACE host.
     view
-    |> element("#workspace-root")
-    |> render_hook("toggle_chat", %{})
+    |> element("[id$=-composer] form")
+    |> render_submit(%{"form" => %{"text" => "Hello host"}})
 
+    {:ok, convos} = Chat.inbox(actor: user, tenant: ws.id)
+    assert [conversation] = convos
+    assert conversation.host_type == :workspace
+    assert is_nil(conversation.host_id)
+  end
+
+  test "opening chat on a page addresses the PAGE host (PLAN-010 §6.1)",
+       %{conn: conn, user: user, ws: ws} do
+    {:ok, page} = Concept.Pages.create_page("Roadmap", ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, view, html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    view |> element("#workspace-root") |> render_hook("toggle_chat", %{})
     :timer.sleep(50)
 
-    # First workspace message find-or-creates a conversation and the LiveView
-    # navigates to it (?c=<id>). Following navigation re-mounts the component on
-    # the now-loaded conversation, which is what previously crashed render when
-    # a broadcast-clause update bypassed the host/composer assigns.
-    result =
-      view
-      |> element("[id$=-composer] form")
-      |> render_submit(%{"form" => %{"text" => "Hello host"}})
+    # The header reflects the page host.
+    assert render(view) =~ "Conversation about this page"
+    refute html =~ "Conversation about this page"
 
-    {:ok, view, html} =
-      case result do
-        {:error, {:live_redirect, %{to: to}}} -> live(conn, to)
-        {:error, {:redirect, %{to: to}}} -> live(conn, to)
-        html when is_binary(html) -> {:ok, view, html}
-      end
+    # A message sent here find-or-creates a PAGE-hosted conversation (host args
+    # ride private_arguments, which survive submit).
+    view
+    |> element("[id$=-composer] form")
+    |> render_submit(%{"form" => %{"text" => "Summarize this page"}})
 
-    :timer.sleep(50)
-    html = if html =~ "Hello host", do: html, else: render(view)
-
-    # The message renders (human bubble) and the host-aware rail is present
-    # without raising in the sender_kind / participant helpers.
-    assert html =~ "Hello host"
-    assert has_element?(view, "[id$=-participant-rail]")
+    {:ok, convos} = Chat.conversations_for_host(:page, page.id, actor: user, tenant: ws.id)
+    assert [conversation] = convos
+    assert conversation.host_type == :page
+    assert conversation.host_id == page.id
   end
 end
