@@ -86,6 +86,41 @@ defmodule Concept.Knowledge.Chat.ParticipantTest do
     end
   end
 
+  describe "sender auto-join (inbox precondition)" do
+    test "sending a message joins the sender as a participant", ctx do
+      %{user: u, workspace: ws} = ctx
+
+      {:ok, msg} =
+        Chat.create_message(%{text: "hello", addresses_host: false}, actor: u, tenant: ws.id)
+
+      {:ok, participants} =
+        Chat.participants_for_conversation(msg.conversation_id, actor: u, tenant: ws.id)
+
+      assert length(participants) == 1
+      {:ok, [p]} = {:ok, participants}
+      {:ok, loaded} = Ash.load(p, [:membership], actor: u, tenant: ws.id)
+      assert loaded.membership.user_id == u.id
+    end
+
+    test "sending twice keeps a single participant (idempotent)", ctx do
+      %{user: u, workspace: ws} = ctx
+
+      {:ok, m1} =
+        Chat.create_message(%{text: "one", addresses_host: false}, actor: u, tenant: ws.id)
+
+      {:ok, _m2} =
+        Chat.create_message(%{text: "two", conversation_id: m1.conversation_id, addresses_host: false},
+          actor: u,
+          tenant: ws.id
+        )
+
+      {:ok, participants} =
+        Chat.participants_for_conversation(m1.conversation_id, actor: u, tenant: ws.id)
+
+      assert length(participants) == 1
+    end
+  end
+
   describe "addressed response (the reflex is dead)" do
     test "a message addressing the host owes a response", ctx do
       %{user: u, workspace: ws, conversation: conv} = ctx
