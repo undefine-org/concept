@@ -64,7 +64,8 @@ defmodule ConceptWeb.RecordRefSeamTest do
     block: block
   } do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
-    assert has_element?(view, ~s([phx-click="open_record_picker"][phx-value-block="#{block.id}"]))
+    editor = find_live_child(view, "page-editor-#{page.id}")
+    assert has_element?(editor, ~s([phx-click="open_record_picker"][phx-value-block="#{block.id}"]))
   end
 
   test "opening the picker and selecting a record links it and renders live state", %{
@@ -76,18 +77,19 @@ defmodule ConceptWeb.RecordRefSeamTest do
     user: user
   } do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+    editor = find_live_child(view, "page-editor-#{page.id}")
 
     # open the picker for this block
-    view
+    editor
     |> element(~s([phx-click="open_record_picker"][phx-value-block="#{block.id}"]))
     |> render_click()
 
     # the picker lists the candidate record by title
-    assert has_element?(view, "#record-picker")
-    assert render(view) =~ "Ship the seam"
+    assert has_element?(editor, "#record-picker")
+    assert render(editor) =~ "Ship the seam"
 
     # select it
-    view
+    editor
     |> element(~s(#record-picker [phx-value-record="#{rec.id}"]))
     |> render_click()
 
@@ -96,7 +98,7 @@ defmodule ConceptWeb.RecordRefSeamTest do
     assert reloaded.props["record_id"] == rec.id
 
     # block now renders the record's live title (not "Unlinked record")
-    html = render(view)
+    html = render(editor)
     assert html =~ "Ship the seam"
     refute html =~ "Unlinked record"
   end
@@ -116,13 +118,14 @@ defmodule ConceptWeb.RecordRefSeamTest do
       )
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+    editor = find_live_child(view, "page-editor-#{page.id}")
 
-    view
+    editor
     |> element(~s([phx-click="open_record_picker"][phx-value-block="#{block.id}"]))
     |> render_click()
 
     html =
-      view
+      editor
       |> form("#record-picker form", %{"query" => "seam"})
       |> render_change()
 

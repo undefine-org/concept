@@ -51,14 +51,30 @@ defmodule Concept.Pages.BlockTypes.RecordRef do
     ~H"""
     <div class="my-1">
       <%= if @record do %>
-        <span class="inline-flex items-center gap-2 rounded-md border border-notion-divider px-2 py-1 text-sm">
+        <span class="group inline-flex items-center gap-2 rounded-md border border-notion-divider px-2 py-1 text-sm">
           <span class={["rounded px-1.5 py-0.5 text-xs font-medium", state_class(@record)]}>
             {state_label(@record)}
           </span>
           <span class="font-medium text-notion-text">{title(@record)}</span>
+          <button
+            type="button"
+            phx-click="open_record_picker"
+            phx-value-block={@block.id}
+            class="opacity-0 group-hover:opacity-100 text-xs text-notion-text-light hover:text-notion-text"
+            title="Change linked record"
+          >
+            change
+          </button>
         </span>
       <% else %>
-        <span class="text-notion-text-light text-sm italic">Unlinked record</span>
+        <button
+          type="button"
+          phx-click="open_record_picker"
+          phx-value-block={@block.id}
+          class="inline-flex items-center gap-1.5 rounded-md border border-dashed border-notion-divider px-2 py-1 text-sm text-notion-text-light italic hover:border-notion-text hover:text-notion-text"
+        >
+          🔗 Link a record…
+        </button>
       <% end %>
     </div>
     """

@@ -278,7 +278,7 @@ Hybrid vector+graph search over the workspace's pages and blocks.
 
 ---
 ## Concept.Knowledge.Chat
-### Tools (4)
+### Tools (5)
 
 #### `conversation_create`
 
@@ -292,6 +292,19 @@ Start a new chat conversation in the workspace.
   - `workspace_id` (`UUID`, required) — Workspace the conversation belongs to.
 
 
+#### `conversation_for_host`
+
+List conversations about a given host (e.g. a page), most recent first.
+
+- **Resource**: `Concept.Knowledge.Chat.Conversation`
+- **Action**: `:for_host` (read)
+
+**Arguments:**
+
+  - `host_type` (`Atom`, required) — The host type, e.g. :page or :workspace.
+  - `host_id` (`UUID`, optional) — The host record id; nil for the :workspace host.
+
+
 #### `conversation_my_conversations`
 
 List the actor's chat conversations in the workspace, most recent first.
@@ -302,10 +315,15 @@ List the actor's chat conversations in the workspace, most recent first.
 
 #### `message_create`
 
-Send a message in a chat conversation; an AI response is generated asynchronously.
+Send a message to a host (a page, a record, or the workspace). If no conversation exists for that host yet, one is created; the host's grounded AI voice may reply asynchronously.
 
 - **Resource**: `Concept.Knowledge.Chat.Message`
 - **Action**: `:create` (create)
+
+**Arguments:**
+
+  - `host_type` (`Atom`, optional) — What this message is about: :workspace (whole tenant) or a registered host type such as :page.
+  - `host_id` (`UUID`, optional) — The host record id (e.g. the page id). Omit for the :workspace host.
 
 
 #### `message_for_conversation`
