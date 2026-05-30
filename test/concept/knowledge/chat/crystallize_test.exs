@@ -72,6 +72,72 @@ defmodule Concept.Knowledge.Chat.CrystallizeTest do
     assert reloaded_src.message_id != nil
   end
 
+  test "crystallize preserves block hierarchy (parent before child, rewired)", ctx do
+    %{user: u, workspace: ws, page: page, conversation: conv_id} = ctx
+
+    {:ok, msg} =
+      Chat.create_message(%{text: "nested", host_type: :workspace, addresses_host: false},
+        actor: u,
+        tenant: ws.id
+      )
+
+    {:ok, parent} =
+      Pages.Block
+      |> Ash.Changeset.for_create(
+        :create_block,
+        %{message_id: msg.id, type: :toggle, content: %{"text" => "parent"}, workspace_id: ws.id},
+        actor: u,
+        tenant: ws.id
+      )
+      |> Ash.create()
+
+    {:ok, child} =
+      Pages.Block
+      |> Ash.Changeset.for_create(
+        :create_block,
+        %{
+          message_id: msg.id,
+          parent_block_id: parent.id,
+          type: :paragraph,
+          content: %{"text" => "child"},
+          workspace_id: ws.id
+        },
+        actor: u,
+        tenant: ws.id
+      )
+      |> Ash.create()
+
+    {:ok, _} =
+      Chat.crystallize_conversation(msg.conversation_id, page.id, ws.id, actor: u, tenant: ws.id)
+
+    {:ok, page_blocks} = Pages.list_for_page(page.id, actor: u, tenant: ws.id)
+    cloned_parent = Enum.find(page_blocks, &(&1.content["text"] == "parent"))
+    cloned_child = Enum.find(page_blocks, &(&1.content["text"] == "child"))
+
+    assert cloned_parent
+    assert cloned_child
+    # The cloned child points at the cloned parent, NOT the source parent.
+    assert cloned_child.parent_block_id == cloned_parent.id
+    refute cloned_child.parent_block_id == parent.id
+    _ = conv_id
+    _ = child
+  end
+
+  test "crystallize is idempotent — a second call clones nothing", ctx do
+    %{user: u, workspace: ws, page: page, conversation: conv_id} = ctx
+
+    {:ok, ids1} = Chat.crystallize_conversation(conv_id, page.id, ws.id, actor: u, tenant: ws.id)
+    refute ids1 == []
+
+    {:ok, ids2} = Chat.crystallize_conversation(conv_id, page.id, ws.id, actor: u, tenant: ws.id)
+    assert ids2 == []
+
+    # Page has exactly the first crystallization's blocks (no duplicates).
+    {:ok, page_blocks} = Pages.list_for_page(page.id, actor: u, tenant: ws.id)
+    matching = Enum.filter(page_blocks, &(&1.content["text"] == "ship it"))
+    assert length(matching) == 1
+  end
+
   test "crystallize authors provenance links from source to cloned blocks", ctx do
     %{user: u, workspace: ws, page: page, conversation: conv_id, src_block: src} = ctx
 
