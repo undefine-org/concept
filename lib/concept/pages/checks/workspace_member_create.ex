@@ -27,6 +27,12 @@ defmodule Concept.Pages.Checks.WorkspaceMemberCreate do
     member?(actor, workspace_id)
   end
 
+  # Generic actions (e.g. Conversation.:crystallize) carry an ActionInput whose
+  # workspace tenant is passed as an argument.
+  def match?(actor, %{subject: %Ash.ActionInput{} = input}, _opts) do
+    member?(actor, Ash.ActionInput.get_argument(input, :workspace_id))
+  end
+
   def match?(_actor, _context, _opts), do: false
 
   defp member?(_actor, nil), do: false
