@@ -149,7 +149,9 @@ defmodule Concept.Knowledge.Chat.ScenarioTest do
 
     {:ok, halted} =
       Chat.get_message(gated.id, actor: maya, tenant: ws.id)
-      |> then(fn {:ok, msg} -> Ash.load(msg, [:needs_host_response], actor: maya, tenant: ws.id) end)
+      |> then(fn {:ok, msg} ->
+        Ash.load(msg, [:needs_host_response], actor: maya, tenant: ws.id)
+      end)
 
     refute halted.needs_host_response
 
