@@ -37,7 +37,9 @@ defmodule Concept.Knowledge.Chat.HostAddressingTest do
         tenant: ws.id
       )
 
-    {:ok, [conversation]} = Chat.conversations_for_host(:page, page.id, actor: user, tenant: ws.id)
+    {:ok, [conversation]} =
+      Chat.conversations_for_host(:page, page.id, actor: user, tenant: ws.id)
+
     assert conversation.host_type == :page
     assert conversation.host_id == page.id
 

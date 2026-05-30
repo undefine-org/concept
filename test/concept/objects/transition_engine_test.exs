@@ -232,4 +232,56 @@ defmodule Concept.Objects.TransitionEngineTest do
     assert msg =~ "pr"
     assert msg =~ "missing_field"
   end
+
+  test "transitions by state name via the `to` argument", ctx do
+    transition(ctx, :backlog, :todo)
+    rec = new_record(ctx)
+
+    # No to_state_id — only the human-legible state name, as an MCP agent sends.
+    {:ok, moved} =
+      Objects.transition_record(rec, nil, %{to: "Todo"}, actor: ctx.user, tenant: ctx.ws)
+
+    assert moved.state_id == ctx.states[:todo].id
+  end
+
+  test "by-name transition rejects an unknown state name", ctx do
+    rec = new_record(ctx)
+
+    assert {:error, _} =
+             Objects.transition_record(rec, nil, %{to: "Nope"}, actor: ctx.user, tenant: ctx.ws)
+  end
+
+  test "an agent creator cannot self-approve its own work", ctx do
+    transition(ctx, :backlog, :review)
+
+    transition(ctx, :review, :done, [
+      %{"kind" => "requires_approval", "config" => %{"by" => "creator"}}
+    ])
+
+    {:ok, agent} =
+      Concept.Accounts.User
+      |> Ash.Changeset.for_create(:register_with_password, %{
+        email: "agent_#{System.unique_integer([:positive])}@example.com",
+        password: "passw0rd!",
+        password_confirmation: "passw0rd!"
+      })
+      |> Ash.create(authorize?: false)
+
+    {:ok, _} =
+      Concept.Accounts.Membership.create(ctx.ws, agent.id, :agent, actor: %{system?: true})
+
+    # Agent creates AND owns the work: created_by == agent.
+    {:ok, rec} =
+      Objects.create_record(ctx.type.id, %{fields: %{}}, actor: agent, tenant: ctx.ws)
+
+    {:ok, rec} =
+      Objects.transition_record(rec, ctx.states[:review].id, actor: agent, tenant: ctx.ws)
+
+    # The human-acceptance gate must NOT open for the agent that created it.
+    assert {:error, %Ash.Error.Invalid{errors: errors}} =
+             Objects.transition_record(rec, ctx.states[:done].id, actor: agent, tenant: ctx.ws)
+
+    msg = Enum.map_join(errors, " ", fn e -> Map.get(e, :message, "") end)
+    assert msg =~ "human approver"
+  end
 end

@@ -103,7 +103,7 @@ defmodule Concept.Objects.ToolProjector do
     guard_prose = guard_summary(transitions)
 
     desc =
-      "Move a #{type.name} to a new state." <>
+      "Move a #{type.name} to a new state. Pass `to` with the target state name." <>
         if(state_names == "", do: "", else: " States: #{state_names}.") <>
         guard_prose
 

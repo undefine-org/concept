@@ -91,15 +91,16 @@ defmodule Concept.Pages.BlockTypes.RecordRefTest do
       assert html =~ "Todo"
     end
 
-    test "renders an unlinked placeholder when record_id is nil", ctx do
-      block = %Concept.Pages.Block{workspace_id: ctx.ws, props: %{"record_id" => nil}}
+    test "renders a link affordance when record_id is nil", ctx do
+      block = %Concept.Pages.Block{id: Ecto.UUID.generate(), workspace_id: ctx.ws, props: %{"record_id" => nil}}
       html = render_block(block)
       assert html =~ "Link a record"
       assert html =~ "open_record_picker"
     end
 
-    test "renders an unlinked placeholder for a missing record", ctx do
+    test "renders a link affordance for a missing record", ctx do
       block = %Concept.Pages.Block{
+        id: Ecto.UUID.generate(),
         workspace_id: ctx.ws,
         props: %{"record_id" => Ecto.UUID.generate()}
       }

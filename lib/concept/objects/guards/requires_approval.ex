@@ -12,6 +12,7 @@ defmodule Concept.Objects.Guards.RequiresApproval do
   """
   @behaviour Concept.Objects.Guard
   use Phoenix.Component
+  require Ash.Query
 
   @impl true
   def kind, do: :requires_approval
@@ -51,9 +52,20 @@ defmodule Concept.Objects.Guards.RequiresApproval do
         :ok
 
       by == "creator" ->
-        if actor_id(actor) == record.created_by_id,
-          do: :ok,
-          else: {:error, "only the creator may approve this transition"}
+        cond do
+          actor_id(actor) != record.created_by_id ->
+            {:error, "only the creator may approve this transition"}
+
+          # The creator-acceptance gate exists so a human signs off on work.
+          # When the creator is itself an agent (so actor == creator is an
+          # agent), self-approval would defeat that purpose — block it and
+          # force routing to a human, per docs/objects_and_tasks.md §6.
+          agent_member?(actor, ctx[:tenant]) ->
+            {:error, "agent-created work requires a human approver before it can be accepted"}
+
+          true ->
+            :ok
+        end
 
       true ->
         {:error, "unknown approval policy #{inspect(by)}"}
@@ -70,4 +82,17 @@ defmodule Concept.Objects.Guards.RequiresApproval do
 
   defp actor_id(%{id: id}), do: id
   defp actor_id(_), do: nil
+
+  # An actor is an agent when it holds an `:agent` Membership in this workspace
+  # (the docs' definition of agent-ness). Without a tenant (e.g. a pure unit
+  # call) or a membership we conservatively treat the actor as human so the
+  # gate stays open for ordinary human creators.
+  defp agent_member?(%{id: id}, tenant) when is_binary(id) and is_binary(tenant) do
+    Concept.Accounts.Membership
+    |> Ash.Query.filter(workspace_id == ^tenant and user_id == ^id)
+    |> Ash.read!(authorize?: false)
+    |> Enum.any?(&(&1.role == :agent))
+  end
+
+  defp agent_member?(_actor, _tenant), do: false
 end

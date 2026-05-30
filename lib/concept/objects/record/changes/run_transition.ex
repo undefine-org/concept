@@ -23,18 +23,46 @@ defmodule Concept.Objects.Record.Changes.RunTransition do
   def change(changeset, _opts, ctx) do
     Ash.Changeset.before_action(changeset, fn cs ->
       to_state_id = Ash.Changeset.get_argument(cs, :to_state_id)
+      to_name = Ash.Changeset.get_argument(cs, :to)
       record = cs.data
       tenant = cs.tenant || record.workspace_id
       actor = ctx.actor
 
-      with {:ok, to_state} <- fetch_state(to_state_id, tenant),
+      with {:ok, to_state} <- resolve_target(to_state_id, to_name, record, tenant),
            {:ok, transition} <- resolve(record, to_state, tenant),
            :ok <- run_guards(transition, record, to_state, actor, tenant) do
-        Ash.Changeset.force_change_attribute(cs, :state_id, to_state_id)
+        Ash.Changeset.force_change_attribute(cs, :state_id, to_state.id)
       else
         {:error, msg} -> Ash.Changeset.add_error(cs, field: :state_id, message: msg)
       end
     end)
+  end
+
+  # Resolve the target state from either a state id or a state name. Name
+  # resolution is scoped to the record's own workflow (so agents can speak
+  # workflow vocabulary — "Done" — instead of opaque uuids), mirroring how the
+  # id path stays available for the UI and the generic MCP spine.
+  defp resolve_target(nil, nil, _record, _tenant),
+    do: {:error, "provide to_state_id or to (state name)"}
+
+  defp resolve_target(id, _name, _record, tenant) when is_binary(id),
+    do: fetch_state(id, tenant)
+
+  defp resolve_target(_id, name, record, tenant) when is_binary(name) do
+    case workflow_id_for(record, tenant) do
+      wid when is_binary(wid) ->
+        WorkflowState
+        |> Ash.Query.filter(workflow_id == ^wid and name == ^name)
+        |> Ash.Query.set_tenant(tenant)
+        |> Ash.read(authorize?: false)
+        |> case do
+          {:ok, [state | _]} -> {:ok, state}
+          _ -> {:error, "no state named #{inspect(name)} in this workflow"}
+        end
+
+      _ ->
+        {:error, "record has no workflow"}
+    end
   end
 
   defp fetch_state(nil, _tenant), do: {:error, "to_state_id is required"}

@@ -61,10 +61,8 @@ defmodule Concept.Hostable do
   """
   @callback subgraph_scope(record :: struct()) :: scope()
 
-  @doc """
-  Static metadata declared at `use Concept.Hostable` time:
-  `%{type: atom, scope: term, persona: String.t() | :generative}`.
-  """
+  # Static metadata declared at `use Concept.Hostable` time:
+  # `%{type: atom, scope: term, persona: String.t() | :generative}`.
   @callback __hostable__() :: %{
               required(:type) => atom(),
               required(:scope) => term(),

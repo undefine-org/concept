@@ -134,3 +134,36 @@ BlockType mixins?
 - The AI Answer block (EvaluateAi) is confirmed the host-model-in-embryo: its
   ~get_or_create_conversation~ is exactly what Discuss generalizes. Retiring it
   (Wave 5) will be a net deletion.
+
+* CORRECTION [2026-05-30] — discuss was antithetical; replaced with polymorphic host addressing
+
+User caught it: a per-host ~Page.discuss~ action (+ ~Pages.Changes.Discuss~
+hardcoding ~:page~) is EXACTLY the parallel per-resource wiring that
+~use Concept.Hostable~ exists to eliminate. It would force an
+~Objects.Changes.Discuss~ clone for the next host. The conversational power had
+leaked back into per-host code. Also: ~Page.discuss~ was a no-op update existing
+only to mint a tool name — a smell.
+
+FIX (all discuss work was uncommitted — clean cutover, no history rewrite):
+- DELETED ~Pages.Changes.Discuss~ + ~Page.discuss~ + the per-host discuss test.
+- Generalized ~Message.:create~ to be host-aware: added described ~host_type~
+  (one_of Hostable.types, default :workspace) + ~host_id~ args. The existing
+  ~CreateConversationIfNotProvided~ change now resolves: explicit conversation_id
+  → host's conversation (find) → host's conversation (create). ONE action,
+  polymorphic over ~{host_type, host_id}~ data.
+- ~use Concept.Hostable~ is now PURE opt-in: registry membership (admits :page to
+  the valid host_type set) + subgraph_scope (grounding). No per-host action.
+
+WHY THIS IS MORE CONCEPT-UAL: ~{host_type, host_id}~ is a tagged reference =
+DATA, not a type. So "discuss" is one polymorphic action over that data, not one
+action per host. The agent gets ONE ~message_create(host_type:, host_id:, text:)~
+tool (self-documenting via the one_of enum) instead of N ~*_discuss~ tools —
+less tool-surface bloat, and the parity principle expressed correctly. The
+plan's own §30 ("synthesize a described discuss per host") was itself slightly
+antithetical; this corrects it.
+
+Tests: test/concept/knowledge/chat/host_addressing_test.exs (4) proves
+polymorphic addressing + asserts ~:page_discuss~ is ABSENT and ~:message_create~
+is the single tool. 70 chat+pages+hostable tests green; 7 parity green; surface
+regenerated (page_discuss gone, message_create gains host args); warning-free;
+Credo clean.

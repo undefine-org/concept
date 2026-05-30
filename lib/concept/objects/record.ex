@@ -62,13 +62,20 @@ defmodule Concept.Objects.Record do
     end
 
     update :transition do
-      description "Move a record to a new workflow state, enforcing the transition's guards."
+      description "Move a record to a new workflow state by id or name, enforcing the transition's guards."
+
       accept []
       require_atomic? false
 
       argument :to_state_id, :uuid,
-        allow_nil?: false,
-        description: "Target workflow state. Must be reachable from the current state."
+        allow_nil?: true,
+        description:
+          "Target workflow state id, reachable from the current state. Provide this or `to`."
+
+      argument :to, :string,
+        allow_nil?: true,
+        description:
+          "Target workflow state name (alternative to to_state_id), resolved within the record's workflow."
 
       change Concept.Objects.Record.Changes.RunTransition
     end

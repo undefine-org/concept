@@ -62,6 +62,7 @@ defmodule Concept.Knowledge.Chat.Message do
         public? true
         default :workspace
         constraints one_of: Concept.Hostable.types()
+
         description "What this message is about: :workspace (whole tenant) or a registered host type such as :page."
       end
 

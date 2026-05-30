@@ -75,6 +75,34 @@ defmodule ConceptWeb.ProjectedMcpToolsTest do
     assert Enum.any?(records, &(&1.title == "Via HTTP"))
   end
 
+  test "tools/call task_transition moves a record by state name", %{
+    conn: conn,
+    user: user,
+    ws: ws
+  } do
+    {:ok, types} = Objects.list_object_types(actor: user, tenant: ws)
+    task = Enum.find(types, &(&1.key == "task"))
+
+    {:ok, rec} =
+      Objects.create_record(task.id, %{fields: %{"title" => "Move me"}}, actor: user, tenant: ws)
+
+    resp =
+      rpc(conn, "tools/call", %{
+        "params" => %{
+          "name" => "task_transition",
+          "arguments" => %{"id" => rec.id, "input" => %{"to" => "Todo"}}
+        }
+      })
+
+    assert resp["result"], "no result in resp: #{inspect(resp)}"
+    refute resp["result"]["isError"], "isError in resp: #{inspect(resp)}"
+
+    {:ok, moved} = Objects.get_record(rec.id, actor: user, tenant: ws)
+    {:ok, states} = Objects.list_workflow_states(task.workflow_id, actor: user, tenant: ws)
+    todo = Enum.find(states, &(&1.name == "Todo"))
+    assert moved.state_id == todo.id
+  end
+
   test "a custom object type immediately yields a typed create tool", %{
     conn: conn,
     user: user,
