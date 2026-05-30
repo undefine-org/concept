@@ -26,10 +26,21 @@ defmodule Concept.Pages.Block do
       reference :page, on_delete: :delete
       reference :parent_block, on_delete: :nilify
       reference :lock_holder, on_delete: :nilify
+      reference :message, on_delete: :delete
     end
 
     custom_indexes do
       index [:workspace_id, :page_id, :parent_block_id, :position]
+      index [:workspace_id, :message_id, :position]
+    end
+
+    # A block lives under exactly ONE container: a page (document) XOR a message
+    # (conversation turn). The content-layer membrane (PLAN-010 §27-28).
+    check_constraints do
+      check_constraint :page_id,
+        name: "blocks_one_container",
+        check: "num_nonnulls(page_id, message_id) = 1",
+        message: "a block must belong to exactly one of a page or a message"
     end
   end
 
@@ -70,7 +81,7 @@ defmodule Concept.Pages.Block do
 
     create :create_block do
       description "Create a new block on a page, optionally as a child of another block."
-      accept [:page_id, :parent_block_id, :type, :content, :props, :position]
+      accept [:page_id, :message_id, :parent_block_id, :type, :content, :props, :position]
 
       argument :workspace_id, :uuid,
         allow_nil?: false,
@@ -232,7 +243,9 @@ defmodule Concept.Pages.Block do
   attributes do
     uuid_primary_key :id
     attribute :workspace_id, :uuid, allow_nil?: false, public?: true
-    attribute :page_id, :uuid, allow_nil?: false, public?: true
+    # page_id XOR message_id (enforced by the :one_container check constraint).
+    attribute :page_id, :uuid, allow_nil?: true, public?: true, writable?: true
+    attribute :message_id, :uuid, allow_nil?: true, public?: true, writable?: true
     attribute :parent_block_id, :uuid, allow_nil?: true, public?: true
     attribute :type, Concept.Pages.BlockTypeAttr, allow_nil?: false, public?: true
     attribute :position, :string, allow_nil?: false, public?: true
@@ -255,6 +268,11 @@ defmodule Concept.Pages.Block do
     belongs_to :page, Concept.Pages.Page,
       attribute_writable?: true,
       source_attribute: :page_id,
+      destination_attribute: :id
+
+    belongs_to :message, Concept.Knowledge.Chat.Message,
+      attribute_writable?: true,
+      source_attribute: :message_id,
       destination_attribute: :id
 
     belongs_to :parent_block, __MODULE__,

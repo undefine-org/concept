@@ -340,6 +340,14 @@ defmodule Concept.Knowledge.Chat.Message do
       source_attribute :sender_participant_id
       destination_attribute :id
     end
+
+    # A message's rich body: Blocks (the same content unit as a page). Talk
+    # carries the editor's full expressiveness; crystallization reparents these
+    # onto the host page (PLAN-010 §27). `text` is retained as a plain-text
+    # fast-path shim alongside this.
+    has_many :blocks, Concept.Pages.Block do
+      destination_attribute :message_id
+    end
   end
 
   calculations do
