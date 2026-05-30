@@ -102,13 +102,16 @@ defmodule ConceptWeb.ChatComponent do
     host_key = {socket.assigns[:host_type], socket.assigns[:host_id]}
 
     socket =
-      if is_nil(socket.assigns[:conversation]) and socket.assigns[:message_form_host_key] != host_key do
+      if is_nil(socket.assigns[:conversation]) and
+           socket.assigns[:message_form_host_key] != host_key do
         # Preserve any half-typed draft across the host-driven form rebuild.
         draft = socket.assigns[:draft_text]
 
         socket
         |> assign(:message_form_host_key, host_key)
-        |> then(fn s -> if draft not in [nil, ""], do: assign(s, :initial_text, draft), else: s end)
+        |> then(fn s ->
+          if draft not in [nil, ""], do: assign(s, :initial_text, draft), else: s
+        end)
         |> assign_message_form()
       else
         socket
@@ -245,7 +248,12 @@ defmodule ConceptWeb.ChatComponent do
                   title={sender_label(message, assigns)}
                 >
                   <.icon
-                    name={if(sender_kind(message) == :host, do: "hero-sparkles-micro", else: "hero-cpu-chip-micro")}
+                    name={
+                      if(sender_kind(message) == :host,
+                        do: "hero-sparkles-micro",
+                        else: "hero-cpu-chip-micro"
+                      )
+                    }
                     class={[
                       "size-4",
                       sender_kind(message) == :host && "text-notion-blue",
@@ -307,7 +315,9 @@ defmodule ConceptWeb.ChatComponent do
           id={"#{@id}-participant-rail"}
           class="flex flex-wrap items-center gap-2 px-4 py-2 border-t border-notion-divider bg-notion-sidebar/40"
         >
-          <span class="text-xs uppercase tracking-wide text-notion-text-light mr-1">In this conversation</span>
+          <span class="text-xs uppercase tracking-wide text-notion-text-light mr-1">
+            In this conversation
+          </span>
           <%!-- Crystallize: talk becomes durable document on the host page
                (PLAN-010 §6.4). Only meaningful when the host IS a page. --%>
           <button
@@ -355,7 +365,11 @@ defmodule ConceptWeb.ChatComponent do
 
         <div id={"#{@id}-composer"} class="ora-chat-input-row relative">
           <%!-- Pending @-mention chips (participant ids carried into the message). --%>
-          <div :if={@pending_mentions != []} id={"#{@id}-mention-chips"} class="flex flex-wrap gap-1 mb-2">
+          <div
+            :if={@pending_mentions != []}
+            id={"#{@id}-mention-chips"}
+            class="flex flex-wrap gap-1 mb-2"
+          >
             <span
               :for={mention <- @pending_mentions}
               class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-violet-100 text-violet-700"
@@ -392,10 +406,16 @@ defmodule ConceptWeb.ChatComponent do
               >
                 <.icon
                   name={if(opt.kind == "host", do: "hero-sparkles-micro", else: "hero-user-micro")}
-                  class={["size-4", opt.kind == "host" && "text-notion-blue", opt.kind == "agent" && "text-violet-500"]}
+                  class={[
+                    "size-4",
+                    opt.kind == "host" && "text-notion-blue",
+                    opt.kind == "agent" && "text-violet-500"
+                  ]}
                 />
                 {opt.label}
-                <span :if={opt.kind == "host"} class="ml-auto text-xs text-notion-text-light">AI voice</span>
+                <span :if={opt.kind == "host"} class="ml-auto text-xs text-notion-text-light">
+                  AI voice
+                </span>
               </button>
             </li>
           </ul>
@@ -434,6 +454,7 @@ defmodule ConceptWeb.ChatComponent do
               value={form[:text].value}
               type="text"
               phx-mounted={JS.focus()}
+              phx-debounce="120"
               placeholder="Message — @ a person or the host"
               class="ora-input flex-1"
               autocomplete="off"
@@ -660,7 +681,11 @@ defmodule ConceptWeb.ChatComponent do
 
     participant_opts =
       for participant <- socket.assigns[:participants] || [] do
-        %{id: participant.id, label: participant_name(participant), kind: to_string(participant.kind)}
+        %{
+          id: participant.id,
+          label: participant_name(participant),
+          kind: to_string(participant.kind)
+        }
       end
 
     [host | participant_opts]
