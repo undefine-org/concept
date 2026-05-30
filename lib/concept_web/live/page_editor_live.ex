@@ -57,6 +57,9 @@ defmodule ConceptWeb.PageEditorLive do
       |> assign(:held_locks, %{})
       |> assign(:presence_users, [])
       |> assign(:locked_blocks, %{})
+      |> assign(:picker_block_id, nil)
+      |> assign(:picker_query, "")
+      |> assign(:picker_results, [])
 
     {:ok, socket}
   end
@@ -101,6 +104,15 @@ defmodule ConceptWeb.PageEditorLive do
           <ora-slash-menu items={Jason.encode!(Concept.Pages.BlockTypes.slash_menu_items())} />
         </div>
         <ConceptWeb.CompositePicker.picker id="composite-picker" />
+
+        <ConceptWeb.Objects.RecordPicker.record_picker
+          :if={@picker_block_id}
+          results={@picker_results}
+          query={@picker_query}
+          on_search="picker_search"
+          on_select="picker_select"
+          on_close="close_record_picker"
+        />
       </div>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".PageScroll">
@@ -218,6 +230,44 @@ defmodule ConceptWeb.PageEditorLive do
     end)
 
     {:noreply, socket}
+  end
+
+  # ── record_ref seam: pick the canonical record a block references ─────
+  @impl true
+  def handle_event("open_record_picker", %{"block" => block_id}, socket) do
+    {:noreply,
+     socket
+     |> assign(:picker_block_id, block_id)
+     |> assign(:picker_query, "")
+     |> assign(:picker_results, picker_search(socket, ""))}
+  end
+
+  def handle_event("close_record_picker", _params, socket) do
+    {:noreply, assign(socket, picker_block_id: nil, picker_query: "", picker_results: [])}
+  end
+
+  def handle_event("picker_search", %{"query" => query}, socket) do
+    {:noreply,
+     socket
+     |> assign(:picker_query, query)
+     |> assign(:picker_results, picker_search(socket, query))}
+  end
+
+  def handle_event("picker_select", %{"record" => record_id}, socket) do
+    user = socket.assigns.current_user
+    ws_id = socket.assigns.workspace.id
+    block_id = socket.assigns.picker_block_id
+
+    with block when not is_nil(block) <- find_block(socket.assigns.blocks, block_id),
+         {:ok, _} <-
+           Pages.update_props(block, %{"record_id" => record_id}, actor: user, tenant: ws_id) do
+      {:noreply,
+       socket
+       |> assign(:blocks, reload_blocks(socket))
+       |> assign(picker_block_id: nil, picker_query: "", picker_results: [])}
+    else
+      _ -> {:noreply, assign(socket, picker_block_id: nil)}
+    end
   end
 
   @impl true
@@ -703,6 +753,38 @@ defmodule ConceptWeb.PageEditorLive do
   # each parent has its `children` association populated with its direct
   # children sorted by position. Composite renderers (Table/Columns) read
   # `block.children` to lay out cells without an extra round-trip.
+  # Run the seam search via the Objects code interface (LV stays query-free,
+  # EX9001). Excludes nothing — a record_ref may point anywhere in the
+  # workspace (cross-type by design).
+  defp picker_search(socket, query) do
+    user = socket.assigns.current_user
+    ws_id = socket.assigns.workspace.id
+
+    case Concept.Objects.search_records(query: query, actor: user, tenant: ws_id) do
+      {:ok, records} -> records
+      _ -> []
+    end
+  end
+
+  defp find_block(blocks, id) do
+    Enum.find_value(blocks, fn b ->
+      cond do
+        b.id == id -> b
+        is_list(Map.get(b, :children)) -> find_block(b.children, id)
+        true -> nil
+      end
+    end)
+  end
+
+  defp reload_blocks(socket) do
+    %{page_id: page_id, current_user: user, workspace: ws} = socket.assigns
+
+    case Pages.list_for_page(page_id, actor: user, tenant: ws.id) do
+      {:ok, list} -> build_block_tree(list)
+      _ -> socket.assigns.blocks
+    end
+  end
+
   defp build_block_tree(flat_blocks) do
     by_parent = Enum.group_by(flat_blocks, & &1.parent_block_id)
 

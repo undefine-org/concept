@@ -35,6 +35,7 @@ defmodule Concept.Pages do
       define :acquire_lock
       define :release_lock
       define :refresh_lock
+      define :get_block, action: :read, get_by: :id
       define :list_for_page, args: [:page_id]
       define :first_block_for_page, action: :first_for_page, args: [:page_id]
     end
