@@ -24,7 +24,8 @@ defmodule Concept.Knowledge.Chat.ThreadTest do
 
     # A root message hosted by the page.
     {:ok, root} =
-      Chat.create_message(%{text: "should we ship offline mode?", host_type: :page, host_id: page.id},
+      Chat.create_message(
+        %{text: "should we ship offline mode?", host_type: :page, host_id: page.id},
         actor: user,
         tenant: ws.id
       )
@@ -58,7 +59,10 @@ defmodule Concept.Knowledge.Chat.ThreadTest do
       Chat.create_message(%{text: "first", reply_to_message_id: root.id}, actor: u, tenant: ws.id)
 
     {:ok, r2} =
-      Chat.create_message(%{text: "second", reply_to_message_id: root.id}, actor: u, tenant: ws.id)
+      Chat.create_message(%{text: "second", reply_to_message_id: root.id},
+        actor: u,
+        tenant: ws.id
+      )
 
     assert r1.conversation_id == r2.conversation_id
 

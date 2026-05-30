@@ -61,7 +61,11 @@ defmodule Concept.Knowledge.Chat.Conversation do
     update :decrement_budget do
       description "Atomically consume one automatic agent/host turn from the budget (floored at 0)."
       accept []
-      change atomic_update(:agent_turn_budget, expr(fragment("GREATEST(? - 1, 0)", agent_turn_budget)))
+
+      change atomic_update(
+               :agent_turn_budget,
+               expr(fragment("GREATEST(? - 1, 0)", agent_turn_budget))
+             )
     end
 
     update :replenish_budget do
@@ -174,6 +178,7 @@ defmodule Concept.Knowledge.Chat.Conversation do
     attribute :parent_conversation_id, :uuid do
       public? true
       allow_nil? true
+
       description "Parent conversation, if this is a thread spawned from a message. Nil for a root conversation."
     end
 
@@ -191,6 +196,7 @@ defmodule Concept.Knowledge.Chat.Conversation do
       public? true
       allow_nil? false
       default 5
+
       description "Remaining automatic agent/host turns before a human must re-engage. Replenished when a human posts."
     end
 

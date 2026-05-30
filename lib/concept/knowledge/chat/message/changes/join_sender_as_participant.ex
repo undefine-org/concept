@@ -55,23 +55,17 @@ defmodule Concept.Knowledge.Chat.Message.Changes.JoinSenderAsParticipant do
   defp maybe_replenish(%{role: :agent}, _message, _actor, _tenant), do: :ok
 
   defp maybe_replenish(_human_membership, message, actor, tenant) do
-    require Logger
-    Logger.error("maybe_replenish RUNNING for conv #{message.conversation_id}")
-
     with {:ok, conversation} <-
            Concept.Knowledge.Chat.get_conversation(message.conversation_id,
              actor: actor,
              tenant: tenant,
              authorize?: false
            ) do
-      res =
-        Concept.Knowledge.Chat.replenish_budget(conversation,
-          actor: actor,
-          tenant: tenant,
-          authorize?: false
-        )
-
-      Logger.error("replenish result: #{inspect(res)}")
+      Concept.Knowledge.Chat.replenish_budget(conversation,
+        actor: actor,
+        tenant: tenant,
+        authorize?: false
+      )
     end
 
     :ok

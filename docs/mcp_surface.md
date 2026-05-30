@@ -278,7 +278,7 @@ Hybrid vector+graph search over the workspace's pages and blocks.
 
 ---
 ## Concept.Knowledge.Chat
-### Tools (8)
+### Tools (11)
 
 #### `conversation_create`
 
@@ -290,6 +290,14 @@ Start a new chat conversation in the workspace.
 **Arguments:**
 
   - `workspace_id` (`UUID`, required) — Workspace the conversation belongs to.
+
+
+#### `conversation_decrement_budget`
+
+Atomically consume one automatic agent/host turn from the budget (floored at 0).
+
+- **Resource**: `Concept.Knowledge.Chat.Conversation`
+- **Action**: `:decrement_budget` (update)
 
 
 #### `conversation_for_host`
@@ -305,12 +313,32 @@ List conversations about a given host (e.g. a page), most recent first.
   - `host_id` (`UUID`, optional) — The host record id; nil for the :workspace host.
 
 
+#### `conversation_for_seed`
+
+Find the thread (child conversation) spawned from a given seed message, if any.
+
+- **Resource**: `Concept.Knowledge.Chat.Conversation`
+- **Action**: `:for_seed` (read)
+
+**Arguments:**
+
+  - `seed_message_id` (`UUID`, required) — The message a thread was spawned from.
+
+
 #### `conversation_my_conversations`
 
 List the actor's chat conversations in the workspace, most recent first.
 
 - **Resource**: `Concept.Knowledge.Chat.Conversation`
 - **Action**: `:my_conversations` (read)
+
+
+#### `conversation_replenish_budget`
+
+Reset the agent-turn budget when a human re-engages the conversation.
+
+- **Resource**: `Concept.Knowledge.Chat.Conversation`
+- **Action**: `:replenish_budget` (update)
 
 
 #### `message_create`
@@ -324,6 +352,7 @@ Send a message to a host (a page, a record, or the workspace). If no conversatio
 
   - `host_type` (`Atom`, optional) — What this message is about: :workspace (whole tenant) or a registered host type such as :page.
   - `host_id` (`UUID`, optional) — The host record id (e.g. the page id). Omit for the :workspace host.
+  - `reply_to_message_id` (`UUID`, optional) — Spawn (or continue) a thread: a child conversation seeded from this message, inheriting the parent's host. Omit to post in the conversation directly.
 
 
 #### `message_for_conversation`
@@ -687,7 +716,7 @@ Update a workflow state's name or category.
 
 ---
 ## Concept.Pages
-### Tools (24)
+### Tools (25)
 
 #### `block_acquire_lock`
 
@@ -760,6 +789,18 @@ Read the first (topmost) non-archived block of a page.
 **Arguments:**
 
   - `page_id` (`UUID`, required) — Page whose first block to read.
+
+
+#### `block_list_for_message`
+
+List all non-archived blocks in a message (a conversation turn's rich body), in render order.
+
+- **Resource**: `Concept.Pages.Block`
+- **Action**: `:list_for_message` (read)
+
+**Arguments:**
+
+  - `message_id` (`UUID`, required) — Message whose blocks to list.
 
 
 #### `block_list_for_page`

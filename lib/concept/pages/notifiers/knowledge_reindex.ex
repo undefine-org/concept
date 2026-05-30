@@ -80,5 +80,4 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindex do
 
   defp op_for_page(:archive), do: :delete
   defp op_for_page(_), do: :upsert
-
 end

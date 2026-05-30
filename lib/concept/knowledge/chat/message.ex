@@ -75,6 +75,7 @@ defmodule Concept.Knowledge.Chat.Message do
       argument :reply_to_message_id, :uuid do
         public? true
         allow_nil? true
+
         description "Spawn (or continue) a thread: a child conversation seeded from this message, inheriting the parent's host. Omit to post in the conversation directly."
       end
 
