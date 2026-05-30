@@ -225,4 +225,61 @@ defmodule Concept.Objects do
       {:ok, %{mine: mine, ready: ready, blocked_ids: blocked_ids}}
     end
   end
+  @doc """
+  Search a workspace's records by title — the candidate source for the
+  non-redundancy **seam** (the `record_ref` block picker) and for `:relation`
+  field pickers. Returns `{:ok, [Record]}`.
+
+  Options:
+    * `:query` — case-insensitive title fragment; blank returns recent records.
+    * `:object_type_id` — narrow to one type (relation fields); omit for
+      workspace-wide search across every type (the doc seam).
+    * `:exclude_id` — drop this record from results (a record can't reference
+      itself).
+    * `:limit` — max results (default 20).
+
+  Pure orchestration over code-interface reads (no `Ash.Query` here) so the
+  picker LiveView/component stays query-free (EX9001) and the same fn backs an
+  MCP `record_search` tool — humans and agents pick from the same set.
+  """
+  def search_records(opts) do
+    actor = Keyword.fetch!(opts, :actor)
+    tenant = Keyword.fetch!(opts, :tenant)
+    q = opts |> Keyword.get(:query, "") |> to_string() |> String.trim() |> String.downcase()
+    limit = Keyword.get(opts, :limit, 20)
+    exclude_id = Keyword.get(opts, :exclude_id)
+
+    with {:ok, type_ids} <- candidate_type_ids(opts[:object_type_id], actor, tenant) do
+      records =
+        type_ids
+        |> Enum.flat_map(fn tid ->
+          case list_records(tid, actor: actor, tenant: tenant) do
+            {:ok, recs} -> recs
+            _ -> []
+          end
+        end)
+        |> Enum.reject(&(not is_nil(exclude_id) and &1.id == exclude_id))
+        |> Enum.filter(&title_matches?(&1, q))
+        |> Enum.sort_by(& &1.updated_at, {:desc, DateTime})
+        |> Enum.take(limit)
+
+      {:ok, records}
+    end
+  end
+
+  defp candidate_type_ids(nil, actor, tenant) do
+    with {:ok, types} <- list_object_types(actor: actor, tenant: tenant) do
+      {:ok, Enum.map(types, & &1.id)}
+    end
+  end
+
+  defp candidate_type_ids(type_id, _actor, _tenant) when is_binary(type_id),
+    do: {:ok, [type_id]}
+
+  defp title_matches?(_record, ""), do: true
+
+  defp title_matches?(%{title: title}, q) when is_binary(title),
+    do: String.contains?(String.downcase(title), q)
+
+  defp title_matches?(_record, _q), do: false
 end
