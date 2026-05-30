@@ -157,8 +157,10 @@ defmodule Concept.Knowledge.Chat.Conversation do
     end
 
     # Generic actions (e.g. :crystallize) — workspace members may invoke.
+    # WorkspaceMember is a FilterCheck (unusable with generic actions), so use
+    # the SimpleCheck WorkspaceMemberCreate.
     policy action_type(:action) do
-      authorize_if Concept.Pages.Checks.WorkspaceMember
+      authorize_if Concept.Pages.Checks.WorkspaceMemberCreate
     end
   end
 
