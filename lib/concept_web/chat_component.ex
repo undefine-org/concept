@@ -51,6 +51,11 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:tool_data_warning_shown?, fn -> false end)
         |> assign_new(:has_messages, fn -> false end)
         |> assign_new(:participants, fn -> [] end)
+        |> assign_new(:pending_mentions, fn -> [] end)
+        |> assign_new(:addresses_host, fn -> true end)
+        |> assign_new(:mention_query, fn -> nil end)
+        |> assign_new(:mention_suggestions, fn -> [] end)
+        |> assign_new(:draft_text, fn -> "" end)
         |> stream(:conversations, conversations)
         |> stream(:messages, [])
         |> assign_message_form()
@@ -65,17 +70,7 @@ defmodule ConceptWeb.ChatComponent do
           load_conversation(socket, socket.assigns.conversation_id)
 
         !socket.assigns[:conversation_id] && socket.assigns.conversation ->
-              if socket.assigns[:conversation] do
-      ConceptWeb.Endpoint.unsubscribe("chat:messages:#{socket.assigns.conversation.id}")
-    end
-
-    socket
-    |> assign(:conversation, nil)
-    |> assign(:participants, [])
-    |> assign(:agent_responding, false)
-    |> assign(:has_messages, false)
-    |> stream(:messages, [], reset: true)
-    |> assign_message_form()(socket)
+          clear_conversation(socket)
 
         true ->
           socket
@@ -307,7 +302,53 @@ defmodule ConceptWeb.ChatComponent do
           </span>
         </div>
 
-        <div class="ora-chat-input-row">
+        <div id={"#{@id}-composer"} class="ora-chat-input-row relative">
+          <%!-- Pending @-mention chips (participant ids carried into the message). --%>
+          <div :if={@pending_mentions != []} id={"#{@id}-mention-chips"} class="flex flex-wrap gap-1 mb-2">
+            <span
+              :for={mention <- @pending_mentions}
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-violet-100 text-violet-700"
+            >
+              @{mention.label}
+              <button
+                type="button"
+                phx-click="remove_mention"
+                phx-value-id={mention.id}
+                phx-target={@myself}
+                class="hover:text-violet-900"
+                aria-label={"Remove mention #{mention.label}"}
+              >
+                <.icon name="hero-x-mark-micro" class="size-3" />
+              </button>
+            </span>
+          </div>
+
+          <%!-- Mention suggestions: opened by a trailing @token in the draft. --%>
+          <ul
+            :if={@mention_query != nil and @mention_suggestions != []}
+            id={"#{@id}-mention-suggestions"}
+            class="absolute bottom-full mb-1 left-0 z-20 w-64 bg-white border border-notion-divider rounded-lg shadow-lg overflow-hidden"
+          >
+            <li :for={opt <- @mention_suggestions}>
+              <button
+                type="button"
+                phx-click="pick_mention"
+                phx-value-id={opt.id}
+                phx-value-label={opt.label}
+                phx-value-kind={opt.kind}
+                phx-target={@myself}
+                class="flex items-center gap-2 w-full text-left px-3 py-2 text-sm hover:bg-notion-sidebar-hover"
+              >
+                <.icon
+                  name={if(opt.kind == "host", do: "hero-sparkles-micro", else: "hero-user-micro")}
+                  class={["size-4", opt.kind == "host" && "text-notion-blue", opt.kind == "agent" && "text-violet-500"]}
+                />
+                {opt.label}
+                <span :if={opt.kind == "host"} class="ml-auto text-xs text-notion-text-light">AI voice</span>
+              </button>
+            </li>
+          </ul>
+
           <.form
             :let={form}
             for={@message_form}
@@ -317,12 +358,32 @@ defmodule ConceptWeb.ChatComponent do
             phx-submit="send_message"
             class="flex items-center gap-2 w-full"
           >
+            <%!-- The reflex-killer: toggle whether the host's AI voice replies. --%>
+            <button
+              type="button"
+              id={"#{@id}-toggle-host"}
+              phx-click="toggle_host"
+              phx-target={@myself}
+              aria-pressed={to_string(@addresses_host != false)}
+              title={
+                if(@addresses_host != false,
+                  do: "#{host_voice_name(@host_type)} will reply — click to silence",
+                  else: "Human-only message — click to ask #{host_voice_name(@host_type)}"
+                )
+              }
+              class={[
+                "ora-btn ora-btn--icon",
+                if(@addresses_host != false, do: "text-notion-blue", else: "text-notion-text-light")
+              ]}
+            >
+              <.icon name="hero-sparkles-micro" class="size-4" />
+            </button>
             <input
               name={form[:text].name}
               value={form[:text].value}
               type="text"
               phx-mounted={JS.focus()}
-              placeholder="Type your message…"
+              placeholder="Message — @ a person or the host"
               class="ora-input flex-1"
               autocomplete="off"
             />
@@ -338,8 +399,49 @@ defmodule ConceptWeb.ChatComponent do
 
   @impl true
   def handle_event("validate_message", %{"form" => params}, socket) do
+    text = params["text"] || ""
+
+    {mention_query, suggestions} = mention_state(text, socket)
+
     {:noreply,
-     assign(socket, :message_form, AshPhoenix.Form.validate(socket.assigns.message_form, params))}
+     socket
+     |> assign(:draft_text, text)
+     |> assign(:mention_query, mention_query)
+     |> assign(:mention_suggestions, suggestions)
+     |> assign(:message_form, AshPhoenix.Form.validate(socket.assigns.message_form, params))}
+  end
+
+  @impl true
+  def handle_event("pick_mention", %{"kind" => "host"}, socket) do
+    # Addressing the host's voice doesn't add a participant id — it flips the
+    # "a grounded reply is owed" switch and strips the trailing @token.
+    {:noreply,
+     socket
+     |> assign(:addresses_host, true)
+     |> close_mentions_with_stripped_draft()}
+  end
+
+  def handle_event("pick_mention", %{"id" => id, "label" => label, "kind" => kind}, socket) do
+    pending = socket.assigns[:pending_mentions] || []
+
+    pending =
+      if Enum.any?(pending, &(&1.id == id)),
+        do: pending,
+        else: pending ++ [%{id: id, label: label, kind: kind}]
+
+    {:noreply,
+     socket
+     |> assign(:pending_mentions, pending)
+     |> close_mentions_with_stripped_draft()}
+  end
+
+  def handle_event("remove_mention", %{"id" => id}, socket) do
+    pending = Enum.reject(socket.assigns[:pending_mentions] || [], &(&1.id == id))
+    {:noreply, assign(socket, :pending_mentions, pending)}
+  end
+
+  def handle_event("toggle_host", _params, socket) do
+    {:noreply, assign(socket, :addresses_host, !(socket.assigns[:addresses_host] != false))}
   end
 
   @impl true
@@ -349,6 +451,8 @@ defmodule ConceptWeb.ChatComponent do
     else
       case AshPhoenix.Form.submit(socket.assigns.message_form, params: params) do
         {:ok, message} ->
+          socket = reset_composer(socket)
+
           if socket.assigns.conversation do
             socket
             |> assign(:agent_responding, true)
@@ -430,6 +534,62 @@ defmodule ConceptWeb.ChatComponent do
     |> assign(:has_messages, false)
     |> stream(:messages, [], reset: true)
     |> assign_message_form()
+  end
+
+  # ── Mention composer (PLAN-010 §6.3) ────────────────────────────────────
+  # Mentionable targets = the conversation's participants + the host's voice.
+  # A trailing "@token" in the draft opens a server-rendered suggestion list
+  # (no custom JS → fully driveable by Phoenix.LiveViewTest).
+  @mention_regex ~r/@([\p{L}0-9_]*)$/u
+
+  defp mention_state(text, socket) do
+    case Regex.run(@mention_regex, text) do
+      [_, query] ->
+        {query, mention_suggestions(query, socket)}
+
+      _ ->
+        {nil, []}
+    end
+  end
+
+  defp mention_suggestions(query, socket) do
+    q = String.downcase(query)
+
+    host = %{
+      id: "host",
+      label: host_voice_name(socket.assigns[:host_type] || :workspace),
+      kind: "host"
+    }
+
+    participant_opts =
+      for participant <- socket.assigns[:participants] || [] do
+        %{id: participant.id, label: participant_name(participant), kind: to_string(participant.kind)}
+      end
+
+    [host | participant_opts]
+    |> Enum.filter(fn opt -> q == "" or String.contains?(String.downcase(opt.label), q) end)
+    |> Enum.take(6)
+  end
+
+  # Strip the trailing @token from the draft and close the suggestion list.
+  defp close_mentions_with_stripped_draft(socket) do
+    stripped = Regex.replace(@mention_regex, socket.assigns[:draft_text] || "", "")
+
+    socket
+    |> assign(:draft_text, stripped)
+    |> assign(:initial_text, stripped)
+    |> assign(:mention_query, nil)
+    |> assign(:mention_suggestions, [])
+    |> assign_message_form()
+  end
+
+  defp reset_composer(socket) do
+    socket
+    |> assign(:pending_mentions, [])
+    |> assign(:addresses_host, true)
+    |> assign(:mention_query, nil)
+    |> assign(:mention_suggestions, [])
+    |> assign(:draft_text, "")
   end
 
   # Participant rail (PLAN-010 §6.2). Participants ARE memberships (humans &
@@ -529,6 +689,15 @@ defmodule ConceptWeb.ChatComponent do
       base_args
       |> Map.put(:host_type, socket.assigns[:host_type] || :workspace)
       |> Map.put(:host_id, socket.assigns[:host_id])
+
+    # Addressing (PLAN-010 §6.3): `mentions` are the participant ids @-mentioned;
+    # `addresses_host` decides whether the host's AI voice owes a reply. Setting
+    # it false for human↔human is what kills the "every message summons the AI"
+    # reflex (§B.2).
+    base_args =
+      base_args
+      |> Map.put(:mentions, Enum.map(socket.assigns[:pending_mentions] || [], & &1.id))
+      |> Map.put(:addresses_host, socket.assigns[:addresses_host] != false)
 
     tenant = socket.assigns[:workspace_id]
 
