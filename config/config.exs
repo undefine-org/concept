@@ -187,7 +187,7 @@ config :concept, Concept.AutoTools,
 
 config :arcana,
   repo: Concept.Repo,
-  embedder: {:custom, module: Concept.Knowledge.GeminiEmbedder},
+  embedder: Concept.Knowledge.GeminiEmbedder,
   chunker: Concept.Knowledge.BlockChunker,
   search: [mode: :hybrid, limit: 10]
 
