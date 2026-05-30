@@ -42,6 +42,7 @@ defmodule Concept.Objects do
       define :archive_record, action: :archive
       define :list_records, args: [:object_type_id], action: :list_for_type
       define :ready_records, args: [:object_type_id], action: :ready
+      define :all_ready_records, action: :ready_all
       define :board_records, args: [:object_type_id], action: :board
       define :my_records, action: :mine
       define :get_record, action: :read, get_by: :id

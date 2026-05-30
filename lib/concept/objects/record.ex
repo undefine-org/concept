@@ -110,12 +110,21 @@ defmodule Concept.Objects.Record do
 
       filter expr(object_type_id == ^arg(:object_type_id) and is_nil(assignee_id))
       prepare Concept.Objects.Record.Preparations.FilterReady
+      prepare build(load: [:state, :object_type])
+    end
+
+    read :ready_all do
+      description "List all ready-to-pick records across every object type in the workspace: in a :todo-category state, unblocked, and unassigned."
+
+      filter expr(is_nil(assignee_id))
+      prepare Concept.Objects.Record.Preparations.FilterReady
+      prepare build(load: [:state, :object_type])
     end
 
     read :mine do
       description "List records assigned to the current actor."
       filter expr(assignee_id == ^actor(:id))
-      prepare build(sort: [updated_at: :desc])
+      prepare build(sort: [updated_at: :desc], load: [:state, :object_type])
     end
 
     read :board do

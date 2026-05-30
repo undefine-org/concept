@@ -310,7 +310,7 @@ List messages in a chat conversation, most recent first by default.
 
 ---
 ## Concept.Objects
-### Tools (33)
+### Tools (34)
 
 #### `field_def_create`
 
@@ -474,6 +474,14 @@ List records that are ready to pick up: in a :todo-category state, unblocked, an
 **Arguments:**
 
   - `object_type_id` (`UUID`, required) — Object type whose ready records to list.
+
+
+#### `record_ready_all`
+
+List all ready-to-pick records across every object type in the workspace: in a :todo-category state, unblocked, and unassigned.
+
+- **Resource**: `Concept.Objects.Record`
+- **Action**: `:ready_all` (read)
 
 
 #### `record_reorder`
