@@ -42,7 +42,7 @@ defmodule Concept.Knowledge.Chat.Message do
     end
 
     create :create do
-      description "Send a message in a chat conversation; an AI response is generated asynchronously."
+      description "Send a message to a host (a page, a record, or the workspace). If no conversation exists for that host yet, one is created; the host's grounded AI voice may reply asynchronously."
       accept [:text, :scope, :scope_target_id, :profile]
 
       validate match(:text, ~r/\S/) do
@@ -51,6 +51,24 @@ defmodule Concept.Knowledge.Chat.Message do
 
       argument :conversation_id, :uuid do
         public? false
+      end
+
+      # Host addressing — the polymorphic, registry-validated subject of the
+      # conversation. When `conversation_id` is omitted, the message routes to
+      # (or creates) the host's conversation. This is what makes EVERY
+      # registered host conversable through ONE action (see Concept.Hostable):
+      # no per-host `discuss` action, no parallel wiring.
+      argument :host_type, :atom do
+        public? true
+        default :workspace
+        constraints one_of: Concept.Hostable.types()
+        description "What this message is about: :workspace (whole tenant) or a registered host type such as :page."
+      end
+
+      argument :host_id, :uuid do
+        public? true
+        allow_nil? true
+        description "The host record id (e.g. the page id). Omit for the :workspace host."
       end
 
       change Concept.Knowledge.Chat.Message.Changes.CreateConversationIfNotProvided

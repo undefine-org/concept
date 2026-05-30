@@ -1,5 +1,5 @@
 #+TITLE: Hostable extension and Page-host keystone slice
-#+STATE: DOING
+#+STATE: DONE
 #+SESSION_ID: 14f5a7dfc1bd8c9b
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
 #+CUSTOM_ID: FEAT-074-hostable-extension-and-page-host-keyston
@@ -72,3 +72,65 @@ This wave is the go/no-go for the architecture. The mid-flight report MUST
 answer: did the transformer compose cleanly, or did Ash resource-compile
 ordering fight it? Is ~use Concept.Hostable~ ergonomically on par with the
 BlockType mixins?
+
+* MID-FLIGHT REPORT [2026-05-30] — Wave 0 GATE: GO ✅
+
+** Work done (+ proving tests)
+- ~Concept.Hostable~ extension: mixin (~__using__~ → @behaviour +
+  ~subgraph_scope/1~ with ~defoverridable~, default from ~:scope~) + a
+  config-backed registry (~:hostables~, mirrors ~:block_types~). registered/0,
+  types/0, module_for/1, scope_for/3, resolve_scope/2.
+- Page is the first Hostable: ~use Concept.Hostable, type: :page,
+  scope: :subtree, persona: "this page"~.
+- Conversation host-aware: ~host_type~ (one_of Hostable.types, default
+  :workspace) + ~host_id~ (nil ⇔ :workspace). Migration backfills existing rows
+  via ~null: false, default: "workspace"~ — non-breaking.
+- ~discuss~ action on Page (described update) + ~Pages.Changes.Discuss~
+  (find-or-create host conversation + post message, after_action). ~for_host~
+  read + ~Chat.conversations_for_host~ interface.
+- Proving tests: 7 keystone (hostable_test.exs) + 3 discuss (discuss_test.exs)
+  + MCP parity (17) all green. ~page_discuss~ in docs/mcp_surface.md.
+  ~mix precommit~ EXIT=0; warning-free ~--warnings-as-errors~ compile.
+
+** GATE QUESTIONS — answered
+- *Did the transformer compose cleanly vs Ash compile ordering?* We did NOT need
+  a Spark transformer at all. The keystone is achievable with a plain ~__using__~
+  mixin + a described ~discuss~ action that AutoTools already projects. The
+  riskiest envisioned piece (DSL-patching ~[:actions]~/~[:relationships]~
+  mid-compile) was AVOIDED — ~page_discuss~ is synthesized for free because the
+  action carries a description. This is the parity principle paying off exactly
+  as designed.
+- *Is ~use Concept.Hostable~ on par with BlockType mixins?* Yes — one stanza,
+  same ergonomics, ~defoverridable~ callback default. Cleaner, in fact, since no
+  transformer is required for Wave 0.
+
+** Decisions / deviations from plan
+- DEFERRED the per-host Spark transformer. ~discuss~ lives on the host resource
+  as a described action (Page.discuss → page_discuss). When a 2nd/3rd host type
+  lands (Record), evaluate whether to DRY via a transformer or a shared
+  ~use Concept.Hostable.Discussable~ mixin contributing the action. The data
+  model + registry + grounded-scope spine is proven; tool synthesis is free.
+- Kept the transitional ~relate_actor(:user)~ on Conversation.create (creator
+  still related as user) until the Participant model lands (Wave 1). No 1:1
+  reflex was ripped out prematurely — additive, non-breaking.
+
+** Work to be done (next: Wave 1, FEAT-076)
+- Participant resource (Membership × Conversation, unread cursor = inbox).
+- Message.sender_participant_id nullable; migrate binary ~source~.
+- needs_host_response calc (host-addressed + no reply + budget); kill the
+  every-message-summons-AI reflex.
+- Real policies on Conversation/Message (currently none); borrowed-identity
+  grounding ∩ addresser visibility.
+
+** Process learnings
+- Ash 3.x: ~set_argument/3~ MUST precede ~for_create/3~ (validated changeset is
+  frozen after) — confirmed via EvaluateAi's comment; bit us once in Discuss.
+- after_action hooks do NOT reliably carry tenant in ~context~; thread
+  ~tenant: changeset.tenant~ + ~actor: context.actor~ explicitly.
+- ~@doc~ on a ~__~-prefixed ~@callback~ leaks ("redefining @doc") — use a plain
+  comment for ~@callback __hostable__/0~.
+- Test env: ~too_many_connections~ Oban noise is benign (parallel suites);
+  tests pass underneath it.
+- The AI Answer block (EvaluateAi) is confirmed the host-model-in-embryo: its
+  ~get_or_create_conversation~ is exactly what Discuss generalizes. Retiring it
+  (Wave 5) will be a net deletion.

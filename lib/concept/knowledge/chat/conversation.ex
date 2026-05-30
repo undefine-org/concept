@@ -58,6 +58,22 @@ defmodule Concept.Knowledge.Chat.Conversation do
       description "List the actor's chat conversations in the workspace, most recent first."
       filter expr(user_id == ^actor(:id))
     end
+
+    read :for_host do
+      description "List conversations about a given host (e.g. a page), most recent first."
+
+      argument :host_type, :atom,
+        allow_nil?: false,
+        constraints: [one_of: Concept.Hostable.types()],
+        description: "The host type, e.g. :page or :workspace."
+
+      argument :host_id, :uuid,
+        allow_nil?: true,
+        description: "The host record id; nil for the :workspace host."
+
+      filter expr(host_type == ^arg(:host_type) and host_id == ^arg(:host_id))
+      prepare build(sort: [inserted_at: :desc])
+    end
   end
 
   pub_sub do
@@ -93,12 +109,14 @@ defmodule Concept.Knowledge.Chat.Conversation do
       allow_nil? false
       default :workspace
       constraints one_of: Concept.Hostable.types()
+
       description "What this conversation is about: :workspace (whole tenant) or a registered host type (e.g. :page)."
     end
 
     attribute :host_id, :uuid do
       public? true
       allow_nil? true
+
       description "The host record id. Nil for the :workspace host (the conversation is about the whole workspace)."
     end
 
