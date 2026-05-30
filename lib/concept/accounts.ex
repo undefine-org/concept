@@ -85,4 +85,115 @@ defmodule Concept.Accounts do
     |> Ash.Query.filter(id in ^ids)
     |> Ash.read(authorize?: false)
   end
+
+  @doc """
+  List members of a workspace with their user record loaded.
+  """
+  def list_members(workspace_id, opts \\ []) do
+    actor = opts[:actor]
+
+    with {:ok, memberships} <-
+           Concept.Accounts.Membership
+           |> Ash.Query.filter(workspace_id == ^workspace_id)
+           |> Ash.read(actor: actor, authorize?: true),
+         {:ok, memberships} <-
+           Ash.load(memberships, :user, authorize?: false) do
+      {:ok, memberships}
+    end
+  end
+
+  @doc """
+  Add an existing user to a workspace by email.
+
+  Returns `{:ok, membership}` on success, `{:error, :user_not_found}`
+  if no user has that email, or `{:error, :already_member}` if the
+  user is already a member of the workspace.
+  """
+  def add_member(workspace_id, email, opts \\ []) do
+    actor = opts[:actor]
+
+    case Concept.Accounts.User
+         |> Ash.Query.filter(email == ^email)
+         |> Ash.read_one(actor: actor, authorize?: false) do
+      {:ok, nil} ->
+        {:error, :user_not_found}
+
+      {:error, reason} ->
+        {:error, reason}
+
+      {:ok, user} ->
+        case get_membership(user.id, workspace_id, actor: actor) do
+          {:ok, %Concept.Accounts.Membership{}} ->
+            {:error, :already_member}
+
+          {:ok, nil} ->
+            Concept.Accounts.Membership.create(
+              workspace_id,
+              user.id,
+              :member,
+              actor: actor
+            )
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+    end
+  end
+
+  @doc """
+  Change a member's role in a workspace.
+
+  `role` must be one of the Membership role enum values.
+  """
+  def set_member_role(membership, role, opts \\ []) do
+    actor = opts[:actor]
+
+    membership
+    |> Ash.Changeset.for_update(:update_role, %{role: role})
+    |> Ash.update(actor: actor, authorize?: true)
+  end
+
+  @doc """
+  List API keys bound to a workspace (hashes only; no plaintext).
+  """
+  def list_api_keys(workspace_id, opts \\ []) do
+    actor = opts[:actor]
+
+    Concept.Accounts.ApiKey.for_workspace(workspace_id, actor: actor)
+  end
+
+  @doc """
+  Issue a workspace-bound API key for the actor.
+
+  Returns `{:ok, %{api_key: key_struct, plaintext: "..."}}`.
+  The plaintext is available only at creation time.
+  """
+  def issue_api_key(workspace_id, attrs, opts \\ []) do
+    actor = opts[:actor]
+
+    expires_at = attrs[:expires_at] || DateTime.add(DateTime.utc_now(), 365, :day)
+
+    case Concept.Accounts.ApiKey.create(
+           actor.id,
+           expires_at,
+           workspace_id,
+           actor: actor
+         ) do
+      {:ok, api_key} ->
+        plaintext = api_key.__metadata__.plaintext_api_key
+        {:ok, %{api_key: api_key, plaintext: plaintext}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Revoke (destroy) an API key.
+  """
+  def revoke_api_key(api_key, opts \\ []) do
+    actor = opts[:actor]
+
+    Ash.destroy(api_key, actor: actor, authorize?: true)
+  end
 end

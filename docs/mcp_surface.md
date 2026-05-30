@@ -11,7 +11,7 @@ caller sees.
 ---
 
 ## Concept.Accounts
-### Tools (13)
+### Tools (14)
 
 #### `api_key_create`
 
@@ -27,6 +27,18 @@ Revoke an API key by id.
 
 - **Resource**: `Concept.Accounts.ApiKey`
 - **Action**: `:destroy` (destroy)
+
+
+#### `api_key_for_workspace`
+
+List API keys bound to a workspace (hashes only).
+
+- **Resource**: `Concept.Accounts.ApiKey`
+- **Action**: `:for_workspace` (read)
+
+**Arguments:**
+
+  - `workspace_id` (`UUID`, required) — Workspace whose API keys to list.
 
 
 #### `api_key_read`
@@ -494,14 +506,15 @@ Reorder a record within its object type.
 
 #### `record_transition`
 
-Move a record to a new workflow state, enforcing the transition's guards.
+Move a record to a new workflow state by id or name, enforcing the transition's guards.
 
 - **Resource**: `Concept.Objects.Record`
 - **Action**: `:transition` (update)
 
 **Arguments:**
 
-  - `to_state_id` (`UUID`, required) — Target workflow state. Must be reachable from the current state.
+  - `to_state_id` (`UUID`, optional) — Target workflow state id, reachable from the current state. Provide this or `to`.
+  - `to` (`String`, optional) — Target workflow state name (alternative to to_state_id), resolved within the record's workflow.
 
 
 #### `record_update_fields`

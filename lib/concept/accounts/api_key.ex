@@ -10,11 +10,26 @@ defmodule Concept.Accounts.ApiKey do
     repo Concept.Repo
   end
 
+  code_interface do
+    define :create, args: [:user_id, :expires_at, :workspace_id]
+    define :for_workspace, action: :for_workspace, args: [:workspace_id]
+  end
+
   actions do
     read :read do
       primary? true
 
       description "List the actor's API keys (hashes only; key material is shown only at creation)."
+    end
+
+    read :for_workspace do
+      description "List API keys bound to a workspace (hashes only)."
+
+      argument :workspace_id, :uuid,
+        allow_nil?: false,
+        description: "Workspace whose API keys to list."
+
+      filter expr(workspace_id == ^arg(:workspace_id))
     end
 
     destroy :destroy do
@@ -36,6 +51,14 @@ defmodule Concept.Accounts.ApiKey do
   policies do
     bypass AshAuthentication.Checks.AshAuthenticationInteraction do
       authorize_if always()
+    end
+
+    policy action_type(:read) do
+      authorize_if expr(exists(workspace.memberships, user_id == ^actor(:id) and role == :owner))
+    end
+
+    policy action_type([:create, :destroy]) do
+      authorize_if expr(exists(workspace.memberships, user_id == ^actor(:id) and role == :owner))
     end
   end
 
