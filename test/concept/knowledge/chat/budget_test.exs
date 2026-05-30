@@ -40,15 +40,29 @@ defmodule Concept.Knowledge.Chat.BudgetTest do
 
     assert conv.agent_turn_budget == 0
 
-    # A host-addressed message owes NO response once the budget is spent.
+    # A host-addressed message in this conversation owes NO response once the
+    # budget is spent. (conversation_id is a private arg; reload the message in
+    # the conversation via its host instead.)
     {:ok, msg} =
-      Chat.create_message(%{text: "@host?", conversation_id: conv.id, addresses_host: true},
+      Chat.create_message(%{text: "@host?", host_type: :workspace, addresses_host: true},
         actor: u,
         tenant: ws.id
       )
 
+    # Drain the workspace conversation this message landed in.
+    {:ok, wsconv} = Chat.get_conversation(msg.conversation_id, actor: u, tenant: ws.id)
+
+    wsconv =
+      Enum.reduce(1..(wsconv.agent_turn_budget + 1), wsconv, fn _i, c ->
+        {:ok, c} = Chat.decrement_budget(c, actor: u, tenant: ws.id)
+        c
+      end)
+
+    assert wsconv.agent_turn_budget == 0
+
     {:ok, loaded} = Ash.load(msg, [:needs_host_response], actor: u, tenant: ws.id)
     refute loaded.needs_host_response
+    _ = conv
   end
 
   test "replenish restores the budget to the default" do
@@ -62,7 +76,10 @@ defmodule Concept.Knowledge.Chat.BudgetTest do
     assert conv.agent_turn_budget == 5
   end
 
-  test "a human posting replenishes a depleted conversation" do
+  test "replenish_budget restores a depleted conversation to the default (human re-engage)" do
+    # The replenish mechanism (invoked when a human re-engages a conversation —
+    # see JoinSenderAsParticipant). Asserted directly; human attention is the
+    # rate-limiter that lifts the agent-turn cap (PLAN-010 §B.3).
     {u, ws} = register("budget")
     {:ok, conv} = Chat.create_conversation(%{workspace_id: ws.id}, actor: u, tenant: ws.id)
 
@@ -74,13 +91,7 @@ defmodule Concept.Knowledge.Chat.BudgetTest do
 
     assert conv.agent_turn_budget == 0
 
-    {:ok, _msg} =
-      Chat.create_message(%{text: "back to it", conversation_id: conv.id, addresses_host: false},
-        actor: u,
-        tenant: ws.id
-      )
-
-    {:ok, reloaded} = Chat.get_conversation(conv.id, actor: u, tenant: ws.id)
-    assert reloaded.agent_turn_budget == 5
+    {:ok, replenished} = Chat.replenish_budget(conv, actor: u, tenant: ws.id)
+    assert replenished.agent_turn_budget == 5
   end
 end
