@@ -496,6 +496,12 @@ defmodule ConceptWeb.ChatComponent do
     if true && is_nil(socket.assigns.current_user) do
       {:noreply, put_flash(socket, :error, "You must sign in to send messages")}
     else
+      # Re-merge addressing into the submit params: AshPhoenix.Form.submit/2 with
+      # `params:` REPLACES the param set built in assign_message_form, so host_type/
+      # host_id/mentions/addresses_host must be present here too or the action
+      # defaults (→ :workspace) win and a page message would mis-route.
+      params = Map.merge(addressing_params(socket), params)
+
       case AshPhoenix.Form.submit(socket.assigns.message_form, params: params) do
         {:ok, message} ->
           socket = reset_composer(socket)
@@ -768,42 +774,47 @@ defmodule ConceptWeb.ChatComponent do
         do: Map.put(base_args, :text, socket.assigns.initial_text),
         else: base_args
 
-    # Addressing (PLAN-010 §6.1/§6.3) goes via PRIVATE arguments, NOT form params:
-    # `submit(form, params: %{"text" => ...})` replaces the param set, so host_type/
-    # host_id/mentions/addresses_host placed in params would be dropped at submit
-    # and the action's defaults (→ :workspace, addresses_host true) would win.
-    # private_arguments persist across submit (same mechanism as conversation_id).
-    addressing = %{
-      host_type: socket.assigns[:host_type] || :workspace,
-      host_id: socket.assigns[:host_id],
-      mentions: Enum.map(socket.assigns[:pending_mentions] || [], & &1.id),
-      addresses_host: socket.assigns[:addresses_host] != false
-    }
+    # Addressing (PLAN-010 §6.1/§6.3): host_type/host_id/mentions/addresses_host
+    # are baked into the form's create args here AND re-merged into the submit
+    # params by send_message/3 (AshPhoenix.Form.submit/2 with `params:` REPLACES
+    # the param set, so they must be present at submit too — see addressing_params/1).
+    base_args = Map.merge(base_args, addressing_params(socket))
 
     tenant = socket.assigns[:workspace_id]
 
-    private_arguments =
-      if socket.assigns.conversation do
-        # A loaded conversation wins find-or-create (conversation_id resolves
-        # first); host args are harmless but kept for consistency.
-        Map.put(addressing, :conversation_id, socket.assigns.conversation.id)
-      else
-        addressing
-      end
-
     form =
-      Concept.Knowledge.Chat.form_to_create_message(
-        actor: socket.assigns.current_user,
-        tenant: tenant,
-        params: base_args,
-        private_arguments: private_arguments
-      )
-      |> to_form()
+      if socket.assigns.conversation do
+        Concept.Knowledge.Chat.form_to_create_message(
+          actor: socket.assigns.current_user,
+          tenant: tenant,
+          params: base_args,
+          private_arguments: %{conversation_id: socket.assigns.conversation.id}
+        )
+        |> to_form()
+      else
+        Concept.Knowledge.Chat.form_to_create_message(
+          actor: socket.assigns.current_user,
+          tenant: tenant,
+          params: base_args
+        )
+        |> to_form()
+      end
 
     socket
     |> assign(:message_form, form)
     |> assign(:initial_text, nil)
     |> assign(:message_form_host_key, {socket.assigns[:host_type], socket.assigns[:host_id]})
+  end
+
+  # The addressing args, as STRING-keyed params (so they merge cleanly into the
+  # form-submitted params and survive AshPhoenix.Form.submit/2's param replace).
+  defp addressing_params(socket) do
+    %{
+      "host_type" => to_string(socket.assigns[:host_type] || :workspace),
+      "host_id" => socket.assigns[:host_id],
+      "mentions" => Enum.map(socket.assigns[:pending_mentions] || [], & &1.id),
+      "addresses_host" => socket.assigns[:addresses_host] != false
+    }
   end
 
   defp tool_calls(message), do: safe_extract(message).tool_calls
