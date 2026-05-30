@@ -155,6 +155,11 @@ defmodule Concept.Knowledge.Chat.Conversation do
     policy action_type([:update, :destroy]) do
       authorize_if Concept.Pages.Checks.WorkspaceMember
     end
+
+    # Generic actions (e.g. :crystallize) — workspace members may invoke.
+    policy action_type(:action) do
+      authorize_if Concept.Pages.Checks.WorkspaceMember
+    end
   end
 
   pub_sub do

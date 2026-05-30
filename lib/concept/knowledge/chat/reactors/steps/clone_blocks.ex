@@ -12,21 +12,25 @@ defmodule Concept.Knowledge.Chat.Reactors.Steps.CloneBlocks do
   require Ash.Query
 
   @impl true
-  def run(%{conversation_id: conversation_id, target_page_id: page_id, workspace_id: workspace_id}, _context, _opts) do
+  def run(
+        %{conversation_id: conversation_id, target_page_id: page_id, workspace_id: workspace_id},
+        _context,
+        _opts
+      ) do
     opts = [authorize?: false, tenant: workspace_id]
 
     source_blocks = conversation_blocks(conversation_id, workspace_id)
 
-    cloned =
+    cloned_ids =
       Enum.map(source_blocks, fn block ->
         {:ok, new_block} = clone_block(block, page_id, workspace_id, opts)
         link_provenance(block, new_block, workspace_id, opts)
-        new_block
+        new_block.id
       end)
 
     mark_crystallized(conversation_id, page_id, opts)
 
-    {:ok, cloned}
+    {:ok, cloned_ids}
   rescue
     e -> {:error, e}
   end
