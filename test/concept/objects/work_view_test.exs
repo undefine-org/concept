@@ -52,7 +52,10 @@ defmodule Concept.Objects.WorkViewTest do
   # Records start in the initial (:todo) state on create.
   defp todo_record(ctx, type, title) do
     {:ok, rec} =
-      Objects.create_record(type.id, %{fields: %{"title" => title}}, actor: ctx.user, tenant: ctx.ws)
+      Objects.create_record(type.id, %{fields: %{"title" => title}},
+        actor: ctx.user,
+        tenant: ctx.ws
+      )
 
     rec
   end
@@ -105,7 +108,8 @@ defmodule Concept.Objects.WorkViewTest do
         tenant: ctx.ws
       )
 
-    {:ok, _} = Objects.link_records(blocked.id, blocker.id, rel.id, actor: ctx.user, tenant: ctx.ws)
+    {:ok, _} =
+      Objects.link_records(blocked.id, blocker.id, rel.id, actor: ctx.user, tenant: ctx.ws)
 
     {:ok, view} = Objects.work_view(actor: ctx.user, tenant: ctx.ws)
     assert MapSet.member?(view.blocked_ids, blocked.id)
