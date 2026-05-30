@@ -112,7 +112,7 @@ defmodule ConceptWeb.ObjectBoardLive do
 
         socket
         |> assign(:board, board)
-        |> assign(:page_title, board.type.name)
+        |> assign(:page_title, board_title(socket.assigns.live_action, board.type))
         |> assign(:moves, moves)
         |> assign(:members, load_members(ws.id, user))
         |> assign(:card_fields, card_fields(board.field_defs))
@@ -175,7 +175,7 @@ defmodule ConceptWeb.ObjectBoardLive do
       <div id="tasks-root" class="p-6">
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold text-notion-text">
-            {(@board && @board.type.name) || @page_title}
+            {@page_title}
           </h1>
           <.link
             navigate={~p"/w/#{@workspace.slug}"}
@@ -308,6 +308,12 @@ defmodule ConceptWeb.ObjectBoardLive do
     </Layouts.app>
     """
   end
+
+  # The built-in Task board keeps its canonical "Tasks" heading; any other
+  # type's board is titled by the type's own name (e.g. "Customer").
+  defp board_title(:tasks, _type), do: "Tasks"
+  defp board_title(_action, %{name: name}) when is_binary(name), do: name
+  defp board_title(_action, _type), do: "Board"
 
   defp record_title(%{title: t}) when is_binary(t) and t != "", do: t
   defp record_title(_), do: "Untitled"
