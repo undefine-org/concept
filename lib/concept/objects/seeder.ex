@@ -1,8 +1,14 @@
 defmodule Concept.Objects.Seeder do
   @moduledoc """
-  Seeds the built-in **Task** object type into a workspace: a default workflow
-  (Backlog→Todo→Doing→Review→Done + Canceled), built-in fields (priority,
-  blocked_by), and the human-acceptance guard on `→ Done`.
+  Seeds the built-in **Task** object type into a workspace.
+
+  Task is *not* special-cased machinery: it is a `Concept.Objects.Scaffold`
+  type (default 6-category workflow + Title field) **plus** Task-specific
+  extras — a `priority` select, a `blocked_by` relation, and the
+  human-acceptance guard on the `Review → Done` transition. The scaffold is
+  the single source of truth shared with the human "Create type" path
+  (`Objects.scaffold_object_type/2`), so the built-in type and user types are
+  built the same way.
 
   Idempotent: if a system Task type already exists in the workspace, it is a
   no-op. Runs with a system actor (bypasses member policies) so it can be
@@ -10,18 +16,10 @@ defmodule Concept.Objects.Seeder do
   """
   require Ash.Query
 
-  alias Concept.Objects.{ObjectType, Workflow, WorkflowState, Transition, FieldDef}
+  alias Concept.Objects.{FieldDef, ObjectType, Scaffold, Transition, WorkflowState}
 
   @system %{system?: true}
-
-  @states [
-    {"Backlog", :backlog, true},
-    {"Todo", :todo, false},
-    {"Doing", :doing, false},
-    {"Review", :review, false},
-    {"Done", :done, false},
-    {"Canceled", :canceled, false}
-  ]
+  @seed_opts [actor: @system, authorize?: false]
 
   @doc """
   Seed (or return the existing) Task type for `workspace_id`.
@@ -43,79 +41,21 @@ defmodule Concept.Objects.Seeder do
   end
 
   defp create_task_type(workspace_id) do
-    {:ok, wf} =
-      Workflow
-      |> Ash.Changeset.for_create(:create, %{name: "Default"},
-        actor: @system,
-        tenant: workspace_id
-      )
-      |> Ash.create()
+    opts = [tenant: workspace_id] ++ @seed_opts
 
-    states = create_states(wf, workspace_id)
-    create_done_guard_transition(wf, states, workspace_id)
-
+    # Scaffold builds the usable base (default workflow + Title field); we then
+    # pin the Task identity and layer on Task-specific fields + the acceptance
+    # guard. Same path a human "Create type" takes, specialized for Task.
     {:ok, type} =
-      ObjectType
-      |> Ash.Changeset.for_create(
-        :create,
-        %{name: "Task", key: "task", icon: "✓", is_system?: true, workflow_id: wf.id},
-        actor: @system,
-        tenant: workspace_id
-      )
-      |> Ash.create()
+      Scaffold.object_type("Task", %{key: "task", icon: "✓", is_system?: true}, opts)
 
-    create_fields(type, workspace_id)
+    add_task_fields(type, workspace_id)
+    add_done_guard(type, workspace_id)
     {:ok, type}
   end
 
-  defp create_states(wf, workspace_id) do
-    Enum.reduce(@states, %{}, fn {name, cat, initial}, acc ->
-      {:ok, state} =
-        WorkflowState
-        |> Ash.Changeset.for_create(
-          :create,
-          %{workflow_id: wf.id, name: name, category: cat, is_initial?: initial},
-          actor: @system,
-          tenant: workspace_id
-        )
-        |> Ash.create()
-
-      Map.put(acc, cat, state)
-    end)
-  end
-
-  # The default linear flow + the human-acceptance gate on → Done.
-  defp create_done_guard_transition(wf, states, workspace_id) do
-    edges = [
-      {:backlog, :todo, []},
-      {:todo, :doing, []},
-      {:doing, :review, []},
-      {:review, :done, [%{"kind" => "requires_approval", "config" => %{"by" => "creator"}}]},
-      {:todo, :canceled, []},
-      {:doing, :canceled, []}
-    ]
-
-    for {from, to, guards} <- edges do
-      {:ok, _} =
-        Transition
-        |> Ash.Changeset.for_create(
-          :create,
-          %{
-            workflow_id: wf.id,
-            from_state_id: states[from].id,
-            to_state_id: states[to].id,
-            guards: guards
-          },
-          actor: @system,
-          tenant: workspace_id
-        )
-        |> Ash.create()
-    end
-  end
-
-  defp create_fields(type, workspace_id) do
+  defp add_task_fields(type, workspace_id) do
     fields = [
-      %{name: "Title", field_type: :text, is_title?: true, required?: true},
       %{
         name: "Priority",
         field_type: :select,
@@ -135,5 +75,42 @@ defmodule Concept.Objects.Seeder do
         )
         |> Ash.create()
     end
+  end
+
+  # Task overrides the scaffold's guard-free `Review → Done` edge with the
+  # human-acceptance gate (Symphony's accept step, expressed as data). The
+  # scaffold already created the edge; we set its guards.
+  defp add_done_guard(type, workspace_id) do
+    states = states_by_category(type.workflow_id, workspace_id)
+    review = states[:review]
+    done = states[:done]
+
+    transition =
+      Transition
+      |> Ash.Query.filter(
+        workflow_id == ^type.workflow_id and from_state_id == ^review.id and
+          to_state_id == ^done.id
+      )
+      |> Ash.Query.set_tenant(workspace_id)
+      |> Ash.read!(actor: @system, authorize?: false)
+      |> List.first()
+
+    {:ok, _} =
+      transition
+      |> Ash.Changeset.for_update(
+        :set_guards,
+        %{guards: [%{"kind" => "requires_approval", "config" => %{"by" => "creator"}}]},
+        actor: @system,
+        tenant: workspace_id
+      )
+      |> Ash.update()
+  end
+
+  defp states_by_category(workflow_id, workspace_id) do
+    WorkflowState
+    |> Ash.Query.filter(workflow_id == ^workflow_id)
+    |> Ash.Query.set_tenant(workspace_id)
+    |> Ash.read!(actor: @system, authorize?: false)
+    |> Map.new(&{&1.category, &1})
   end
 end
