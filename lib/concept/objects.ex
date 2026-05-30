@@ -160,4 +160,32 @@ defmodule Concept.Objects do
     do: Concept.Objects.Guards.describe_all(guards)
 
   def requirements(_), do: []
+
+  @doc """
+  Pull-model "work" view for a member: what is assigned to me, and what is
+  ready for anyone to pick up — across *every* object type in the workspace
+  (not just Tasks). Returns
+
+      {:ok, %{mine: [Record], ready: [Record], blocked_ids: MapSet.t()}}
+
+  - `mine`   — records assigned to the actor (state + object_type loaded),
+    newest-touched first.
+  - `ready`  — unassigned, unblocked records in a `:todo`-category state
+    (`Record.Blocking` is the single blocked? authority).
+  - `blocked_ids` — ids among `mine` that have an incomplete `blocked_by`
+    dependency, so the UI can badge them without a second pass.
+
+  Pure orchestration over code-interface fns so the LiveView stays query-free
+  (Concept.Credo.Check.LiveViewPurity / EX9001).
+  """
+  def work_view(opts) do
+    actor = Keyword.fetch!(opts, :actor)
+    tenant = Keyword.fetch!(opts, :tenant)
+
+    with {:ok, mine} <- my_records(actor: actor, tenant: tenant),
+         {:ok, ready} <- all_ready_records(actor: actor, tenant: tenant) do
+      blocked_ids = Concept.Objects.Record.Blocking.blocked_ids(mine, tenant)
+      {:ok, %{mine: mine, ready: ready, blocked_ids: blocked_ids}}
+    end
+  end
 end
