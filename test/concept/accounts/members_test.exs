@@ -71,6 +71,36 @@ defmodule Concept.Accounts.MembersTest do
     test "rejects unknown roles", %{owner: owner, membership: membership} do
       assert {:error, _} = Accounts.set_member_role(membership, :superuser, actor: owner)
     end
+
+    test "admin actor CANNOT change an owner's role", %{
+      owner: owner,
+      workspace: workspace
+    } do
+      admin = register_user("example.com")
+      {:ok, admin_membership} = Accounts.add_member(workspace.id, admin.email, actor: owner)
+      {:ok, admin_membership} = Accounts.set_member_role(admin_membership, :admin, actor: owner)
+
+      {:ok, owner_membership} = Accounts.get_membership(owner.id, workspace.id, actor: owner)
+      assert {:error, _} = Accounts.set_member_role(owner_membership, :admin, actor: admin)
+    end
+
+    test "rejects demoting the last owner", %{owner: owner, workspace: workspace} do
+      {:ok, owner_membership} = Accounts.get_membership(owner.id, workspace.id, actor: owner)
+      assert {:error, _} = Accounts.set_member_role(owner_membership, :member, actor: owner)
+    end
+
+    test "allows demoting an owner when a second owner exists", %{
+      owner: owner,
+      workspace: workspace
+    } do
+      other_owner = register_user("example.com")
+      {:ok, other_membership} = Accounts.add_member(workspace.id, other_owner.email, actor: owner)
+      {:ok, other_membership} = Accounts.set_member_role(other_membership, :owner, actor: owner)
+
+      {:ok, owner_membership} = Accounts.get_membership(owner.id, workspace.id, actor: owner)
+      assert {:ok, updated} = Accounts.set_member_role(owner_membership, :member, actor: owner)
+      assert updated.role == :member
+    end
   end
 
   describe "list_members/2" do

@@ -148,9 +148,7 @@ defmodule Concept.Accounts do
   def set_member_role(membership, role, opts \\ []) do
     actor = opts[:actor]
 
-    membership
-    |> Ash.Changeset.for_update(:update_role, %{role: role})
-    |> Ash.update(actor: actor, authorize?: true)
+    Concept.Accounts.Membership.update_role(membership, role, actor: actor, authorize?: true)
   end
 
   @doc """

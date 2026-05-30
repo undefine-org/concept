@@ -48,6 +48,9 @@ defmodule Concept.Accounts.Membership do
     update :update_role do
       description "Change a member's role in the workspace."
       accept [:role]
+      require_atomic? false
+
+      change Concept.Accounts.Membership.Changes.ValidateRoleChange
     end
   end
 
@@ -61,6 +64,10 @@ defmodule Concept.Accounts.Membership do
       authorize_if expr(exists(workspace.memberships, user_id == ^actor(:id)))
     end
 
+    policy action(:update_role) do
+      authorize_if expr(exists(workspace.memberships, user_id == ^actor(:id) and role in [:owner, :admin]))
+    end
+
     policy action_type([:create, :update, :destroy]) do
       authorize_if expr(exists(workspace.memberships, user_id == ^actor(:id) and role == :owner))
     end
@@ -70,7 +77,7 @@ defmodule Concept.Accounts.Membership do
     uuid_primary_key :id
 
     attribute :role, :atom,
-      constraints: [one_of: [:owner, :member, :agent]],
+      constraints: [one_of: [:owner, :admin, :member, :agent]],
       default: :member,
       public?: true
 
@@ -89,5 +96,67 @@ defmodule Concept.Accounts.Membership do
 
   identities do
     identity :unique_user_workspace, [:workspace_id, :user_id]
+  end
+
+  defmodule Changes.ValidateRoleChange do
+    @moduledoc """
+    Prevents privilege escalation and owner lockout on membership role changes.
+    Only an owner may change another owner's role or promote someone to owner.
+    The last owner cannot be demoted.
+    """
+    use Ash.Resource.Change
+    require Ash.Query
+
+    @impl true
+    def change(changeset, _opts, ctx) do
+      Ash.Changeset.before_action(changeset, &validate(&1, ctx.actor))
+    end
+
+    defp validate(changeset, actor) do
+      current_role = changeset.data.role
+      workspace_id = changeset.data.workspace_id
+      new_role = Ash.Changeset.get_attribute(changeset, :role)
+
+      cond do
+        is_nil(actor) ->
+          changeset
+
+        current_role == :owner and not actor_owner?(actor, workspace_id) ->
+          Ash.Changeset.add_error(changeset, field: :role, message: "only an owner may change an owner's role")
+
+        new_role == :owner and not actor_owner?(actor, workspace_id) ->
+          Ash.Changeset.add_error(changeset, field: :role, message: "only an owner may promote to owner")
+
+        current_role == :owner and new_role != :owner and last_owner?(workspace_id) ->
+          Ash.Changeset.add_error(changeset, field: :role, message: "cannot demote the last owner")
+
+        true ->
+          changeset
+      end
+    end
+
+    defp actor_owner?(actor, workspace_id) do
+      actor_id = actor.id
+
+      Concept.Accounts.Membership
+      |> Ash.Query.filter(workspace_id == ^workspace_id and user_id == ^actor_id and role == :owner)
+      |> Ash.read_one(authorize?: false)
+      |> case do
+        {:ok, nil} -> false
+        {:ok, _} -> true
+        _ -> false
+      end
+    end
+
+    defp last_owner?(workspace_id) do
+      Concept.Accounts.Membership
+      |> Ash.Query.filter(workspace_id == ^workspace_id and role == :owner)
+      |> Ash.Query.limit(2)
+      |> Ash.read(authorize?: false)
+      |> case do
+        {:ok, owners} when length(owners) == 1 -> true
+        _ -> false
+      end
+    end
   end
 end
