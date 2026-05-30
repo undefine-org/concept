@@ -34,8 +34,6 @@ defmodule Concept.Pages.Block do
       index [:workspace_id, :message_id, :position]
     end
 
-    # A block lives under exactly ONE container: a page (document) XOR a message
-    # (conversation turn). The content-layer membrane (PLAN-010 §27-28).
     check_constraints do
       check_constraint :page_id,
         name: "blocks_one_container",
@@ -274,11 +272,6 @@ defmodule Concept.Pages.Block do
     belongs_to :message, Concept.Knowledge.Chat.Message,
       attribute_writable?: true,
       define_attribute?: false,
-      source_attribute: :message_id,
-      destination_attribute: :id
-
-    belongs_to :message, Concept.Knowledge.Chat.Message,
-      attribute_writable?: true,
       source_attribute: :message_id,
       destination_attribute: :id
 
