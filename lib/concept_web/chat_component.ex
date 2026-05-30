@@ -270,6 +270,19 @@ defmodule ConceptWeb.ChatComponent do
           class="flex flex-wrap items-center gap-2 px-4 py-2 border-t border-notion-divider bg-notion-sidebar/40"
         >
           <span class="text-xs uppercase tracking-wide text-notion-text-light mr-1">In this conversation</span>
+          <%!-- Crystallize: talk becomes durable document on the host page
+               (PLAN-010 §6.4). Only meaningful when the host IS a page. --%>
+          <button
+            :if={@host_type == :page and @host_id}
+            type="button"
+            id={"#{@id}-crystallize-btn"}
+            phx-click="crystallize"
+            phx-target={@myself}
+            class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+            title="Clone this conversation's blocks onto the page (copy, with provenance)"
+          >
+            <.icon name="hero-sparkles-micro" class="size-3" /> Crystallize into Page
+          </button>
           <%!-- The host's grounded voice: a voice, not a person (PLAN-010 §39). --%>
           <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-notion-blue/10 text-notion-blue"
@@ -468,6 +481,41 @@ defmodule ConceptWeb.ChatComponent do
         {:error, form} ->
           {:noreply, assign(socket, :message_form, form)}
       end
+    end
+  end
+
+  @impl true
+  def handle_event("crystallize", _params, socket) do
+    # Talk → document: clone the conversation's message blocks onto the host page
+    # (copy + provenance, idempotent — BUG-068). Page-hosted only; target = host.
+    cond do
+      is_nil(socket.assigns.current_user) ->
+        {:noreply, put_flash(socket, :error, "You must sign in to crystallize")}
+
+      socket.assigns[:host_type] != :page or is_nil(socket.assigns[:host_id]) ->
+        {:noreply, socket}
+
+      true ->
+        case Concept.Knowledge.Chat.crystallize_conversation(
+               socket.assigns.conversation.id,
+               socket.assigns.host_id,
+               socket.assigns[:workspace_id],
+               actor: socket.assigns.current_user,
+               tenant: socket.assigns[:workspace_id]
+             ) do
+          {:ok, block_ids} ->
+            send(self(), {:conversation_crystallized, socket.assigns.host_id})
+
+            {:noreply,
+             put_flash(
+               socket,
+               :info,
+               "Crystallized #{length(block_ids)} block(s) onto the page."
+             )}
+
+          {:error, _reason} ->
+            {:noreply, put_flash(socket, :error, "Could not crystallize this conversation.")}
+        end
     end
   end
 
