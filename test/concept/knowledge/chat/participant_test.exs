@@ -106,14 +106,23 @@ defmodule Concept.Knowledge.Chat.ParticipantTest do
     test "sending twice keeps a single participant (idempotent)", ctx do
       %{user: u, workspace: ws} = ctx
 
-      {:ok, m1} =
-        Chat.create_message(%{text: "one", addresses_host: false}, actor: u, tenant: ws.id)
+      # Send two messages into the same host conversation (the setup-created
+      # one) by addressing a fresh page host twice.
+      {:ok, page} = Concept.Pages.create_page("Topic", ws.id, nil, actor: u, tenant: ws.id)
 
-      {:ok, _m2} =
-        Chat.create_message(%{text: "two", conversation_id: m1.conversation_id, addresses_host: false},
+      {:ok, m1} =
+        Chat.create_message(%{text: "one", host_type: :page, host_id: page.id, addresses_host: false},
           actor: u,
           tenant: ws.id
         )
+
+      {:ok, m2} =
+        Chat.create_message(%{text: "two", host_type: :page, host_id: page.id, addresses_host: false},
+          actor: u,
+          tenant: ws.id
+        )
+
+      assert m1.conversation_id == m2.conversation_id
 
       {:ok, participants} =
         Chat.participants_for_conversation(m1.conversation_id, actor: u, tenant: ws.id)
