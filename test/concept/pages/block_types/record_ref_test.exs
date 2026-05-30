@@ -94,7 +94,8 @@ defmodule Concept.Pages.BlockTypes.RecordRefTest do
     test "renders an unlinked placeholder when record_id is nil", ctx do
       block = %Concept.Pages.Block{workspace_id: ctx.ws, props: %{"record_id" => nil}}
       html = render_block(block)
-      assert html =~ "Unlinked"
+      assert html =~ "Link a record"
+      assert html =~ "open_record_picker"
     end
 
     test "renders an unlinked placeholder for a missing record", ctx do
@@ -104,7 +105,8 @@ defmodule Concept.Pages.BlockTypes.RecordRefTest do
       }
 
       html = render_block(block)
-      assert html =~ "Unlinked"
+      assert html =~ "Link a record"
+      assert html =~ "open_record_picker"
     end
   end
 
