@@ -41,7 +41,9 @@ defmodule ConceptWeb.InboxLiveTest do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/inbox")
 
     assert has_element?(view, "#inbox-list")
-    assert render(view) =~ "No conversations yet"
+    # Empty state uses CSS `hidden only:block`, so its text is always in the DOM;
+    # the meaningful signal is the ABSENCE of conversation rows (the `<a>` items).
+    refute has_element?(view, "#inbox-list > a")
   end
 
   test "inbox lists a conversation the user participates in", %{conn: conn, user: user, ws: ws} do
@@ -57,24 +59,33 @@ defmodule ConceptWeb.InboxLiveTest do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/inbox")
 
     assert has_element?(view, "#inbox-list")
-    refute render(view) =~ "No conversations yet"
+    # A real conversation row is present (an `<a>` stream item), and it carries
+    # its host context.
+    assert has_element?(view, "#inbox-list > a")
     assert render(view) =~ "About this workspace"
   end
 
   test "inbox re-streams on inbox_activity broadcast", %{conn: conn, user: user, ws: ws} do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/inbox")
-    assert render(view) =~ "No conversations yet"
+    refute has_element?(view, "#inbox-list > a")
 
-    {:ok, _message} =
+    {:ok, message} =
       Chat.create_message(
         %{text: "Ping", host_type: :workspace, addresses_host: false},
         actor: user,
         tenant: ws.id
       )
 
-    # The BroadcastInbox change fans out {:inbox_activity, _} to inbox:<user_id>,
-    # which the LiveView subscribes to. Give the async broadcast a moment.
-    :timer.sleep(100)
-    refute render(view) =~ "No conversations yet"
+    # Drive the handler deterministically: broadcast the same payload the domain
+    # fans out via BroadcastInbox. This exercises the LiveView's re-stream path
+    # (the cross-process after_action broadcast is covered end-to-end in browser).
+    Phoenix.PubSub.broadcast(
+      Concept.PubSub,
+      "inbox:#{user.id}",
+      {:inbox_activity, %{conversation_id: message.conversation_id, message_id: message.id}}
+    )
+
+    assert render(view) =~ "About this workspace"
+    assert has_element?(view, "#inbox-list > a")
   end
 end

@@ -84,7 +84,7 @@ defmodule ConceptWeb.InboxLive do
         </div>
 
         <div id="inbox-list" phx-update="stream" class="flex flex-col divide-y divide-notion-divider">
-          <div class="hidden only:block py-12 text-center text-notion-text-light">
+          <div id="inbox-empty" class="hidden only:block py-12 text-center text-notion-text-light">
             <.icon name="hero-inbox" class="size-8 mx-auto mb-2 opacity-50" />
             <p>No conversations yet. Start one from a page or the chat panel.</p>
           </div>

@@ -25,6 +25,7 @@ defmodule ConceptWeb.WorkspaceLive.ChatPanel do
       |> assign_new(:message_profile, fn -> :default end)
       |> assign_new(:initial_prompt, fn -> nil end)
       |> assign_new(:conversation_id, fn -> nil end)
+      |> assign_new(:current_page, fn -> nil end)
       |> assign_new(:scope_target_id, fn -> nil end)
 
     {:ok, socket}
@@ -111,6 +112,8 @@ defmodule ConceptWeb.WorkspaceLive.ChatPanel do
             message_profile={@message_profile}
             initial_prompt={@initial_prompt}
             conversation_id={@conversation_id}
+            host_type={if(@current_page, do: :page, else: :workspace)}
+            host_id={@current_page && @current_page.id}
             scope_target_id={@scope_target_id}
           />
         </div>

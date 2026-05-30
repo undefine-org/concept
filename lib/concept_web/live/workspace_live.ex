@@ -666,6 +666,7 @@ defmodule ConceptWeb.WorkspaceLive do
         open={@chat_open?}
         initial_prompt={@chat_initial_prompt}
         conversation_id={@chat_conversation_id}
+        current_page={@current_page}
       />
 
       <.live_component
