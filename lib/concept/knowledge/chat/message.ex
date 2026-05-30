@@ -363,11 +363,10 @@ defmodule Concept.Knowledge.Chat.Message do
     # old `needs_response` (which fired on EVERY user message — the reflex).
     # The agent-turn budget conjunct lands in Wave 4 (FEAT-078).
     calculate :needs_host_response, :boolean do
-      calculation
-        expr(
-          source == :user and addresses_host and not exists(response) and
-            conversation.agent_turn_budget > 0
-        )
+      calculation expr(
+                    source == :user and addresses_host and not exists(response) and
+                      conversation.agent_turn_budget > 0
+                  )
     end
   end
 end

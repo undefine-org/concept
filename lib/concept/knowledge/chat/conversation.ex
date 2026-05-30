@@ -61,13 +61,13 @@ defmodule Concept.Knowledge.Chat.Conversation do
     update :decrement_budget do
       description "Atomically consume one automatic agent/host turn from the budget (floored at 0)."
       accept []
-      change atomic_update(:agent_turn_budget, expr(max(agent_turn_budget - 1, 0)))
+      change atomic_update(:agent_turn_budget, expr(fragment("GREATEST(? - 1, 0)", agent_turn_budget)))
     end
 
     update :replenish_budget do
       description "Reset the agent-turn budget when a human re-engages the conversation."
       accept []
-      change atomic_update(:agent_turn_budget, expr(^@default_budget))
+      change set_attribute(:agent_turn_budget, @default_budget)
     end
 
     read :my_conversations do

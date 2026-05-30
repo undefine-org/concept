@@ -37,6 +37,7 @@ defmodule Concept.Pages do
       define :refresh_lock
       define :get_block, action: :read, get_by: :id
       define :list_for_page, args: [:page_id]
+      define :list_for_message, action: :list_for_message, args: [:message_id]
       define :first_block_for_page, action: :first_for_page, args: [:page_id]
     end
   end

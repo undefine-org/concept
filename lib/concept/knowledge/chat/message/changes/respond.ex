@@ -132,6 +132,12 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
     profile_name = message.profile || :default
     profile = Concept.Knowledge.Profiles.get!(profile_name)
 
+    # Consume one automatic turn from the conversation's budget (PLAN-010 §B):
+    # this host turn is now in flight. When the budget hits 0, future
+    # `needs_host_response` is false and the trigger stops firing — bounding
+    # agent↔agent loops. Best-effort; never fail the response on a budget write.
+    decrement_budget(message.conversation_id, context.actor, message.workspace_id)
+
     # ── Retrieval phase (BUG-052 / BUG-053) ──────────────────────────────
     # Ground the answer in workspace content before generation. Without this
     # the chat is a bare tool-calling loop: no citations, empty search_trace,
@@ -298,6 +304,26 @@ defmodule Concept.Knowledge.Chat.Message.Changes.Respond do
   end
 
   defp scope_opts(_message, _context), do: []
+
+  # Best-effort atomic budget decrement for the in-flight host turn.
+  defp decrement_budget(conversation_id, actor, tenant) do
+    with {:ok, conversation} <-
+           Concept.Knowledge.Chat.get_conversation(conversation_id,
+             actor: actor,
+             tenant: tenant,
+             authorize?: false
+           ) do
+      Concept.Knowledge.Chat.decrement_budget(conversation,
+        actor: actor,
+        tenant: tenant,
+        authorize?: false
+      )
+    end
+
+    :ok
+  rescue
+    _ -> :ok
+  end
 
   defp trace_entry(hit) do
     %{

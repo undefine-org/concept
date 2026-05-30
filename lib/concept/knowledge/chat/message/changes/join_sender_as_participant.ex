@@ -18,7 +18,7 @@ defmodule Concept.Knowledge.Chat.Message.Changes.JoinSenderAsParticipant do
 
   @impl true
   def change(changeset, _opts, context) do
-    Ash.Changeset.after_action(changeset, fn changeset, message ->
+    Ash.Changeset.after_action(changeset, fn _changeset, message ->
       maybe_join(message, context)
       {:ok, message}
     end)
