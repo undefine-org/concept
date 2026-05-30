@@ -50,6 +50,7 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:agent_responding, fn -> false end)
         |> assign_new(:tool_data_warning_shown?, fn -> false end)
         |> assign_new(:has_messages, fn -> false end)
+        |> assign_new(:participants, fn -> [] end)
         |> stream(:conversations, conversations)
         |> stream(:messages, [])
         |> assign_message_form()
@@ -64,7 +65,17 @@ defmodule ConceptWeb.ChatComponent do
           load_conversation(socket, socket.assigns.conversation_id)
 
         !socket.assigns[:conversation_id] && socket.assigns.conversation ->
-          clear_conversation(socket)
+              if socket.assigns[:conversation] do
+      ConceptWeb.Endpoint.unsubscribe("chat:messages:#{socket.assigns.conversation.id}")
+    end
+
+    socket
+    |> assign(:conversation, nil)
+    |> assign(:participants, [])
+    |> assign(:agent_responding, false)
+    |> assign(:has_messages, false)
+    |> stream(:messages, [], reset: true)
+    |> assign_message_form()(socket)
 
         true ->
           socket
@@ -258,6 +269,44 @@ defmodule ConceptWeb.ChatComponent do
           <span>AshAi is responding…</span>
         </div>
 
+        <div
+          :if={@conversation}
+          id={"#{@id}-participant-rail"}
+          class="flex flex-wrap items-center gap-2 px-4 py-2 border-t border-notion-divider bg-notion-sidebar/40"
+        >
+          <span class="text-xs uppercase tracking-wide text-notion-text-light mr-1">In this conversation</span>
+          <%!-- The host's grounded voice: a voice, not a person (PLAN-010 §39). --%>
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-notion-blue/10 text-notion-blue"
+            title="The host's grounded AI voice"
+          >
+            <.icon name="hero-sparkles-micro" class="size-3" />
+            {host_voice_name(@host_type)}
+          </span>
+          <span
+            :for={participant <- @participants}
+            class={[
+              "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs",
+              participant.kind == :agent && "bg-violet-100 text-violet-700",
+              participant.kind != :agent && "bg-notion-sidebar text-notion-text"
+            ]}
+            title={participant_name(participant)}
+          >
+            <.icon
+              :if={participant.kind == :agent}
+              name="hero-cpu-chip-micro"
+              class="size-3 text-violet-500"
+            />
+            <span
+              :if={participant.kind != :agent}
+              class="inline-flex items-center justify-center size-4 rounded-full bg-notion-blue text-white text-[10px] font-semibold"
+            >
+              {participant_initial(participant)}
+            </span>
+            {participant_name(participant)}
+          </span>
+        </div>
+
         <div class="ora-chat-input-row">
           <.form
             :let={form}
@@ -381,6 +430,33 @@ defmodule ConceptWeb.ChatComponent do
     |> assign(:has_messages, false)
     |> stream(:messages, [], reset: true)
     |> assign_message_form()
+  end
+
+  # Participant rail (PLAN-010 §6.2). Participants ARE memberships (humans &
+  # external agents). The host's grounded voice has NO participant row by design
+  # (§39) — it's rendered as a synthetic entry from the conversation's host_type.
+  defp load_participants(socket, conversation_id) do
+    Concept.Knowledge.Chat.participants_for_conversation!(conversation_id,
+      actor: socket.assigns.current_user,
+      tenant: socket.assigns[:workspace_id],
+      load: [:kind, :membership]
+    )
+  rescue
+    _ -> []
+  end
+
+  defp participant_name(%{membership: %{display_name: name}}) when is_binary(name) and name != "",
+    do: name
+
+  defp participant_name(%{kind: :agent}), do: "Agent"
+  defp participant_name(_), do: "Member"
+
+  defp participant_initial(participant) do
+    participant
+    |> participant_name()
+    |> String.first()
+    |> Kernel.||("?")
+    |> String.upcase()
   end
 
   defp get_current_conversation_id(socket) do
