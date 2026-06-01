@@ -50,16 +50,6 @@ defmodule ConceptWeb.ChatComponent do
 
     socket =
       if !socket.assigns[:initialized] do
-        conversations =
-          if is_nil(socket.assigns.current_user) or is_nil(socket.assigns[:workspace_id]) do
-            []
-          else
-            Concept.Knowledge.Chat.my_conversations!(
-              actor: socket.assigns.current_user,
-              tenant: socket.assigns.workspace_id
-            )
-          end
-
         # B1 (FUP-UX): resume the host's existing conversation on open instead
         # of dropping the user into a blank seed state. The panel reopened onto
         # the SAME {host_type, host_id} should show the live thread, not lose
@@ -85,7 +75,10 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:mention_query, fn -> nil end)
         |> assign_new(:mention_suggestions, fn -> [] end)
         |> assign_new(:draft_text, fn -> "" end)
-        |> stream(:conversations, conversations)
+        |> assign_new(:collapsed_hosts, fn -> MapSet.new() end)
+        |> assign_new(:host_picker_open, fn -> false end)
+        |> assign_new(:host_picker_prebound, fn -> nil end)
+        |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
       else
@@ -152,37 +145,114 @@ defmodule ConceptWeb.ChatComponent do
     <div id={@id} class="flex bg-white min-h-full max-h-full">
       <div
         :if={!@hide_sidebar}
-        class="w-72 border-r border-notion-divider bg-notion-sidebar flex flex-col overflow-y-auto"
+        class="w-60 shrink-0 border-r border-notion-divider bg-notion-sidebar flex flex-col overflow-y-auto"
       >
-        <div class="py-4 px-6">
-          <div class="text-sm font-semibold text-notion-text-light mb-3">Conversations</div>
+        <div class="py-4 px-3">
+          <%!-- The global host-picker: starting a conversation = choosing a
+                host (workspace/page/person). Resolves to create_message. --%>
           <button
-            phx-click="new_chat"
+            phx-click="open_host_picker"
             phx-target={@myself}
-            class="ora-btn ora-btn--primary w-full justify-center mb-3"
+            id={"#{@id}-new-conversation"}
+            class="ora-btn ora-btn--ghost w-full justify-start gap-2 mb-3 text-notion-text-light"
           >
-            <.icon name="hero-plus-micro" class="size-4" /> New Chat
+            <.icon name="hero-plus-micro" class="size-4" /> New conversation
           </button>
-          <ul class="flex flex-col-reverse" phx-update="stream" id={"#{@id}-conversations-list"}>
-            <%= for {id, conversation} <- @streams.conversations do %>
-              <li id={id}>
-                <button
-                  phx-click="select_conversation"
-                  phx-target={@myself}
-                  phx-value-id={conversation.id}
-                  class={[
-                    "block py-2 px-3 transition border-l-2 pl-2 mb-1 w-full text-left text-sm",
-                    if(@conversation && @conversation.id == conversation.id,
-                      do: "border-notion-blue font-medium text-notion-text",
-                      else: "border-transparent text-notion-text-light hover:text-notion-text"
-                    )
-                  ]}
-                >
-                  {build_conversation_title_string(conversation.title)}
-                </button>
-              </li>
-            <% end %>
-          </ul>
+
+          <%!-- Adaptive rail (T1): host › conversation, grouped by
+                Concept.Chat.RailModel. ≥2 convos → a collapsible host category;
+                exactly 1 → the conversation inline with a muted in-<host> ref. --%>
+          <nav id={"#{@id}-rail"} class="flex flex-col gap-4" aria-label="Conversations">
+            <div :for={section <- rail_sections(@rail_groups)} class="flex flex-col">
+              <div class="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wide text-notion-text-light">
+                {Concept.Chat.RailModel.section_label(section.section)}
+              </div>
+              <div :for={group <- section.groups} class="flex flex-col">
+                <%= if group.mode == :category do %>
+                  <% collapsed = MapSet.member?(@collapsed_hosts, host_key(group)) %>
+                  <div class="group/host flex items-center gap-1 px-2 py-1 rounded hover:bg-notion-sidebar-hover">
+                    <button
+                      type="button"
+                      phx-click="toggle_host_category"
+                      phx-value-key={host_key(group)}
+                      phx-target={@myself}
+                      class="flex items-center gap-1 flex-1 min-w-0 text-left text-sm font-medium text-notion-text"
+                    >
+                      <.icon
+                        name={if(collapsed, do: "hero-chevron-right-micro", else: "hero-chevron-down-micro")}
+                        class="size-3.5 text-notion-text-light shrink-0"
+                      />
+                      <.icon name={Concept.Chat.RailModel.glyph(group.host_type)} class="size-4 shrink-0 text-notion-text-light" />
+                      <span class="truncate">{host_group_label(group, assigns)}</span>
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="open_host_picker"
+                      phx-value-host-type={group.host_type}
+                      phx-value-host-id={group.host_id}
+                      phx-target={@myself}
+                      class="opacity-0 group-hover/host:opacity-100 transition shrink-0 text-notion-text-light hover:text-notion-text"
+                      title={"New topic about #{host_group_label(group, assigns)}"}
+                      aria-label={"New conversation about #{host_group_label(group, assigns)}"}
+                    >
+                      <.icon name="hero-plus-micro" class="size-3.5" />
+                    </button>
+                  </div>
+                  <ul :if={!collapsed} class="ml-4 border-l border-notion-divider pl-2 flex flex-col">
+                    <li :for={conversation <- group.conversations}>
+                      <button
+                        phx-click="select_conversation"
+                        phx-target={@myself}
+                        phx-value-id={conversation.id}
+                        class={[
+                          "block w-full text-left py-1 px-2 rounded text-sm truncate transition",
+                          conv_selected?(@conversation, conversation) &&
+                            "bg-notion-sidebar-hover font-medium text-notion-text",
+                          !conv_selected?(@conversation, conversation) &&
+                            "text-notion-text-light hover:text-notion-text"
+                        ]}
+                      >
+                        {rail_conversation_title(conversation)}
+                      </button>
+                    </li>
+                  </ul>
+                <% else %>
+                  <% conversation = hd(group.conversations) %>
+                  <button
+                    phx-click="select_conversation"
+                    phx-target={@myself}
+                    phx-value-id={conversation.id}
+                    class={[
+                      "group/inline flex flex-col px-2 py-1 rounded text-left transition",
+                      conv_selected?(@conversation, conversation) && "bg-notion-sidebar-hover",
+                      !conv_selected?(@conversation, conversation) && "hover:bg-notion-sidebar-hover"
+                    ]}
+                  >
+                    <span class="flex items-center gap-1.5 min-w-0">
+                      <.icon name={Concept.Chat.RailModel.glyph(group.host_type)} class="size-4 shrink-0 text-notion-text-light" />
+                      <span class={[
+                        "truncate text-sm",
+                        conv_selected?(@conversation, conversation) && "font-medium text-notion-text",
+                        !conv_selected?(@conversation, conversation) && "text-notion-text"
+                      ]}>
+                        {rail_conversation_title(conversation)}
+                      </span>
+                    </span>
+                    <%!-- the muted in-<host> ref, revealed on hover (§1.1) --%>
+                    <span
+                      :if={inline_host_ref(group, assigns)}
+                      class="ml-5 text-xs text-notion-text-light opacity-0 group-hover/inline:opacity-100 transition truncate"
+                    >
+                      in {inline_host_ref(group, assigns)}
+                    </span>
+                  </button>
+                <% end %>
+              </div>
+            </div>
+            <p :if={@rail_groups == []} class="px-2 text-sm text-notion-text-light">
+              No conversations yet.
+            </p>
+          </nav>
         </div>
       </div>
 
@@ -605,6 +675,28 @@ defmodule ConceptWeb.ChatComponent do
   end
 
   @impl true
+  def handle_event("open_host_picker", params, socket) do
+    # T1: open the host-picker (full impl lands with t1-host-picker). A host may
+    # be pre-bound when launched from a category's "+". Stubbed to a no-op-safe
+    # assign so the rail's buttons are wired and testable now.
+    {:noreply,
+     socket
+     |> assign(:host_picker_open, true)
+     |> assign(:host_picker_prebound, prebound_host(params))}
+  end
+
+  def handle_event("toggle_host_category", %{"key" => key}, socket) do
+    collapsed = socket.assigns[:collapsed_hosts] || MapSet.new()
+
+    collapsed =
+      if MapSet.member?(collapsed, key),
+        do: MapSet.delete(collapsed, key),
+        else: MapSet.put(collapsed, key)
+
+    {:noreply, assign(socket, :collapsed_hosts, collapsed)}
+  end
+
+  @impl true
   def handle_event("seed_prompt", %{"prompt" => prompt}, socket) do
     # One-click: a seed prompt sends immediately (B6/C7), same path as Send.
     submit_message(socket, %{"text" => prompt})
@@ -859,7 +951,9 @@ defmodule ConceptWeb.ChatComponent do
         socket
       end
 
-    stream_insert(socket, :conversations, conversation)
+    # A new/renamed conversation may flip a host inline→category, so re-derive
+    # the whole rail rather than splicing one item (the rail is a projection).
+    assign_rail(socket)
   end
 
   defp handle_broadcast(socket, _), do: socket
@@ -871,6 +965,93 @@ defmodule ConceptWeb.ChatComponent do
       is_binary(title) && String.length(title) <= 25 -> title
     end
   end
+
+  # ── Adaptive rail (T1) ───────────────────────────────────────────────────
+  # The rail is a PROJECTION over the conversation list, not a stream: it must
+  # group the whole set (streams aren't enumerable). We hold the raw list for
+  # re-derivation and a {page_id => title} label map for inline/category labels.
+  defp assign_rail(socket) do
+    conversations =
+      if is_nil(socket.assigns[:current_user]) or is_nil(socket.assigns[:workspace_id]) do
+        []
+      else
+        Concept.Knowledge.Chat.my_conversations!(
+          actor: socket.assigns.current_user,
+          tenant: socket.assigns.workspace_id
+        )
+      end
+
+    socket
+    |> assign(:rail_conversations, conversations)
+    |> assign(:rail_groups, Concept.Chat.RailModel.group_by_host(conversations))
+    |> assign(:page_labels, page_label_map(socket, conversations))
+  end
+
+  # Resolve page-host titles once (a single list_tree read), keyed by page id.
+  # Pages not found fall back to a generic label at render.
+  defp page_label_map(socket, conversations) do
+    needs_pages? = Enum.any?(conversations, &(host_type_of(&1) == :page))
+
+    with true <- needs_pages?,
+         %_{} = user <- socket.assigns[:current_user],
+         ws when not is_nil(ws) <- socket.assigns[:workspace_id],
+         {:ok, pages} <- Concept.Pages.list_tree(actor: user, tenant: ws) do
+      pages
+      |> flatten_pages()
+      |> Map.new(fn p -> {p.id, p.title} end)
+    else
+      _ -> %{}
+    end
+  end
+
+  defp flatten_pages(pages) do
+    Enum.flat_map(pages, fn p ->
+      [p | flatten_pages(child_pages(p))]
+    end)
+  end
+
+  defp child_pages(%{children: children}) when is_list(children), do: children
+  defp child_pages(_), do: []
+
+  defp host_type_of(%{host_type: t}), do: t
+  defp host_type_of(%{"host_type" => t}), do: t
+  defp host_type_of(_), do: :workspace
+
+  # Display sections in Hostable.types() order, each carrying its host groups.
+  defp rail_sections(groups) do
+    groups
+    |> Enum.chunk_by(&Concept.Chat.RailModel.section_for(&1.host_type))
+    |> Enum.map(fn chunk ->
+      %{section: Concept.Chat.RailModel.section_for(hd(chunk).host_type), groups: chunk}
+    end)
+  end
+
+  defp host_key(group), do: "#{group.host_type}:#{group.host_id || "_"}"
+
+  defp prebound_host(%{"host-type" => t, "host-id" => id}) when is_binary(t),
+    do: %{host_type: t, host_id: id}
+
+  defp prebound_host(_), do: nil
+
+  defp conv_selected?(nil, _conversation), do: false
+  defp conv_selected?(current, conversation), do: current.id == conversation.id
+
+  defp rail_conversation_title(%{title: title}), do: build_conversation_title_string(title)
+  defp rail_conversation_title(_), do: "Untitled conversation"
+
+  # The label for a host category header / inline host glyph row.
+  defp host_group_label(%{host_type: :workspace}, _assigns), do: "Workspace"
+
+  defp host_group_label(%{host_type: :page, host_id: id}, assigns) do
+    Map.get(assigns[:page_labels] || %{}, id) || "Page"
+  end
+
+  defp host_group_label(%{host_type: type}, _assigns), do: "#{type}"
+
+  # The muted "in <host>" ref shown on hover for an inline (single-conversation)
+  # host. Nil for the workspace host (no useful ref — it's the default place).
+  defp inline_host_ref(%{host_type: :workspace}, _assigns), do: nil
+  defp inline_host_ref(group, assigns), do: host_group_label(group, assigns)
 
   defp assign_message_form(socket) do
     # Build base arguments with optional scope+profile from assigns
