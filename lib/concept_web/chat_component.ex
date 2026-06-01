@@ -243,67 +243,46 @@ defmodule ConceptWeb.ChatComponent do
             phx-update="stream"
             class="ora-chat-messages"
           >
+              <%!-- Dispatch on Concept.Chat.MessageKind.render_mode/1 — the single
+                    source of truth. Host replies SEEP in (fused continuation,
+                    no avatar); humans/agents take a row. Raw tool plumbing never
+                    renders in the stream — it lives behind "Why this answer?". --%>
             <%= for {id, message} <- @streams.messages do %>
+              <% mode = Concept.Chat.MessageKind.render_mode(message) %>
               <div
                 id={id}
+                data-render-mode={mode}
                 class={[
                   "ora-chat-message",
-                  sender_kind(message) == :human && "ora-chat-message--user",
-                  sender_kind(message) in [:agent, :host] && "ora-chat-message--agent"
+                  mode == :human_row && "ora-chat-message--user",
+                  mode == :agent_row && "ora-chat-message--agent",
+                  mode in [:host_seep, :host_note] && "ora-chat-message--seep"
                 ]}
               >
+                <span :if={mode == :human_row} class="ora-chat-avatar">
+                  <.icon name="hero-user-micro" class="size-4 text-notion-text-light" />
+                </span>
                 <span
-                  :if={sender_kind(message) in [:agent, :host]}
+                  :if={mode == :agent_row}
                   class="ora-chat-avatar"
                   title={sender_label(message, assigns)}
                 >
-                  <.icon
-                    name={
-                      if(sender_kind(message) == :host,
-                        do: "hero-sparkles-micro",
-                        else: "hero-cpu-chip-micro"
-                      )
-                    }
-                    class={[
-                      "size-4",
-                      sender_kind(message) == :host && "text-notion-blue",
-                      sender_kind(message) == :agent && "text-violet-500"
-                    ]}
-                  />
+                  <.icon name="hero-cpu-chip-micro" class="size-4 text-violet-500" />
                 </span>
-                <span :if={sender_kind(message) == :human} class="ora-chat-avatar">
-                  <.icon name="hero-user-micro" class="size-4 text-notion-text-light" />
-                </span>
-                <div class="flex flex-col gap-1 min-w-0">
+                <div class="flex flex-col gap-1 min-w-0 flex-1">
+                  <%!-- Host seep: a quiet "from this <host>" voice label, not a
+                        person's name. The blue rail comes from --seep. --%>
+                  <div
+                    :if={mode in [:host_seep, :host_note]}
+                    class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
+                  >
+                    <.icon name="hero-sparkles-micro" class="size-3" />
+                    <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
+                  </div>
                   <div :if={String.trim(message.text || "") != ""} class="ora-chat-bubble">
                     {to_markdown(message.text || "")}
                   </div>
-                  <div
-                    :if={sender_kind(message) in [:agent, :host] && tool_calls(message) != []}
-                    class="flex flex-wrap gap-1"
-                  >
-                    <span :for={tool_call <- tool_calls(message)} class="ora-chat-toolcall">
-                      {tool_call.name}<span :if={tool_call.arguments != %{}}> ({tool_call.arguments_preview})</span>
-                    </span>
-                  </div>
-                  <div
-                    :if={sender_kind(message) in [:agent, :host] && tool_results(message) != []}
-                    class="flex flex-col gap-1"
-                  >
-                    <div
-                      :for={tool_result <- tool_results(message)}
-                      class={[
-                        "ora-chat-toolresult",
-                        tool_result.is_error && "ora-chat-toolresult--error"
-                      ]}
-                    >
-                      <span class="font-semibold">
-                        {if tool_result.is_error, do: "error", else: "result"}
-                      </span>
-                      <span :if={tool_result.name}> ({tool_result.name})</span>: {tool_result.content_preview}
-                    </div>
-                  </div>
-                  <div :if={sender_kind(message) in [:agent, :host]} class="mt-1">
+                  <div :if={Concept.Chat.MessageKind.host?(message)} class="mt-1">
                     <.why_this_answer message={message} />
                   </div>
                 </div>
@@ -879,20 +858,6 @@ defmodule ConceptWeb.ChatComponent do
       "mentions" => Enum.map(socket.assigns[:pending_mentions] || [], & &1.id),
       "addresses_host" => socket.assigns[:addresses_host] != false
     }
-  end
-
-  defp tool_calls(message), do: safe_extract(message).tool_calls
-
-  defp tool_results(message), do: safe_extract(message).tool_results
-
-  defp safe_extract(message) do
-    case @chat_ui_tools.extract(message) do
-      {:ok, extracted} ->
-        extracted
-
-      {:error, _} ->
-        %{tool_calls: [], tool_results: []}
-    end
   end
 
   defp maybe_warn_tool_data(socket, messages) when is_list(messages) do
