@@ -311,7 +311,7 @@ defmodule ConceptWeb.PageEditorLive do
     ws_id = socket.assigns.workspace.id
     page_id = socket.assigns.page_id
 
-    case Pages.create_block(page_id, :paragraph, ws_id, nil, actor: user, tenant: ws_id) do
+    case Pages.create_block(:page, page_id, :paragraph, ws_id, nil, actor: user, tenant: ws_id) do
       {:ok, block} ->
         {:noreply,
          socket
@@ -351,7 +351,7 @@ defmodule ConceptWeb.PageEditorLive do
                 Concept.Pages.FractionalIndex.after_(source.position)
               end
 
-            case Pages.create_block(page_id, type_atom, ws_id, nil, %{position: position},
+            case Pages.create_block(:page, page_id, type_atom, ws_id, nil, %{position: position},
                    actor: user,
                    tenant: ws_id
                  ) do

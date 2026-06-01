@@ -15,8 +15,6 @@ defmodule Concept.Knowledge.Workers.IngestPage do
 
   require Logger
 
-  alias Concept.Pages
-
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"op" => "upsert"} = args}) do
     {source_type, source_id} = source_ref(args)
@@ -40,49 +38,43 @@ defmodule Concept.Knowledge.Workers.IngestPage do
   defp source_ref(%{"source_type" => t, "source_id" => id}), do: {t, id}
   defp source_ref(%{"page_id" => page_id}), do: {"page", page_id}
 
-  defp ingest("page", page_id, workspace_id) do
-    actor = %{system?: true}
+  # Dispatch ingest through the Concept.Containable registry: each container
+  # type describes itself as a knowledge source via `ingest_descriptor/2`, so
+  # this worker needs no per-type clause. Adding a new container = implement the
+  # callback + register it; zero edits here.
+  defp ingest(source_type, source_id, workspace_id) when is_binary(source_type) do
+    case container_module(source_type) do
+      nil ->
+        Logger.error("Unknown ingest source_type #{inspect(source_type)}; skipping")
+        {:error, :unknown_source_type}
 
-    with {:ok, page} <- Pages.get_page(page_id, actor: actor, tenant: workspace_id),
-         {:ok, blocks} <- Pages.list_for_page(page_id, actor: actor, tenant: workspace_id) do
-      do_ingest(workspace_id, "page:#{page_id}", page.title || "Untitled",
-        page: page,
-        blocks: blocks,
-        workspace_id: workspace_id
-      )
-    else
-      {:error, %Ash.Error.Query.NotFound{}} ->
-        Logger.info("Page #{page_id} not found for workspace #{workspace_id}; skipping ingest")
+      mod ->
+        dispatch_ingest(mod, source_type, source_id, workspace_id)
+    end
+  end
+
+  defp dispatch_ingest(mod, source_type, source_id, workspace_id) do
+    case mod.ingest_descriptor(source_id, workspace_id) do
+      {:ok, %{source_id: sid, body: body, chunker_opts: opts}} ->
+        do_ingest(workspace_id, sid, body, opts)
+
+      :skip ->
+        Logger.info("#{source_type}:#{source_id} has nothing to ingest; skipping")
         :ok
 
       {:error, reason} = error ->
-        Logger.error("Failed to ingest page #{page_id}: #{inspect(reason)}")
+        Logger.error("Failed to ingest #{source_type}:#{source_id}: #{inspect(reason)}")
         error
     end
   end
 
-  defp ingest("message", message_id, workspace_id) do
-    actor = %{system?: true}
-
-    case Pages.list_for_message(message_id, actor: actor, tenant: workspace_id) do
-      {:ok, []} ->
-        # No rich blocks (text-only message): nothing to ingest as blocks.
-        :ok
-
-      {:ok, blocks} ->
-        # A message has no title; use a stable breadcrumb. The chunker rebuilds
-        # chunk text from the blocks, so the document body is just non-blank.
-        do_ingest(workspace_id, "message:#{message_id}", "Message",
-          blocks: blocks,
-          workspace_id: workspace_id,
-          message_id: message_id,
-          breadcrumbs: "Conversation"
-        )
-
-      {:error, reason} = error ->
-        Logger.error("Failed to ingest message #{message_id}: #{inspect(reason)}")
-        error
-    end
+  # Resolve a source_type string to its Containable module. The discriminator
+  # atom is registry-validated, so `to_existing_atom` is safe (the atom exists
+  # whenever the module is registered).
+  defp container_module(source_type) do
+    Concept.Containable.module_for(String.to_existing_atom(source_type))
+  rescue
+    ArgumentError -> nil
   end
 
   defp do_ingest(workspace_id, source_id, body, chunker_opts) do

@@ -35,7 +35,7 @@ defmodule Concept.Pages.BlockEditableLockTest do
       Pages.create_page("Edit Lock", ws.id, nil, actor: owner, tenant: ws.id)
 
     {:ok, block} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: owner, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: owner, tenant: ws.id)
 
     %{owner: owner, ws: ws, block: block}
   end

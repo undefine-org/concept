@@ -40,6 +40,7 @@ defmodule Concept.Pages.Reactors.CreateColumns do
         end
 
       Pages.create_block(
+        :page,
         args.page_id,
         :columns,
         args.workspace_id,
@@ -75,6 +76,7 @@ defmodule Concept.Pages.Reactors.CreateColumns do
             child_props = %{"ratio" => ratio, "col_index" => idx}
 
             case Pages.create_block(
+                   :page,
                    args.page_id,
                    :column,
                    args.workspace_id,

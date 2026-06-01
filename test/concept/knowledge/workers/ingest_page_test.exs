@@ -37,7 +37,7 @@ defmodule Concept.Knowledge.Workers.IngestPageTest do
       )
 
     {:ok, _block} =
-      Pages.create_block(page.id, :paragraph, workspace.id, nil,
+      Pages.create_block(:page, page.id, :paragraph, workspace.id, nil,
         actor: user,
         tenant: workspace.id
       )
@@ -105,7 +105,13 @@ defmodule Concept.Knowledge.Workers.IngestPageTest do
         Concept.Pages.Block
         |> Ash.Changeset.for_create(
           :create_block,
-          %{message_id: msg.id, type: :paragraph, content: %{}, workspace_id: ws.id},
+          %{
+            container_type: :message,
+            container_id: msg.id,
+            type: :paragraph,
+            content: %{},
+            workspace_id: ws.id
+          },
           actor: user,
           tenant: ws.id
         )

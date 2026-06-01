@@ -33,6 +33,7 @@ defmodule Concept.Knowledge.BlockChunker do
         metadata: %{
           "page_id" => page && page.id,
           "message_id" => Keyword.get(opts, :message_id),
+          "record_id" => Keyword.get(opts, :record_id),
           "workspace_id" => workspace_id,
           "block_id" => pid,
           "block_ids" => ids,

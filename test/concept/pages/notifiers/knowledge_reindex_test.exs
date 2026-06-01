@@ -30,7 +30,7 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindexTest do
         Pages.create_page("Test Page", workspace.id, nil, actor: user, tenant: workspace.id)
 
       {:ok, _block} =
-        Pages.create_block(page.id, :paragraph, workspace.id, nil,
+        Pages.create_block(:page, page.id, :paragraph, workspace.id, nil,
           actor: user,
           tenant: workspace.id
         )
@@ -78,13 +78,13 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindexTest do
       Oban.drain_queue(queue: :knowledge_ingest)
 
       {:ok, _} =
-        Pages.create_block(page_a.id, :paragraph, workspace.id, nil,
+        Pages.create_block(:page, page_a.id, :paragraph, workspace.id, nil,
           actor: user,
           tenant: workspace.id
         )
 
       {:ok, _} =
-        Pages.create_block(page_b.id, :paragraph, workspace.id, nil,
+        Pages.create_block(:page, page_b.id, :paragraph, workspace.id, nil,
           actor: user,
           tenant: workspace.id
         )
@@ -133,7 +133,7 @@ defmodule Concept.Pages.Notifiers.KnowledgeReindexTest do
         Pages.create_page("Test Page", workspace.id, nil, actor: user, tenant: workspace.id)
 
       {:ok, block} =
-        Pages.create_block(page.id, :paragraph, workspace.id, nil,
+        Pages.create_block(:page, page.id, :paragraph, workspace.id, nil,
           actor: user,
           tenant: workspace.id
         )

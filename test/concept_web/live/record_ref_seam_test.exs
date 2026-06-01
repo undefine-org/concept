@@ -52,7 +52,7 @@ defmodule ConceptWeb.RecordRefSeamTest do
       )
 
     {:ok, block} =
-      Pages.create_block(page.id, :record_ref, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :record_ref, ws.id, nil, actor: user, tenant: ws.id)
 
     %{conn: conn, user: user, ws: ws, page: page, type: type, rec: rec, block: block}
   end

@@ -64,7 +64,7 @@ defmodule ConceptWeb.LockIndicatorTest do
     {:ok, page} = Pages.create_page("Lock Test", ws.id, nil, actor: user1, tenant: ws.id)
 
     {:ok, block} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user1, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user1, tenant: ws.id)
 
     {:ok,
      conn1: conn1, conn2: conn2, user1: user1, user2: user2, ws: ws, page: page, block: block}

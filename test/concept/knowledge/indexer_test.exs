@@ -52,7 +52,7 @@ defmodule Concept.Knowledge.IndexerTest do
 
   defp add_block(page, ws, user, text) do
     {:ok, block} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, block} = Pages.update_content(block, paragraph(text), actor: user, tenant: ws.id)
     block

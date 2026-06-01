@@ -54,7 +54,7 @@ defmodule ConceptWeb.Blocks.AiAnswerTest do
     {:ok, page} = Pages.create_page("AI Wiring Page", ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, block} =
-      Pages.create_block(page.id, :ai_answer, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :ai_answer, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, conn: conn, user: user, ws: ws, page: page, block: block}
   end

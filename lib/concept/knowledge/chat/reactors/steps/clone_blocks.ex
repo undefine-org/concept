@@ -87,7 +87,8 @@ defmodule Concept.Knowledge.Chat.Reactors.Steps.CloneBlocks do
 
   defp clone_block(block, page_id, new_parent_id, workspace_id, opts) do
     attrs = %{
-      page_id: page_id,
+      container_type: :page,
+      container_id: page_id,
       parent_block_id: new_parent_id,
       type: block.type,
       content: block.content || %{},

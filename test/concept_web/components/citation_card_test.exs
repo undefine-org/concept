@@ -27,6 +27,7 @@ defmodule ConceptWeb.Components.CitationCardTest do
     # Create a test block with content
     {:ok, block} =
       Pages.create_block(
+        :page,
         page.id,
         :paragraph,
         workspace.id,

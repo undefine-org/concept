@@ -17,6 +17,8 @@ defmodule Concept.Objects.Record do
     extensions: [AshArchival.Resource],
     notifiers: [Ash.Notifier.PubSub]
 
+  use Concept.Containable, type: :record
+
   postgres do
     table "records"
     repo Concept.Repo
@@ -211,5 +213,46 @@ defmodule Concept.Objects.Record do
       destination_attribute: :id
 
     has_many :outgoing_links, Concept.Objects.RecordLink, destination_attribute: :from_record_id
+
+    # The record's own detail body — a block tree it *owns* as a Containable.
+    # Distinct from `:page` above, which is a *reference* to a separate page a
+    # record points at (the project seam). Owning content ≠ referencing an entity.
+    has_many :blocks, Concept.Pages.Block,
+      destination_attribute: :container_id,
+      filter: expr(container_type == :record)
+  end
+
+  @doc """
+  Describe a record's detail body as a knowledge-ingest source: its title as
+  body, its block tree as chunker input. `:skip` when the body has no blocks
+  (the common case for a freshly created record). See
+  `Concept.Containable.ingest_descriptor/2`.
+  """
+  @impl Concept.Containable
+  def ingest_descriptor(record_id, workspace_id) do
+    actor = %{system?: true}
+
+    case Concept.Pages.list_for_container(:record, record_id, actor: actor, tenant: workspace_id) do
+      {:ok, []} ->
+        :skip
+
+      {:ok, blocks} ->
+        {:ok,
+         %{
+           source_id: "record:#{record_id}",
+           body: record_body(record_id, workspace_id),
+           chunker_opts: [blocks: blocks, workspace_id: workspace_id, record_id: record_id]
+         }}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp record_body(record_id, workspace_id) do
+    case Ash.get(__MODULE__, record_id, actor: %{system?: true}, tenant: workspace_id) do
+      {:ok, %{title: title}} when is_binary(title) and title != "" -> title
+      _ -> "Record"
+    end
   end
 end

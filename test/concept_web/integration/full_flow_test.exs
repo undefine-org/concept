@@ -32,10 +32,16 @@ defmodule ConceptWeb.Integration.FullFlowTest do
       assert page.title == "Roadmap"
 
       {:ok, b1} =
-        Concept.Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+        Concept.Pages.create_block(:page, page.id, :paragraph, ws.id, nil,
+          actor: user,
+          tenant: ws.id
+        )
 
       {:ok, b2} =
-        Concept.Pages.create_block(page.id, :heading_1, ws.id, nil, actor: user, tenant: ws.id)
+        Concept.Pages.create_block(:page, page.id, :heading_1, ws.id, nil,
+          actor: user,
+          tenant: ws.id
+        )
 
       {:ok, blocks} = Concept.Pages.list_for_page(page.id, actor: user, tenant: ws.id)
       assert length(blocks) == 2

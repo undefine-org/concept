@@ -24,7 +24,7 @@ defmodule Concept.Knowledge.Chat.CrystallizeTest do
     {:ok, [ws | _]} = Concept.Accounts.Workspace.for_user(user.id, actor: user)
     {:ok, page} = Pages.create_page("Target", ws.id, nil, actor: user, tenant: ws.id)
 
-    {:ok, conv} = Chat.create_conversation(%{workspace_id: ws.id}, actor: user, tenant: ws.id)
+    {:ok, _conv} = Chat.create_conversation(%{workspace_id: ws.id}, actor: user, tenant: ws.id)
 
     {:ok, msg} =
       Chat.create_message(%{text: "decision", addresses_host: false}, actor: user, tenant: ws.id)
@@ -34,7 +34,8 @@ defmodule Concept.Knowledge.Chat.CrystallizeTest do
       |> Ash.Changeset.for_create(
         :create_block,
         %{
-          message_id: msg.id,
+          container_type: :message,
+          container_id: msg.id,
           type: :paragraph,
           content: %{"text" => "ship it"},
           workspace_id: ws.id
@@ -69,7 +70,8 @@ defmodule Concept.Knowledge.Chat.CrystallizeTest do
 
     # Source message block is untouched (copy, not move).
     {:ok, reloaded_src} = Ash.get(Pages.Block, src.id, actor: u, tenant: ws.id)
-    assert reloaded_src.message_id != nil
+    assert reloaded_src.container_type == :message
+    assert reloaded_src.container_id != nil
   end
 
   test "crystallize preserves block hierarchy (parent before child, rewired)", ctx do
@@ -85,7 +87,13 @@ defmodule Concept.Knowledge.Chat.CrystallizeTest do
       Pages.Block
       |> Ash.Changeset.for_create(
         :create_block,
-        %{message_id: msg.id, type: :toggle, content: %{"text" => "parent"}, workspace_id: ws.id},
+        %{
+          container_type: :message,
+          container_id: msg.id,
+          type: :toggle,
+          content: %{"text" => "parent"},
+          workspace_id: ws.id
+        },
         actor: u,
         tenant: ws.id
       )
@@ -96,7 +104,8 @@ defmodule Concept.Knowledge.Chat.CrystallizeTest do
       |> Ash.Changeset.for_create(
         :create_block,
         %{
-          message_id: msg.id,
+          container_type: :message,
+          container_id: msg.id,
           parent_block_id: parent.id,
           type: :paragraph,
           content: %{"text" => "child"},

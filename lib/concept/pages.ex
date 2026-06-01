@@ -25,7 +25,15 @@ defmodule Concept.Pages do
     end
 
     resource Concept.Pages.Block do
-      define :create_block, args: [:page_id, :type, :workspace_id, {:optional, :parent_block_id}]
+      define :create_block,
+        args: [
+          :container_type,
+          :container_id,
+          :type,
+          :workspace_id,
+          {:optional, :parent_block_id}
+        ]
+
       define :update_content, args: [:content]
       define :update_props, args: [:props]
       define :evaluate_ai, args: [:prompt, {:optional, :scope}, {:optional, :profile}]
@@ -38,6 +46,11 @@ defmodule Concept.Pages do
       define :get_block, action: :read, get_by: :id
       define :list_for_page, args: [:page_id]
       define :list_for_message, action: :list_for_message, args: [:message_id]
+
+      define :list_for_container,
+        action: :list_for_container,
+        args: [:container_type, :container_id]
+
       define :first_block_for_page, action: :first_for_page, args: [:page_id]
     end
   end

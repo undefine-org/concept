@@ -35,7 +35,11 @@ defmodule Concept.Knowledge.GraphBuilder do
         name: block_name,
         source_id: "block:#{block.id}",
         collection_id: collection_id,
-        metadata: %{block_id: block.id, page_id: block.page_id, block_type: to_string(block.type)}
+        metadata: %{
+          block_id: block.id,
+          page_id: if(block.container_type == :page, do: block.container_id),
+          block_type: to_string(block.type)
+        }
       })
 
       # Block HAS_TYPE BlockType
@@ -111,7 +115,13 @@ defmodule Concept.Knowledge.GraphBuilder do
       Concept.Pages.Block
       |> Ash.read!(actor: actor, tenant: workspace_id)
 
-    blocks_by_page = Enum.group_by(blocks, & &1.page_id)
+    # Only page-container blocks belong to a page graph; message blocks carry
+    # no page (their knowledge source is the conversation). Group by the page
+    # they live in, dropping non-page containers.
+    blocks_by_page =
+      blocks
+      |> Enum.filter(&(&1.container_type == :page))
+      |> Enum.group_by(& &1.container_id)
 
     results =
       Enum.map(pages, fn page ->

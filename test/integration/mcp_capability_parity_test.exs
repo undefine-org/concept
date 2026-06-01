@@ -36,7 +36,7 @@ defmodule Concept.Integration.MCPCapabilityParityTest do
     {:ok, page} = Pages.create_page("Cap", ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, block} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     %{user: user, ws: ws, page: page, block: block}
   end

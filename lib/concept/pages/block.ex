@@ -23,22 +23,16 @@ defmodule Concept.Pages.Block do
     repo Concept.Repo
 
     references do
-      reference :page, on_delete: :delete
       reference :parent_block, on_delete: :nilify
       reference :lock_holder, on_delete: :nilify
-      reference :message, on_delete: :delete
     end
 
     custom_indexes do
-      index [:workspace_id, :page_id, :parent_block_id, :position]
-      index [:workspace_id, :message_id, :position]
-    end
-
-    check_constraints do
-      check_constraint :page_id,
-        name: "blocks_one_container",
-        check: "num_nonnulls(page_id, message_id) = 1",
-        message: "a block must belong to exactly one of a page or a message"
+      # One index over the polymorphic container discriminator + ordering keys.
+      # `container_id` carries no DB foreign key (it is polymorphic, like
+      # `Conversation.host_id`); referential integrity for the one hard-delete
+      # path (Message destroy) is enforced app-side (see Message :destroy).
+      index [:workspace_id, :container_type, :container_id, :parent_block_id, :position]
     end
   end
 
@@ -78,8 +72,17 @@ defmodule Concept.Pages.Block do
     defaults [:read]
 
     create :create_block do
-      description "Create a new block on a page, optionally as a child of another block."
-      accept [:page_id, :message_id, :parent_block_id, :type, :content, :props, :position]
+      description "Create a new block in a container (a page or a message), optionally as a child of another block."
+
+      accept [
+        :container_type,
+        :container_id,
+        :parent_block_id,
+        :type,
+        :content,
+        :props,
+        :position
+      ]
 
       argument :workspace_id, :uuid,
         allow_nil?: false,
@@ -199,7 +202,10 @@ defmodule Concept.Pages.Block do
         allow_nil?: false,
         description: "Page whose blocks to list."
 
-      filter expr(page_id == ^arg(:page_id) and is_nil(archived_at))
+      filter expr(
+               container_type == :page and container_id == ^arg(:page_id) and is_nil(archived_at)
+             )
+
       prepare build(sort: [parent_block_id: :asc, position: :asc])
     end
 
@@ -210,7 +216,11 @@ defmodule Concept.Pages.Block do
         allow_nil?: false,
         description: "Message whose blocks to list."
 
-      filter expr(message_id == ^arg(:message_id) and is_nil(archived_at))
+      filter expr(
+               container_type == :message and container_id == ^arg(:message_id) and
+                 is_nil(archived_at)
+             )
+
       prepare build(sort: [parent_block_id: :asc, position: :asc])
     end
 
@@ -222,8 +232,30 @@ defmodule Concept.Pages.Block do
         allow_nil?: false,
         description: "Page whose first block to read."
 
-      filter expr(page_id == ^arg(:page_id) and is_nil(archived_at))
+      filter expr(
+               container_type == :page and container_id == ^arg(:page_id) and is_nil(archived_at)
+             )
+
       prepare build(sort: [position: :asc], limit: 1)
+    end
+
+    read :list_for_container do
+      description "List all non-archived blocks owned by any container, in render order. The container-agnostic primitive behind the page/message facades."
+
+      argument :container_type, Concept.Containable.TypeAttr,
+        allow_nil?: false,
+        description: "Container kind that owns the blocks (e.g. :page, :message, :record)."
+
+      argument :container_id, :uuid,
+        allow_nil?: false,
+        description: "Id of the container whose blocks to list."
+
+      filter expr(
+               container_type == ^arg(:container_type) and container_id == ^arg(:container_id) and
+                 is_nil(archived_at)
+             )
+
+      prepare build(sort: [parent_block_id: :asc, position: :asc])
     end
   end
 
@@ -244,17 +276,31 @@ defmodule Concept.Pages.Block do
     module ConceptWeb.Endpoint
     prefix "workspace"
 
-    publish_all :create, [:workspace_id, "page", :page_id, "blocks"], event: "block_created"
-    publish_all :update, [:workspace_id, "page", :page_id, "blocks"], event: "block_updated"
-    publish :archive, [:workspace_id, "page", :page_id, "blocks"], event: "block_archived"
+    # Topic is keyed on the polymorphic container. For a page block this renders
+    # "workspace:<ws>:page:<id>:blocks" — byte-identical to the pre-Container
+    # topic, so page-editor subscribers are unchanged; message blocks get their
+    # own "workspace:<ws>:message:<id>:blocks" lane for free.
+    publish_all :create, [:workspace_id, :container_type, :container_id, "blocks"],
+      event: "block_created"
+
+    publish_all :update, [:workspace_id, :container_type, :container_id, "blocks"],
+      event: "block_updated"
+
+    publish :archive, [:workspace_id, :container_type, :container_id, "blocks"],
+      event: "block_archived"
   end
 
   attributes do
     uuid_primary_key :id
     attribute :workspace_id, :uuid, allow_nil?: false, public?: true
-    # page_id XOR message_id (enforced by the :one_container check constraint).
-    attribute :page_id, :uuid, allow_nil?: true, public?: true, writable?: true
-    attribute :message_id, :uuid, allow_nil?: true, public?: true, writable?: true
+
+    # The polymorphic container: which surface owns this block. `container_type`
+    # is registry-validated (Concept.Containable.TypeAttr); `container_id` is an
+    # untyped uuid (no DB FK — same idiom as Conversation.host_id). Together
+    # they replace the former page_id-XOR-message_id pair: cardinality is now
+    # structural (both not-null) rather than a num_nonnulls check constraint.
+    attribute :container_type, Concept.Containable.TypeAttr, allow_nil?: false, public?: true
+    attribute :container_id, :uuid, allow_nil?: false, public?: true
     attribute :parent_block_id, :uuid, allow_nil?: true, public?: true
     attribute :type, Concept.Pages.BlockTypeAttr, allow_nil?: false, public?: true
     attribute :position, :string, allow_nil?: false, public?: true
@@ -274,18 +320,11 @@ defmodule Concept.Pages.Block do
   end
 
   relationships do
-    belongs_to :page, Concept.Pages.Page,
-      attribute_writable?: true,
-      define_attribute?: false,
-      source_attribute: :page_id,
-      destination_attribute: :id
-
-    belongs_to :message, Concept.Knowledge.Chat.Message,
-      attribute_writable?: true,
-      define_attribute?: false,
-      source_attribute: :message_id,
-      destination_attribute: :id
-
+    # No `belongs_to :page` / `:message`: the container is polymorphic
+    # (container_type/container_id), resolved through Concept.Containable rather
+    # than a typed association. Container-specific block loads live on the
+    # container resources (e.g. Page.blocks / Message.blocks via filtered
+    # has_many) — see those resources.
     belongs_to :parent_block, __MODULE__,
       attribute_writable?: true,
       source_attribute: :parent_block_id,

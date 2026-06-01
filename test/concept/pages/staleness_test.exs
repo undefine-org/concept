@@ -24,20 +24,20 @@ defmodule Concept.Pages.StalenessTest do
 
     # Create cited blocks (source blocks)
     {:ok, block1} =
-      Pages.create_block(page.id, :paragraph, workspace.id, nil,
+      Pages.create_block(:page, page.id, :paragraph, workspace.id, nil,
         actor: user,
         tenant: workspace.id
       )
 
     {:ok, block2} =
-      Pages.create_block(page.id, :paragraph, workspace.id, nil,
+      Pages.create_block(:page, page.id, :paragraph, workspace.id, nil,
         actor: user,
         tenant: workspace.id
       )
 
     # Create AI answer block
     {:ok, ai_block} =
-      Pages.create_block(page.id, :ai_answer, workspace.id, nil,
+      Pages.create_block(:page, page.id, :ai_answer, workspace.id, nil,
         actor: user,
         tenant: workspace.id
       )
@@ -176,7 +176,7 @@ defmodule Concept.Pages.StalenessTest do
     } do
       # Create AI block without message_id
       {:ok, legacy_block} =
-        Pages.create_block(page.id, :ai_answer, workspace.id, nil,
+        Pages.create_block(:page, page.id, :ai_answer, workspace.id, nil,
           actor: user,
           tenant: workspace.id
         )

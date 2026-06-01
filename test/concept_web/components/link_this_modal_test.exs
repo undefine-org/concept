@@ -31,13 +31,13 @@ defmodule ConceptWeb.Components.LinkThisModalTest do
       Pages.create_page("Test Page 2", workspace.id, nil, actor: user, tenant: workspace.id)
 
     {:ok, block1} =
-      Pages.create_block(page1.id, :paragraph, workspace.id, nil,
+      Pages.create_block(:page, page1.id, :paragraph, workspace.id, nil,
         actor: user,
         tenant: workspace.id
       )
 
     {:ok, block2} =
-      Pages.create_block(page2.id, :paragraph, workspace.id, nil,
+      Pages.create_block(:page, page2.id, :paragraph, workspace.id, nil,
         actor: user,
         tenant: workspace.id
       )

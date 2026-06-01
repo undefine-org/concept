@@ -156,6 +156,12 @@ config :concept, :hostables, [
   Concept.Pages.Page
 ]
 
+config :concept, :containables, [
+  Concept.Pages.Page,
+  Concept.Knowledge.Chat.Message,
+  Concept.Objects.Record
+]
+
 config :concept, :field_types, [
   Concept.Objects.FieldTypes.Text,
   Concept.Objects.FieldTypes.Number,

@@ -82,7 +82,7 @@ defmodule Concept.Knowledge.IngestionJob.Changes.PerformIngest do
   defp perform_upsert_with_page(workspace_id, page_id, page, actor) do
     with {:ok, blocks} <-
            Concept.Pages.Block
-           |> Ash.Query.filter(page_id == ^page_id)
+           |> Ash.Query.filter(container_type == :page and container_id == ^page_id)
            |> Ash.read(actor: actor, tenant: workspace_id) do
       case Concept.Knowledge.Indexer.ingest_source(
              workspace_id,

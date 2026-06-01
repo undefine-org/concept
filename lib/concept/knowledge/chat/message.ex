@@ -6,6 +6,10 @@ defmodule Concept.Knowledge.Chat.Message do
     data_layer: AshPostgres.DataLayer,
     notifiers: [Ash.Notifier.PubSub]
 
+  # A Message owns a tree of Blocks (its rich body); it is a block container,
+  # the content-layer twin of being a conversation host. See Concept.Containable.
+  use Concept.Containable, type: :message
+
   oban do
     triggers do
       trigger :respond do
@@ -27,7 +31,16 @@ defmodule Concept.Knowledge.Chat.Message do
   end
 
   actions do
-    defaults [:read, :destroy]
+    defaults [:read]
+
+    destroy :destroy do
+      primary? true
+      require_atomic? false
+      # Replaces the dropped blocks.message_id FK cascade: a message's blocks
+      # (container_type = :message) are polymorphic now, so the cascade is
+      # enforced here. See Concept.Containable / the Container cutover migration.
+      change Concept.Knowledge.Chat.Message.Changes.CascadeDeleteBlocks
+    end
 
     read :for_conversation do
       description "List messages in a chat conversation, most recent first by default."
@@ -355,7 +368,8 @@ defmodule Concept.Knowledge.Chat.Message do
     # onto the host page (PLAN-010 §27). `text` is retained as a plain-text
     # fast-path shim alongside this.
     has_many :blocks, Concept.Pages.Block do
-      destination_attribute :message_id
+      destination_attribute :container_id
+      filter expr(container_type == :message)
     end
   end
 
@@ -369,6 +383,38 @@ defmodule Concept.Knowledge.Chat.Message do
                     source == :user and addresses_host and not exists(response) and
                       conversation.agent_turn_budget > 0
                   )
+    end
+  end
+
+  @doc """
+  Describe a message as a knowledge-ingest source: its rich blocks become
+  searchable conversation content. `:skip` for a text-only message (no blocks).
+  A message has no title, so the body is a stable breadcrumb. See
+  `Concept.Containable.ingest_descriptor/2`.
+  """
+  @impl Concept.Containable
+  def ingest_descriptor(message_id, workspace_id) do
+    actor = %{system?: true}
+
+    case Concept.Pages.list_for_message(message_id, actor: actor, tenant: workspace_id) do
+      {:ok, []} ->
+        :skip
+
+      {:ok, blocks} ->
+        {:ok,
+         %{
+           source_id: "message:#{message_id}",
+           body: "Message",
+           chunker_opts: [
+             blocks: blocks,
+             workspace_id: workspace_id,
+             message_id: message_id,
+             breadcrumbs: "Conversation"
+           ]
+         }}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 end

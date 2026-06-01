@@ -15,6 +15,8 @@ defmodule Concept.Objects.Record.Changes.ValidateFieldsForType do
   use Ash.Resource.Change
   require Ash.Query
 
+  alias Concept.Resources.Changes.TypedJsonb
+
   @impl true
   def change(changeset, _opts, _ctx) do
     Ash.Changeset.before_action(changeset, fn cs ->
@@ -43,9 +45,8 @@ defmodule Concept.Objects.Record.Changes.ValidateFieldsForType do
         |> validate_each(defs, cast)
 
       {:error, errors} ->
-        Enum.reduce(errors, cs, fn {name, msg}, acc ->
-          Ash.Changeset.add_error(acc, field: :fields, message: "#{name}: #{msg}")
-        end)
+        # errors :: [{name, msg}] — the {label, message} result shape.
+        TypedJsonb.put_result(cs, :fields, {:error, errors})
     end
   end
 
@@ -89,10 +90,7 @@ defmodule Concept.Objects.Record.Changes.ValidateFieldsForType do
         cs
 
       keys ->
-        Ash.Changeset.add_error(cs,
-          field: :fields,
-          message: "unknown field(s): #{Enum.join(keys, ", ")}"
-        )
+        TypedJsonb.put_result(cs, :fields, {:error, "unknown field(s): #{Enum.join(keys, ", ")}"})
     end
   end
 
@@ -106,19 +104,22 @@ defmodule Concept.Objects.Record.Changes.ValidateFieldsForType do
           acc
 
         def.required? and is_nil(value) ->
-          Ash.Changeset.add_error(acc, field: :fields, message: "#{def.name} is required")
+          TypedJsonb.put_result(acc, :fields, {:error, "#{def.name} is required"})
 
         true ->
-          case mod.validate(value, def.config || %{}) do
-            :ok ->
-              acc
-
-            {:error, msg} ->
-              Ash.Changeset.add_error(acc, field: :fields, message: "#{def.name}: #{msg}")
-          end
+          TypedJsonb.put_result(
+            acc,
+            :fields,
+            normalize(def.name, mod.validate(value, def.config || %{}))
+          )
       end
     end)
   end
+
+  # Tag a field-type validate result with the field's name so TypedJsonb
+  # renders it as "Name: message", preserving the prior error shape.
+  defp normalize(_name, :ok), do: :ok
+  defp normalize(name, {:error, msg}), do: {:error, {name, msg}}
 
   defp relational?(mod), do: function_exported?(mod, :relational?, 0) and mod.relational?()
 

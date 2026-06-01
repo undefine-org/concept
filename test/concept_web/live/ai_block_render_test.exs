@@ -45,7 +45,7 @@ defmodule ConceptWeb.AiBlockRenderTest do
     test "renders with state=empty", %{conn: conn, user: user, ws: ws, page: page} do
       # Create empty AI answer block
       {:ok, block} =
-        Pages.create_block(page.id, :ai_answer, ws.id, nil,
+        Pages.create_block(:page, page.id, :ai_answer, ws.id, nil,
           actor: user,
           tenant: ws.id
         )
@@ -68,7 +68,7 @@ defmodule ConceptWeb.AiBlockRenderTest do
     } do
       # Create AI answer block
       {:ok, block} =
-        Pages.create_block(page.id, :ai_answer, ws.id, nil,
+        Pages.create_block(:page, page.id, :ai_answer, ws.id, nil,
           actor: user,
           tenant: ws.id
         )
@@ -141,7 +141,7 @@ defmodule ConceptWeb.AiBlockRenderTest do
     } do
       # Create AI answer block
       {:ok, block} =
-        Pages.create_block(page.id, :ai_answer, ws.id, nil,
+        Pages.create_block(:page, page.id, :ai_answer, ws.id, nil,
           actor: user,
           tenant: ws.id
         )

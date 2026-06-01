@@ -253,7 +253,8 @@ defmodule Mix.Tasks.Concept.Demo do
   defp create_block!(page, {:paragraph, text}, ws, user) do
     Concept.Pages.Block
     |> Ash.Changeset.for_create(:create_block, %{
-      page_id: page.id,
+      container_type: :page,
+      container_id: page.id,
       type: :paragraph,
       content: Concept.Lexical.from_plain_text(text, "paragraph"),
       workspace_id: ws.id
@@ -264,7 +265,8 @@ defmodule Mix.Tasks.Concept.Demo do
   defp create_block!(page, {:heading_1, text}, ws, user) do
     Concept.Pages.Block
     |> Ash.Changeset.for_create(:create_block, %{
-      page_id: page.id,
+      container_type: :page,
+      container_id: page.id,
       type: :heading_1,
       content: heading_content(text, 1),
       workspace_id: ws.id
@@ -275,7 +277,8 @@ defmodule Mix.Tasks.Concept.Demo do
   defp create_block!(page, {:heading_2, text}, ws, user) do
     Concept.Pages.Block
     |> Ash.Changeset.for_create(:create_block, %{
-      page_id: page.id,
+      container_type: :page,
+      container_id: page.id,
       type: :heading_2,
       content: heading_content(text, 2),
       workspace_id: ws.id
@@ -286,7 +289,8 @@ defmodule Mix.Tasks.Concept.Demo do
   defp create_block!(page, {:to_do, text, checked}, ws, user) do
     Concept.Pages.Block
     |> Ash.Changeset.for_create(:create_block, %{
-      page_id: page.id,
+      container_type: :page,
+      container_id: page.id,
       type: :to_do,
       content: Concept.Lexical.from_plain_text(text, "paragraph"),
       props: %{"checked" => checked},
@@ -298,7 +302,8 @@ defmodule Mix.Tasks.Concept.Demo do
   defp create_block!(page, {:callout, text, emoji, color}, ws, user) do
     Concept.Pages.Block
     |> Ash.Changeset.for_create(:create_block, %{
-      page_id: page.id,
+      container_type: :page,
+      container_id: page.id,
       type: :callout,
       content: Concept.Lexical.from_plain_text(text, "paragraph"),
       props: %{"emoji" => emoji, "color" => color},
@@ -310,7 +315,8 @@ defmodule Mix.Tasks.Concept.Demo do
   defp create_block!(page, {:ai_answer, prompt, scope}, ws, user) do
     Concept.Pages.Block
     |> Ash.Changeset.for_create(:create_block, %{
-      page_id: page.id,
+      container_type: :page,
+      container_id: page.id,
       type: :ai_answer,
       props: %{"prompt" => prompt, "scope" => to_string(scope)},
       workspace_id: ws.id

@@ -9,10 +9,7 @@ defmodule Concept.Pages.Block.Changes.ValidatePropsForType do
       props = Ash.Changeset.get_attribute(cs, :props) || %{}
       mod = Concept.Pages.BlockTypes.lookup(type)
 
-      case mod.validate_props(props) do
-        :ok -> cs
-        {:error, msg} -> Ash.Changeset.add_error(cs, field: :props, message: msg)
-      end
+      Concept.Resources.Changes.TypedJsonb.put_result(cs, :props, mod.validate_props(props))
     end)
   end
 end

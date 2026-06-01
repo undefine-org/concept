@@ -64,7 +64,7 @@ defmodule ConceptWeb.Components.LiveCitationRailTest do
 
     # Create a block on the page
     {:ok, block} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     # Broadcast a focus event (simulating what page editor would do)
     Phoenix.PubSub.broadcast(
@@ -94,10 +94,10 @@ defmodule ConceptWeb.Components.LiveCitationRailTest do
 
     # Create blocks on both pages
     {:ok, block1} =
-      Pages.create_block(page1.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page1.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, block2} =
-      Pages.create_block(page2.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page2.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     # Mock search results that include both pages
     # Note: In a real scenario, we'd need to mock Concept.Knowledge.Search.search/3
@@ -124,10 +124,10 @@ defmodule ConceptWeb.Components.LiveCitationRailTest do
 
     # Create blocks
     {:ok, block1} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, block2} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     # Send first focus event
     Phoenix.PubSub.broadcast(

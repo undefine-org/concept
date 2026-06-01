@@ -27,13 +27,13 @@ defmodule Concept.Knowledge.LinkTest do
       Pages.create_page("Page 2", workspace.id, nil, actor: user, tenant: workspace.id)
 
     {:ok, block1} =
-      Pages.create_block(page1.id, :paragraph, workspace.id, nil,
+      Pages.create_block(:page, page1.id, :paragraph, workspace.id, nil,
         actor: user,
         tenant: workspace.id
       )
 
     {:ok, block2} =
-      Pages.create_block(page2.id, :paragraph, workspace.id, nil,
+      Pages.create_block(:page, page2.id, :paragraph, workspace.id, nil,
         actor: user,
         tenant: workspace.id
       )
@@ -244,7 +244,7 @@ defmodule Concept.Knowledge.LinkTest do
         )
 
       {:ok, other_block} =
-        Pages.create_block(other_page.id, :paragraph, other_workspace.id, nil,
+        Pages.create_block(:page, other_page.id, :paragraph, other_workspace.id, nil,
           actor: other_user,
           tenant: other_workspace.id
         )

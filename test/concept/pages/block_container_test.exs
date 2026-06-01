@@ -1,9 +1,10 @@
 defmodule Concept.Pages.BlockContainerTest do
   @moduledoc """
-  Wave 2 (FEAT-075): the content-layer membrane. A Block belongs to a page XOR a
-  message (PLAN-010 §27-28). Messages contain blocks, so talk carries the
-  editor's full block expressiveness; crystallization later reparents these onto
-  the host page.
+  The content-layer membrane, post-Container-cutover. A Block lives in exactly
+  one polymorphic container — `container_type` (registry-validated) +
+  `container_id` — replacing the former page_id-XOR-message_id pair. These cases
+  are the regression floor: a page block, a message block, and the not-null
+  cardinality that used to be a check constraint.
   """
   use Concept.DataCase, async: true
   require Ash.Query
@@ -38,20 +39,26 @@ defmodule Concept.Pages.BlockContainerTest do
       Pages.Block
       |> Ash.Changeset.for_create(
         :create_block,
-        %{message_id: msg.id, type: :paragraph, content: %{}, workspace_id: ws.id},
+        %{
+          container_type: :message,
+          container_id: msg.id,
+          type: :paragraph,
+          content: %{},
+          workspace_id: ws.id
+        },
         actor: u,
         tenant: ws.id
       )
       |> Ash.create()
 
-    assert block.message_id == msg.id
-    assert is_nil(block.page_id)
+    assert block.container_type == :message
+    assert block.container_id == msg.id
 
     {:ok, loaded} = Ash.load(msg, [:blocks], actor: u, tenant: ws.id)
     assert Enum.map(loaded.blocks, & &1.id) == [block.id]
   end
 
-  test "a block with NEITHER container is rejected by the check constraint", ctx do
+  test "a block with NO container is rejected (container_type/id are not-null)", ctx do
     %{user: u, workspace: ws} = ctx
 
     assert {:error, _} =
@@ -65,18 +72,16 @@ defmodule Concept.Pages.BlockContainerTest do
              |> Ash.create()
   end
 
-  test "a block with BOTH containers is rejected by the check constraint", ctx do
-    %{user: u, workspace: ws, message: msg} = ctx
-
-    {:ok, page} = Pages.create_page("Doc", ws.id, nil, actor: u, tenant: ws.id)
+  test "an unregistered container_type is rejected by the TypeAttr", ctx do
+    %{user: u, workspace: ws} = ctx
 
     assert {:error, _} =
              Pages.Block
              |> Ash.Changeset.for_create(
                :create_block,
                %{
-                 page_id: page.id,
-                 message_id: msg.id,
+                 container_type: :workspace,
+                 container_id: Ash.UUID.generate(),
                  type: :paragraph,
                  content: %{},
                  workspace_id: ws.id
@@ -96,13 +101,60 @@ defmodule Concept.Pages.BlockContainerTest do
       Pages.Block
       |> Ash.Changeset.for_create(
         :create_block,
-        %{page_id: page.id, type: :paragraph, content: %{}, workspace_id: ws.id},
+        %{
+          container_type: :page,
+          container_id: page.id,
+          type: :paragraph,
+          content: %{},
+          workspace_id: ws.id
+        },
         actor: u,
         tenant: ws.id
       )
       |> Ash.create()
 
-    assert block.page_id == page.id
-    assert is_nil(block.message_id)
+    assert block.container_type == :page
+    assert block.container_id == page.id
+
+    {:ok, loaded} = Ash.load(page, [:blocks], actor: u, tenant: ws.id)
+    assert Enum.map(loaded.blocks, & &1.id) == [block.id]
+  end
+
+  test "list_for_page returns only page-container blocks; list_for_message only message ones",
+       ctx do
+    %{user: u, workspace: ws, message: msg} = ctx
+    {:ok, page} = Pages.create_page("Doc", ws.id, nil, actor: u, tenant: ws.id)
+
+    {:ok, pblock} =
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: u, tenant: ws.id)
+
+    {:ok, mblock} =
+      Pages.create_block(:message, msg.id, :paragraph, ws.id, nil, actor: u, tenant: ws.id)
+
+    {:ok, page_blocks} = Pages.list_for_page(page.id, actor: u, tenant: ws.id)
+    {:ok, msg_blocks} = Pages.list_for_message(msg.id, actor: u, tenant: ws.id)
+
+    assert Enum.map(page_blocks, & &1.id) == [pblock.id]
+    assert Enum.map(msg_blocks, & &1.id) == [mblock.id]
+  end
+
+  test "destroying a message cascades to its blocks (replaces the dropped FK)", ctx do
+    %{user: u, workspace: ws} = ctx
+
+    {:ok, conv} = Chat.create_conversation(%{workspace_id: ws.id}, actor: u, tenant: ws.id)
+
+    {:ok, msg} =
+      Chat.create_message(%{text: "doomed", addresses_host: false}, actor: u, tenant: ws.id)
+
+    {:ok, block} =
+      Pages.create_block(:message, msg.id, :paragraph, ws.id, nil, actor: u, tenant: ws.id)
+
+    :ok = Ash.destroy!(msg, actor: u, tenant: ws.id)
+
+    # The block is gone (hard-deleted by the cascade), not merely archived.
+    assert {:error, _} =
+             Ash.get(Pages.Block, block.id, actor: u, tenant: ws.id, authorize?: false)
+
+    _ = conv
   end
 end

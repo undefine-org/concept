@@ -746,7 +746,7 @@ Update a workflow state's name or category.
 
 ---
 ## Concept.Pages
-### Tools (25)
+### Tools (26)
 
 #### `block_acquire_lock`
 
@@ -785,7 +785,7 @@ Archive a block (soft-delete; cascades to children).
 
 #### `block_create_block`
 
-Create a new block on a page, optionally as a child of another block.
+Create a new block in a container (a page or a message), optionally as a child of another block.
 
 - **Resource**: `Concept.Pages.Block`
 - **Action**: `:create_block` (create)
@@ -819,6 +819,19 @@ Read the first (topmost) non-archived block of a page.
 **Arguments:**
 
   - `page_id` (`UUID`, required) — Page whose first block to read.
+
+
+#### `block_list_for_container`
+
+List all non-archived blocks owned by any container, in render order. The container-agnostic primitive behind the page/message facades.
+
+- **Resource**: `Concept.Pages.Block`
+- **Action**: `:list_for_container` (read)
+
+**Arguments:**
+
+  - `container_type` (`Concept.Containable.TypeAttr`, required) — Container kind that owns the blocks (e.g. :page, :message, :record).
+  - `container_id` (`UUID`, required) — Id of the container whose blocks to list.
 
 
 #### `block_list_for_message`

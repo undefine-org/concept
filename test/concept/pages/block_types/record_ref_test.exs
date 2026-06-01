@@ -42,7 +42,10 @@ defmodule Concept.Pages.BlockTypes.RecordRefTest do
 
     test "a record_ref block can be created on a page", ctx do
       {:ok, block} =
-        Pages.create_block(ctx.page.id, :record_ref, ctx.ws, nil, actor: ctx.user, tenant: ctx.ws)
+        Pages.create_block(:page, ctx.page.id, :record_ref, ctx.ws, nil,
+          actor: ctx.user,
+          tenant: ctx.ws
+        )
 
       assert block.type == :record_ref
     end

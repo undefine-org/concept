@@ -44,6 +44,7 @@ defmodule Concept.Pages.Reactors.CreateTable do
         end
 
       Pages.create_block(
+        :page,
         args.page_id,
         :table,
         args.workspace_id,
@@ -79,6 +80,7 @@ defmodule Concept.Pages.Reactors.CreateTable do
             cell_props = %{"row_index" => r, "col_index" => c}
 
             case Pages.create_block(
+                   :page,
                    args.page_id,
                    :table_cell,
                    args.workspace_id,

@@ -13,6 +13,7 @@ defmodule Concept.Pages.Page do
     notifiers: [Ash.Notifier.PubSub, Concept.Pages.Notifiers.KnowledgeReindex]
 
   use Concept.Hostable, type: :page, scope: :subtree, persona: "this page"
+  use Concept.Containable, type: :page
 
   postgres do
     table "pages"
@@ -158,11 +159,37 @@ defmodule Concept.Pages.Page do
 
     has_many :children, __MODULE__, destination_attribute: :parent_page_id
 
-    has_many :blocks, Concept.Pages.Block, destination_attribute: :page_id
+    has_many :blocks, Concept.Pages.Block,
+      destination_attribute: :container_id,
+      filter: expr(container_type == :page)
   end
 
   aggregates do
     count :children_count, :children
     count :block_count, :blocks
+  end
+
+  @doc """
+  Describe a page as a knowledge-ingest source: its title as body, its blocks
+  as chunker input. `:skip` when the page no longer exists. See
+  `Concept.Containable.ingest_descriptor/2`.
+  """
+  @impl Concept.Containable
+  def ingest_descriptor(page_id, workspace_id) do
+    actor = %{system?: true}
+
+    with {:ok, page} <- Concept.Pages.get_page(page_id, actor: actor, tenant: workspace_id),
+         {:ok, blocks} <-
+           Concept.Pages.list_for_page(page_id, actor: actor, tenant: workspace_id) do
+      {:ok,
+       %{
+         source_id: "page:#{page_id}",
+         body: page.title || "Untitled",
+         chunker_opts: [page: page, blocks: blocks, workspace_id: workspace_id]
+       }}
+    else
+      {:error, %Ash.Error.Query.NotFound{}} -> :skip
+      {:error, reason} -> {:error, reason}
+    end
   end
 end

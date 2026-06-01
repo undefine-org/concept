@@ -64,7 +64,8 @@ defmodule Concept.Knowledge.Chat.ScenarioTest do
       |> Ash.Changeset.for_create(
         :create_block,
         %{
-          message_id: m1.id,
+          container_type: :message,
+          container_id: m1.id,
           type: :code,
           content: %{"text" => "config :offline, enabled: true"},
           workspace_id: ws.id
@@ -74,8 +75,8 @@ defmodule Concept.Knowledge.Chat.ScenarioTest do
       )
       |> Ash.create()
 
-    assert code_block.message_id == m1.id
-    assert is_nil(code_block.page_id)
+    assert code_block.container_type == :message
+    assert code_block.container_id == m1.id
     # …and a block lives under exactly one container (page XOR message).
     {:ok, msg_blocks} = Pages.list_for_message(m1.id, actor: maya, tenant: ws.id)
     assert Enum.map(msg_blocks, & &1.id) == [code_block.id]
@@ -190,7 +191,8 @@ defmodule Concept.Knowledge.Chat.ScenarioTest do
 
     # The source message block is UNTOUCHED — copy, not move (scrollback intact).
     {:ok, still_there} = Ash.get(Pages.Block, code_block.id, actor: maya, tenant: ws.id)
-    assert still_there.message_id == m1.id
+    assert still_there.container_type == :message
+    assert still_there.container_id == m1.id
   end
 
   test "tenancy: an outsider cannot read another workspace's conversation" do

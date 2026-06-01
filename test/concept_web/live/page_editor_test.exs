@@ -45,14 +45,14 @@ defmodule ConceptWeb.PageEditorTest do
 
   test "block-handle renders per text block", %{conn: conn, ws: ws, page: page, user: user} do
     {:ok, _block} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
     assert has_element?(view, "ora-block-handle")
 
     {:ok, _block2} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view2, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -72,20 +72,26 @@ defmodule ConceptWeb.PageEditorTest do
     assert Enum.count(toolbars) == 1
 
     # 1 block
-    {:ok, _} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, _} =
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
     {:ok, view2, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
     toolbars2 = LazyHTML.query(LazyHTML.from_fragment(render(view2)), "ora-format-toolbar")
     assert Enum.count(toolbars2) == 1
 
     # 2 blocks
-    {:ok, _} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, _} =
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
     {:ok, view3, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
     toolbars3 = LazyHTML.query(LazyHTML.from_fragment(render(view3)), "ora-format-toolbar")
     assert Enum.count(toolbars3) == 1
   end
 
   test "handle row layout class present", %{conn: conn, ws: ws, page: page, user: user} do
-    {:ok, _} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, _} =
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
     assert has_element?(view, ".ora-block-row")
@@ -99,7 +105,9 @@ defmodule ConceptWeb.PageEditorTest do
     page: page,
     user: user
   } do
-    {:ok, block} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, block} =
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
     view
@@ -117,10 +125,10 @@ defmodule ConceptWeb.PageEditorTest do
 
   test "insert_paragraph_below between siblings", %{conn: conn, ws: ws, page: page, user: user} do
     {:ok, block_a} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, block_b} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -137,10 +145,10 @@ defmodule ConceptWeb.PageEditorTest do
 
   test "nav_block down focuses next block", %{conn: conn, ws: ws, page: page, user: user} do
     {:ok, block1} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, block2} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -155,10 +163,10 @@ defmodule ConceptWeb.PageEditorTest do
 
   test "nav_block up focuses previous block", %{conn: conn, ws: ws, page: page, user: user} do
     {:ok, block1} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, block2} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -173,7 +181,7 @@ defmodule ConceptWeb.PageEditorTest do
 
   test "nav_block up at first block is no-op", %{conn: conn, ws: ws, page: page, user: user} do
     {:ok, block1} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -191,10 +199,10 @@ defmodule ConceptWeb.PageEditorTest do
     user: user
   } do
     {:ok, block1} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, block2} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -210,7 +218,9 @@ defmodule ConceptWeb.PageEditorTest do
   end
 
   test "delete_block_merge on only block is no-op", %{conn: conn, ws: ws, page: page, user: user} do
-    {:ok, block} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, block} =
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
     view
@@ -245,13 +255,13 @@ defmodule ConceptWeb.PageEditorTest do
     user: user
   } do
     {:ok, b1} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, b2} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, b3} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -276,13 +286,13 @@ defmodule ConceptWeb.PageEditorTest do
     user: user
   } do
     {:ok, b1} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, b2} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, b3} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -307,13 +317,13 @@ defmodule ConceptWeb.PageEditorTest do
     user: user
   } do
     {:ok, b1} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, b2} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, b3} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -345,10 +355,10 @@ defmodule ConceptWeb.PageEditorTest do
     user: user
   } do
     {:ok, b1} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, b2} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -373,7 +383,7 @@ defmodule ConceptWeb.PageEditorTest do
     user: user
   } do
     {:ok, b1} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -509,7 +519,9 @@ defmodule ConceptWeb.PageEditorTest do
     page: page,
     user: user
   } do
-    {:ok, block} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, block} =
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
     view
@@ -533,7 +545,9 @@ defmodule ConceptWeb.PageEditorTest do
     page: page,
     user: user
   } do
-    {:ok, block} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, block} =
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
     view
@@ -560,9 +574,13 @@ defmodule ConceptWeb.PageEditorTest do
   end
 
   test "every block has block-<uuid> anchor", %{conn: conn, ws: ws, page: page, user: user} do
-    {:ok, b1} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
-    {:ok, b2} = Pages.create_block(page.id, :heading_1, ws.id, nil, actor: user, tenant: ws.id)
-    {:ok, b3} = Pages.create_block(page.id, :quote, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, b1} =
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, b2} =
+      Pages.create_block(:page, page.id, :heading_1, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, b3} = Pages.create_block(:page, page.id, :quote, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
     editor_view = find_live_child(view, "page-editor-#{page.id}")
@@ -574,7 +592,9 @@ defmodule ConceptWeb.PageEditorTest do
   end
 
   test "push_scroll_to_block dispatches event", %{conn: conn, ws: ws, page: page, user: user} do
-    {:ok, block} = Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+    {:ok, block} =
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
     {:ok, _view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
     # Verify the function is exported with correct arity

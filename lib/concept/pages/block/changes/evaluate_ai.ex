@@ -41,7 +41,7 @@ defmodule Concept.Pages.Block.Changes.EvaluateAi do
     # 2. Determine scope_target_id based on scope
     scope_target_id =
       case scope do
-        :page -> block.page_id
+        :page -> if(block.container_type == :page, do: block.container_id)
         :subtree -> block.id
         :workspace -> nil
       end

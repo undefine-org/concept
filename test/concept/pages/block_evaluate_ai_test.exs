@@ -24,7 +24,7 @@ defmodule Concept.Pages.BlockEvaluateAiTest do
 
     # Create an AI answer block
     {:ok, block} =
-      Pages.create_block(page.id, :ai_answer, workspace.id, nil,
+      Pages.create_block(:page, page.id, :ai_answer, workspace.id, nil,
         actor: user,
         tenant: workspace.id
       )
@@ -310,7 +310,7 @@ defmodule Concept.Pages.BlockEvaluateAiTest do
       # Block locked by `user`; the spawned task acts as a system actor and
       # must still be allowed to write the response pointer.
       {:ok, locked_block} =
-        Pages.create_block(page.id, :ai_answer, ws.id, nil, actor: user, tenant: ws.id)
+        Pages.create_block(:page, page.id, :ai_answer, ws.id, nil, actor: user, tenant: ws.id)
 
       {:ok, _} =
         Pages.acquire_lock(

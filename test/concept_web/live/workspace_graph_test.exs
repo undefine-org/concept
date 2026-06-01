@@ -61,10 +61,10 @@ defmodule ConceptWeb.WorkspaceGraphTest do
       Pages.create_page("Page B", ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, block_a} =
-      Pages.create_block(page_a.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page_a.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, block_b} =
-      Pages.create_block(page_b.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page_b.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, _link} =
       Knowledge.create_link(

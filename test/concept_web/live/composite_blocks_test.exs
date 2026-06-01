@@ -51,7 +51,7 @@ defmodule ConceptWeb.CompositeBlocksTest do
   test "insert_composite_below table creates 1 parent + 6 cells and renders grid",
        %{conn: conn, user: user, ws: ws, page: page} do
     {:ok, above} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 
@@ -82,7 +82,7 @@ defmodule ConceptWeb.CompositeBlocksTest do
   test "insert_composite_below columns creates 1 parent + N children and renders grid",
        %{conn: conn, user: user, ws: ws, page: page} do
     {:ok, above} =
-      Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
 
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
 

@@ -31,7 +31,7 @@ defmodule Concept.Pages.BlockReleaseExpiredLocksTest do
       )
 
     {:ok, block} =
-      Pages.create_block(page.id, :paragraph, workspace.id, nil,
+      Pages.create_block(:page, page.id, :paragraph, workspace.id, nil,
         actor: user,
         tenant: workspace.id
       )

@@ -31,14 +31,17 @@ defmodule Concept.Pages.WorkspaceTenantArgTest do
       %{user: user, ws: ws, page: page} = fixtures()
 
       assert {:ok, _block} =
-               Pages.create_block(page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+               Pages.create_block(:page, page.id, :paragraph, ws.id, nil,
+                 actor: user,
+                 tenant: ws.id
+               )
     end
 
     test "rejects a workspace_id arg that differs from the tenant" do
       %{user: user, ws: ws, page: page} = fixtures()
 
       assert {:error, error} =
-               Pages.create_block(page.id, :paragraph, Ash.UUIDv7.generate(), nil,
+               Pages.create_block(:page, page.id, :paragraph, Ash.UUIDv7.generate(), nil,
                  actor: user,
                  tenant: ws.id
                )

@@ -26,7 +26,7 @@ defmodule Concept.Knowledge.IngestionJobTest do
       Pages.create_page("Test Page", workspace.id, nil, actor: user, tenant: workspace.id)
 
     {:ok, block} =
-      Pages.create_block(page.id, :paragraph, workspace.id, nil,
+      Pages.create_block(:page, page.id, :paragraph, workspace.id, nil,
         actor: user,
         tenant: workspace.id
       )

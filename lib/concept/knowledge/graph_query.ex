@@ -56,7 +56,13 @@ defmodule Concept.Knowledge.GraphQuery do
       Concept.Pages.Block
       |> Ash.read!(actor: actor, tenant: workspace_id)
 
-    block_page_map = Map.new(blocks, &{&1.id, &1.page_id})
+    # Lift block → page only for page-container blocks; message blocks have no
+    # page and are excluded from the page-level graph.
+    block_page_map =
+      blocks
+      |> Enum.filter(&(&1.container_type == :page))
+      |> Map.new(&{&1.id, &1.container_id})
+
     block_ids = Map.keys(block_page_map)
 
     links =
