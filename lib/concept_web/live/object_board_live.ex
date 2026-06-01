@@ -19,7 +19,7 @@ defmodule ConceptWeb.ObjectBoardLive do
   """
   use ConceptWeb, :live_view
 
-  import ConceptWeb.Components.Sidebar
+
 
   alias Concept.Accounts
   alias Concept.Objects
@@ -195,10 +195,14 @@ defmodule ConceptWeb.ObjectBoardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.shell flash={@flash} current_scope={@current_scope}>
-      <div id="board-root" class="flex min-h-screen" phx-hook="GlobalKeys">
-        <.sidebar workspace={@workspace} pages={@pages} current_user={@current_user} />
-        <main class="flex-1 overflow-y-auto bg-notion-bg">
+    <Layouts.workspace
+      id="board-root"
+      flash={@flash}
+      current_scope={@current_scope}
+      workspace={@workspace}
+      pages={@pages}
+      current_user={@current_user}
+    >
           <div id="tasks-root" class="p-6">
             <div class="flex items-center justify-between mb-6">
               <h1 class="text-2xl font-bold text-notion-text">
@@ -334,9 +338,7 @@ defmodule ConceptWeb.ObjectBoardLive do
               board={@board}
             />
           </div>
-        </main>
-      </div>
-    </Layouts.shell>
+    </Layouts.workspace>
     """
   end
 

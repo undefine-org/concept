@@ -2,7 +2,7 @@ defmodule ConceptWeb.WorkspaceLive do
   @moduledoc "Workspace shell — full Notion-style application shell."
   use ConceptWeb, :live_view
 
-  import ConceptWeb.Components.Sidebar
+
   import ConceptWeb.Components.PresenceBar
   import ConceptWeb.Components.IndexingPill
   import ConceptWeb.Components.LinkThisModal
@@ -586,22 +586,17 @@ defmodule ConceptWeb.WorkspaceLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.shell flash={@flash} current_scope={@current_scope}>
-      <div
-        id="workspace-root"
-        class="flex min-h-screen"
-        phx-hook="GlobalKeys LiveCitationRail"
-      >
-        <.sidebar
-          workspace={@workspace}
-          pages={@pages}
-          current_page={@current_page}
-          current_user={@current_user}
-          live_rail_show={@live_rail_show}
-        />
-
-        <main class="flex-1 overflow-y-auto bg-notion-bg">
-          <%= if @current_page == nil do %>
+    <Layouts.workspace
+      flash={@flash}
+      current_scope={@current_scope}
+      workspace={@workspace}
+      pages={@pages}
+      current_page={@current_page}
+      current_user={@current_user}
+      live_rail_show={@live_rail_show}
+      hook="GlobalKeys LiveCitationRail"
+    >
+      <%= if @current_page == nil do %>
             <div class="flex flex-col items-center justify-center h-full text-notion-text-light">
               <p class="mb-4 text-lg">Pick a page or create one</p>
               <button
@@ -631,17 +626,16 @@ defmodule ConceptWeb.WorkspaceLive do
               )}
             </div>
           <% end %>
-        </main>
 
+      <:overlays>
         <.live_citation_rail
           :if={@live_rail_show && @current_page}
           citations={@live_rail_results}
           workspace_slug={@workspace.slug}
           current_page_id={@current_page && @current_page.id}
         />
-      </div>
 
-      <div class="fixed bottom-4 right-4 z-30">
+        <div class="fixed bottom-4 right-4 z-30">
         <.indexing_pill
           state={
             if @indexing_state.failed?,
@@ -682,9 +676,10 @@ defmodule ConceptWeb.WorkspaceLive do
         show={@link_modal_state != nil}
         source_block_id={@link_modal_state && @link_modal_state.source_block_id}
         target_block_id={@link_modal_state && @link_modal_state.target_block_id}
-        error={@link_modal_state && @link_modal_state.error}
-      />
-    </Layouts.shell>
+          error={@link_modal_state && @link_modal_state.error}
+        />
+      </:overlays>
+    </Layouts.workspace>
     """
   end
 end

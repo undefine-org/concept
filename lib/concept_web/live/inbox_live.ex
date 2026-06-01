@@ -13,7 +13,7 @@ defmodule ConceptWeb.InboxLive do
   """
   use ConceptWeb, :live_view
 
-  import ConceptWeb.Components.Sidebar
+
 
   alias Concept.Knowledge.Chat
   alias Concept.Pages
@@ -93,10 +93,14 @@ defmodule ConceptWeb.InboxLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.shell flash={@flash} current_scope={@current_scope}>
-      <div id="inbox-shell" class="flex min-h-screen" phx-hook="GlobalKeys">
-        <.sidebar workspace={@workspace} pages={@pages} current_user={@current_user} />
-        <main class="flex-1 overflow-y-auto bg-notion-bg">
+    <Layouts.workspace
+      id="inbox-shell"
+      flash={@flash}
+      current_scope={@current_scope}
+      workspace={@workspace}
+      pages={@pages}
+      current_user={@current_user}
+    >
           <div class="max-w-3xl mx-auto p-6">
             <div class="mb-6 flex items-center justify-between">
               <div class="flex items-center gap-2">
@@ -150,9 +154,7 @@ defmodule ConceptWeb.InboxLive do
               </.link>
             </div>
           </div>
-        </main>
-      </div>
-    </Layouts.shell>
+      </Layouts.workspace>
     """
   end
 

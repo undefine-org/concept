@@ -18,7 +18,7 @@ defmodule ConceptWeb.WorkLive do
   """
   use ConceptWeb, :live_view
 
-  import ConceptWeb.Components.Sidebar
+
 
   alias Concept.Accounts
   alias Concept.Objects
@@ -125,10 +125,14 @@ defmodule ConceptWeb.WorkLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.shell flash={@flash} current_scope={@current_scope}>
-      <div id="work-shell" class="flex min-h-screen" phx-hook="GlobalKeys">
-        <.sidebar workspace={@workspace} pages={@pages} current_user={@current_user} />
-        <main class="flex-1 overflow-y-auto bg-notion-bg">
+    <Layouts.workspace
+      id="work-shell"
+      flash={@flash}
+      current_scope={@current_scope}
+      workspace={@workspace}
+      pages={@pages}
+      current_user={@current_user}
+    >
           <div id="work-root" class="mx-auto max-w-5xl p-6">
             <div class="mb-6 flex items-center justify-between">
               <h1 class="text-2xl font-bold text-notion-text">My work</h1>
@@ -242,9 +246,7 @@ defmodule ConceptWeb.WorkLive do
               </div>
             <% end %>
           </div>
-        </main>
-      </div>
-    </Layouts.shell>
+    </Layouts.workspace>
     """
   end
 
