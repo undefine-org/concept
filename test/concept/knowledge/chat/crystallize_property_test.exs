@@ -53,13 +53,18 @@ defmodule Concept.Knowledge.Chat.CrystallizePropertyTest do
 
   property "crystallize preserves sibling order and tree shape", %{user: u, ws: ws} do
     check all(child_counts <- forest_gen(), max_runs: 25) do
-      # Fresh page + message per run (async: false; sandbox). The message
-      # find-or-creates its own workspace-host conversation; crystallize gathers
-      # blocks by THAT conversation_id, so use it (not a detached conversation).
+      # Fresh page + message per run (async: false; sandbox). Anchor the message
+      # to THIS run's page host so each run gets its own conversation — the
+      # workspace host find-or-creates a single shared conversation, which would
+      # make runs 2+ collide now that host resumption works correctly.
       {:ok, page} = Pages.create_page("P", ws.id, nil, actor: u, tenant: ws.id)
 
       {:ok, msg} =
-        Chat.create_message(%{text: "seed", addresses_host: false}, actor: u, tenant: ws.id)
+        Chat.create_message(
+          %{text: "seed", addresses_host: false, host_type: :page, host_id: page.id},
+          actor: u,
+          tenant: ws.id
+        )
 
       conv_id = msg.conversation_id
 

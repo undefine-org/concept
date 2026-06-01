@@ -132,8 +132,14 @@ defmodule Concept.Knowledge.Chat.Conversation do
 
       # Exclude threads (child conversations) so host addressing find-or-creates
       # the canonical ROOT conversation, not a thread spawned from a message.
+      #
+      # host_id is nil for the :workspace host. SQL `col = NULL` is never true,
+      # so a naive `host_id == ^arg(:host_id)` made workspace-host lookup ALWAYS
+      # miss — every workspace message then spawned a fresh conversation and the
+      # panel could never resume one. Match nil explicitly with is_nil.
       filter expr(
-               host_type == ^arg(:host_type) and host_id == ^arg(:host_id) and
+               host_type == ^arg(:host_type) and
+                 ((is_nil(^arg(:host_id)) and is_nil(host_id)) or host_id == ^arg(:host_id)) and
                  is_nil(parent_conversation_id)
              )
 

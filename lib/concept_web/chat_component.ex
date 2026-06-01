@@ -60,7 +60,17 @@ defmodule ConceptWeb.ChatComponent do
             )
           end
 
+        # B1 (FUP-UX): resume the host's existing conversation on open instead
+        # of dropping the user into a blank seed state. The panel reopened onto
+        # the SAME {host_type, host_id} should show the live thread, not lose
+        # it. We only auto-resume when the caller hasn't pinned an explicit
+        # conversation_id (e.g. navigating to a specific thread).
+        resumed_id =
+          socket.assigns[:conversation_id] ||
+            resume_host_conversation_id(socket)
+
         socket
+        |> assign(:conversation_id, resumed_id)
         |> assign(:initialized, true)
         |> assign_new(:hide_sidebar, fn -> false end)
         |> assign_new(:conversation, fn -> nil end)
@@ -604,6 +614,31 @@ defmodule ConceptWeb.ChatComponent do
       |> assign_message_form()
 
     {:noreply, socket}
+  end
+
+  # B1: find the most-recent existing conversation for the current host so the
+  # panel resumes it on open. Returns a conversation id or nil (→ blank state
+  # with seed prompts, the correct first-run experience). Root conversations
+  # only (parent_conversation_id == nil) — threads are opened explicitly.
+  defp resume_host_conversation_id(socket) do
+    with %_{} = user <- socket.assigns[:current_user],
+         ws when not is_nil(ws) <- socket.assigns[:workspace_id] do
+      host_type = socket.assigns[:host_type] || :workspace
+      host_id = socket.assigns[:host_id]
+
+      # `:for_host` already excludes threads and sorts most-recent-first.
+      Concept.Knowledge.Chat.conversations_for_host!(host_type, host_id,
+        actor: user,
+        tenant: ws
+      )
+      |> List.first()
+      |> case do
+        nil -> nil
+        conversation -> conversation.id
+      end
+    else
+      _ -> nil
+    end
   end
 
   defp load_conversation(socket, conversation_id) do
