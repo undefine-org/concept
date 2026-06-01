@@ -141,4 +141,22 @@ defmodule ConceptWeb.ChatResumeTest do
     assert first_at < second_at,
            "expected oldest-first DOM order (top-anchored), got newest-first"
   end
+
+  test "B8: a failed send surfaces a retryable error card", ctx do
+    {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}")
+    view |> element("#workspace-root") |> render_hook("toggle_chat", %{})
+    :timer.sleep(80)
+
+    # A whitespace-only message fails the `match(:text, ~r/\\S/)` validation
+    # → {:error, form}. Before B8 this was a silent no-op; now it must surface
+    # a humane, retryable card.
+    html =
+      view
+      |> element("[id$='-composer'] form")
+      |> render_submit(%{"form" => %{"text" => "   "}})
+
+    assert html =~ "could not be sent", "expected a humane send-error card"
+    assert has_element?(view, "[id$='-retry-send']"), "expected a Retry affordance"
+    assert html =~ "ora-error-card"
+  end
 end

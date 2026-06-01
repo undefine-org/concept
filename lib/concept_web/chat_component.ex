@@ -78,6 +78,7 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:agent_responding, fn -> false end)
         |> assign_new(:tool_data_warning_shown?, fn -> false end)
         |> assign_new(:has_messages, fn -> false end)
+        |> assign_new(:send_error, fn -> nil end)
         |> assign_new(:participants, fn -> [] end)
         |> assign_new(:pending_mentions, fn -> [] end)
         |> assign_new(:addresses_host, fn -> true end)
@@ -362,6 +363,35 @@ defmodule ConceptWeb.ChatComponent do
           </span>
         </div>
 
+        <%!-- B8: a failed send surfaces as a humane, retryable card (never a
+              silent drop or a raw error). One click re-sends the same text. --%>
+        <.error_card
+          :if={@send_error}
+          id={"#{@id}-send-error"}
+          class="mx-4 mb-2"
+        >
+          Message could not be sent.
+          <:actions>
+            <button
+              type="button"
+              id={"#{@id}-retry-send"}
+              phx-click="retry_send"
+              phx-target={@myself}
+              class="ora-btn ora-btn--ghost ora-btn--sm"
+            >
+              <.icon name="hero-arrow-path-micro" class="size-3.5 mr-1" /> Retry
+            </button>
+            <button
+              type="button"
+              phx-click="dismiss_send_error"
+              phx-target={@myself}
+              class="ora-btn ora-btn--ghost ora-btn--sm text-notion-text-light"
+            >
+              Dismiss
+            </button>
+          </:actions>
+        </.error_card>
+
         <div id={"#{@id}-composer"} class="ora-chat-input-row relative">
           <%!-- Pending @-mention chips (participant ids carried into the message). --%>
           <div
@@ -580,6 +610,23 @@ defmodule ConceptWeb.ChatComponent do
     submit_message(socket, %{"text" => prompt})
   end
 
+  @impl true
+  def handle_event("retry_send", _params, socket) do
+    # B8: re-dispatch the text that failed, through the identical submit path.
+    case socket.assigns[:send_error] do
+      %{text: text} when is_binary(text) and text != "" ->
+        submit_message(socket, %{"text" => text})
+
+      _ ->
+        {:noreply, assign(socket, :send_error, nil)}
+    end
+  end
+
+  @impl true
+  def handle_event("dismiss_send_error", _params, socket) do
+    {:noreply, assign(socket, :send_error, nil)}
+  end
+
   # Shared submit path for the composer form AND one-click seed prompts. Builds
   # the same addressing merge + form submit + optimistic stream insert so a seed
   # button behaves exactly like typing the prompt and hitting Send (B6/C7).
@@ -595,7 +642,7 @@ defmodule ConceptWeb.ChatComponent do
 
       case AshPhoenix.Form.submit(socket.assigns.message_form, params: params) do
         {:ok, message} ->
-          socket = reset_composer(socket)
+          socket = socket |> reset_composer() |> assign(:send_error, nil)
 
           if socket.assigns.conversation do
             socket
@@ -610,7 +657,12 @@ defmodule ConceptWeb.ChatComponent do
           end
 
         {:error, form} ->
-          {:noreply, assign(socket, :message_form, form)}
+          # B8: surface a humane, retryable failure instead of a silent no-op.
+          # The attempted text is held so one click re-sends it verbatim.
+          {:noreply,
+           socket
+           |> assign(:message_form, form)
+           |> assign(:send_error, %{text: params["text"] || params[:text] || ""})}
       end
     end
   end
