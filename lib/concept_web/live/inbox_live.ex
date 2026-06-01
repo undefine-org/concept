@@ -13,7 +13,10 @@ defmodule ConceptWeb.InboxLive do
   """
   use ConceptWeb, :live_view
 
+  import ConceptWeb.Components.Sidebar
+
   alias Concept.Knowledge.Chat
+  alias Concept.Pages
 
   @impl true
   def mount(%{"workspace_slug" => slug}, _session, socket) do
@@ -27,9 +30,15 @@ defmodule ConceptWeb.InboxLive do
 
         conversations = list_inbox(user, ws)
 
+        pages =
+          case Pages.list_tree(actor: user, tenant: ws.id) do
+            {:ok, list} -> list
+            _ -> []
+          end
+
         {:ok,
          socket
-         |> assign(workspace: ws, page_title: "Inbox", inbox_count: length(conversations))
+         |> assign(workspace: ws, pages: pages, page_title: "Inbox", inbox_count: length(conversations))
          |> stream(:conversations, conversations)}
 
       _ ->
@@ -39,6 +48,14 @@ defmodule ConceptWeb.InboxLive do
          |> push_navigate(to: ~p"/")}
     end
   end
+
+  @impl true
+  def handle_event(event, _params, socket)
+      when event in ~w(open_command_palette toggle_chat new_page) do
+    {:noreply, push_navigate(socket, to: ~p"/w/#{socket.assigns.workspace.slug}")}
+  end
+
+  def handle_event("escape", _params, socket), do: {:noreply, socket}
 
   @impl true
   def handle_info({:inbox_activity, _payload}, socket) do
@@ -71,7 +88,10 @@ defmodule ConceptWeb.InboxLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.shell flash={@flash} current_scope={@current_scope}>
+      <div id="inbox-shell" class="flex min-h-screen" phx-hook="GlobalKeys">
+        <.sidebar workspace={@workspace} pages={@pages} current_user={@current_user} />
+        <main class="flex-1 overflow-y-auto bg-notion-bg">
       <div class="max-w-3xl mx-auto p-6">
         <div class="mb-6 flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -121,7 +141,9 @@ defmodule ConceptWeb.InboxLive do
           </.link>
         </div>
       </div>
-    </Layouts.app>
+      </main>
+      </div>
+    </Layouts.shell>
     """
   end
 

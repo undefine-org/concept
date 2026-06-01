@@ -19,8 +19,11 @@ defmodule ConceptWeb.ObjectBoardLive do
   """
   use ConceptWeb, :live_view
 
+  import ConceptWeb.Components.Sidebar
+
   alias Concept.Accounts
   alias Concept.Objects
+  alias Concept.Pages
   alias ConceptWeb.Objects.FieldTypeComponent
 
   @impl true
@@ -29,9 +32,16 @@ defmodule ConceptWeb.ObjectBoardLive do
 
     case Accounts.Workspace.by_slug(slug, actor: user) do
       {:ok, ws} ->
+        pages =
+          case Pages.list_tree(actor: user, tenant: ws.id) do
+            {:ok, list} -> list
+            _ -> []
+          end
+
         {:ok,
          socket
          |> assign(:workspace, ws)
+         |> assign(:pages, pages)
          |> assign(:type_id, params["type_id"])
          |> assign(:new_title, "")
          |> assign(:assignee_field_def, %{field_type: :user, config: %{}, key: "assignee"})
@@ -44,6 +54,20 @@ defmodule ConceptWeb.ObjectBoardLive do
          |> put_flash(:error, "Workspace not found")
          |> push_navigate(to: ~p"/w")}
     end
+  end
+
+  # Sidebar/GlobalKeys events that belong to the workspace shell. From a board,
+  # these navigate back to the workspace where command palette / chat / new-page
+  # live, rather than being dead. Keeps the sidebar a single component without
+  # duplicating its full machinery onto every standalone surface.
+  @impl true
+  def handle_event(event, _params, socket)
+      when event in ~w(open_command_palette toggle_chat new_page) do
+    {:noreply, push_navigate(socket, to: ~p"/w/#{socket.assigns.workspace.slug}")}
+  end
+
+  def handle_event("escape", _params, socket) do
+    {:noreply, socket}
   end
 
   @impl true
@@ -171,7 +195,10 @@ defmodule ConceptWeb.ObjectBoardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.shell flash={@flash} current_scope={@current_scope}>
+      <div id="board-root" class="flex min-h-screen" phx-hook="GlobalKeys">
+        <.sidebar workspace={@workspace} pages={@pages} current_user={@current_user} />
+        <main class="flex-1 overflow-y-auto bg-notion-bg">
       <div id="tasks-root" class="p-6">
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold text-notion-text">
@@ -305,7 +332,9 @@ defmodule ConceptWeb.ObjectBoardLive do
           board={@board}
         />
       </div>
-    </Layouts.app>
+      </main>
+      </div>
+    </Layouts.shell>
     """
   end
 

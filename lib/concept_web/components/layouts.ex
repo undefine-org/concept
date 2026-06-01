@@ -36,7 +36,7 @@ defmodule ConceptWeb.Layouts do
     ~H"""
     <header class="ora-app-header">
       <a href={~p"/"} class="ora-app-header__brand">
-        <img src={~p"/images/logo.svg"} width="24" height="24" alt="" />
+        <span class="ora-app-header__mark" aria-hidden="true">C</span>
         <span>
           Concept{if @current_scope && @current_scope.workspace,
             do: " / " <> to_string(@current_scope.workspace.name)}

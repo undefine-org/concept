@@ -18,8 +18,11 @@ defmodule ConceptWeb.WorkLive do
   """
   use ConceptWeb, :live_view
 
+  import ConceptWeb.Components.Sidebar
+
   alias Concept.Accounts
   alias Concept.Objects
+  alias Concept.Pages
 
   # Order categories present in "My work" for a stable, intuitive layout.
   @category_order [:todo, :doing, :review, :backlog, :done, :canceled]
@@ -30,9 +33,16 @@ defmodule ConceptWeb.WorkLive do
 
     case Accounts.Workspace.by_slug(slug, actor: user) do
       {:ok, ws} ->
+        pages =
+          case Pages.list_tree(actor: user, tenant: ws.id) do
+            {:ok, list} -> list
+            _ -> []
+          end
+
         {:ok,
          socket
          |> assign(:workspace, ws)
+         |> assign(:pages, pages)
          |> assign(:page_title, "My work")
          |> load_work()}
 
@@ -43,6 +53,15 @@ defmodule ConceptWeb.WorkLive do
          |> push_navigate(to: ~p"/w")}
     end
   end
+
+  # Workspace-shell events from the shared sidebar → back to the workspace.
+  @impl true
+  def handle_event(event, _params, socket)
+      when event in ~w(open_command_palette toggle_chat new_page) do
+    {:noreply, push_navigate(socket, to: ~p"/w/#{socket.assigns.workspace.slug}")}
+  end
+
+  def handle_event("escape", _params, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("claim", %{"record" => record_id}, socket) do
@@ -106,7 +125,10 @@ defmodule ConceptWeb.WorkLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.shell flash={@flash} current_scope={@current_scope}>
+      <div id="work-shell" class="flex min-h-screen" phx-hook="GlobalKeys">
+        <.sidebar workspace={@workspace} pages={@pages} current_user={@current_user} />
+        <main class="flex-1 overflow-y-auto bg-notion-bg">
       <div id="work-root" class="mx-auto max-w-5xl p-6">
         <div class="mb-6 flex items-center justify-between">
           <h1 class="text-2xl font-bold text-notion-text">My work</h1>
@@ -220,7 +242,9 @@ defmodule ConceptWeb.WorkLive do
           </div>
         <% end %>
       </div>
-    </Layouts.app>
+      </main>
+      </div>
+    </Layouts.shell>
     """
   end
 
