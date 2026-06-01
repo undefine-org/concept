@@ -291,4 +291,63 @@ ora-workspace-graph {
   .ora-auth-hr { display: flex; align-items: center; gap: 8px; margin: 20px 0; color: var(--color-notion-text-light); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
   .ora-auth-hr::before, .ora-auth-hr::after { content: ""; flex: 1; height: 1px; background: var(--color-notion-divider); }
   .ora-auth-spacer { height: 4px; }
+
+  /* ───── State primitives (loading · empty · error) ───── */
+  /* Skeleton shimmer — a content-shaped placeholder while async loads. */
+  @keyframes ora-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  .ora-skeleton {
+    border-radius: 4px;
+    background: linear-gradient(90deg,
+      var(--color-notion-hover) 25%,
+      var(--color-notion-hover-strong, rgba(0,0,0,0.06)) 37%,
+      var(--color-notion-hover) 63%);
+    background-size: 200% 100%;
+    animation: ora-shimmer 1.4s ease-in-out infinite;
+  }
+  .ora-skeleton-line { height: 0.9em; margin: 6px 0; }
+  .ora-skeleton-line:last-child { width: 70%; }
+
+  /* Spinner — a determinate-feeling activity ring. */
+  @keyframes ora-spin { to { transform: rotate(360deg); } }
+  .ora-spinner {
+    display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em;
+    border: 2px solid currentColor; border-right-color: transparent;
+    border-radius: 9999px; animation: ora-spin 0.6s linear infinite;
+  }
+
+  /* Button loading — disabled + leading spinner, label dimmed. */
+  .ora-btn[aria-busy="true"] { opacity: 0.7; cursor: progress; }
+  .ora-btn[aria-busy="true"] .ora-btn__label { opacity: 0.65; }
+
+  /* Empty state — designed zero-data affordance. */
+  .ora-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 48px 24px; text-align: center; color: var(--color-notion-text-light); }
+  .ora-empty__icon { font-size: 40px; line-height: 1; opacity: 0.8; }
+  .ora-empty__title { font-size: 15px; font-weight: 600; color: var(--color-notion-text); }
+  .ora-empty__desc { font-size: 13px; max-width: 22rem; }
+  .ora-empty__cta { margin-top: 4px; }
+
+  /* Error card — humane, retryable. Amber, never raw red JSON. */
+  .ora-error-card { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid #E9A23B; background: #FEF6E7; border-radius: 6px; color: #7A4F12; font-size: 13px; }
+  .ora-error-card__icon { flex: 0 0 auto; margin-top: 1px; }
+  .ora-error-card__body { flex: 1 1 auto; min-width: 0; }
+  .ora-error-card__actions { margin-top: 8px; }
+
+  /* Modal — centered dialog over a scrim; the one overlay primitive. */
+  .ora-modal-root { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+  .ora-modal-overlay { position: absolute; inset: 0; background: rgba(15, 15, 15, 0.28); animation: ora-fade-in 0.12s ease-out; }
+  .ora-modal-dialog { position: relative; width: 100%; max-width: 32rem; background: var(--color-notion-bg); border: 1px solid var(--color-notion-divider); border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,0.18); outline: none; animation: ora-modal-in 0.14s ease-out; }
+  .ora-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--color-notion-divider); }
+  .ora-modal-title { font-size: 15px; font-weight: 600; color: var(--color-notion-text); }
+  .ora-modal-close { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; color: var(--color-notion-text-light); border: none; background: transparent; transition: background 0.15s ease; }
+  .ora-modal-close:hover { background: var(--color-notion-hover); color: var(--color-notion-text); }
+  @keyframes ora-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes ora-modal-in { from { opacity: 0; transform: translateY(-6px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+  /* Respect reduced-motion: freeze decorative animation, keep meaning. */
+  @media (prefers-reduced-motion: reduce) {
+    .ora-skeleton { animation: none; background: var(--color-notion-hover); }
+    .ora-spinner { animation-duration: 1.4s; }
+    .ora-pill-indexing::before { animation: none; }
+    .ora-modal-overlay, .ora-modal-dialog { animation: none; }
+  }
 }

@@ -10,6 +10,8 @@ import ContentEditable from "./content_editable.js";
 import EmojiPicker from "./emoji_picker.js";
 import GlobalKeys from "./global_keys.js";
 import TaskBoard from "./task_board.js";
+import FocusTrap from "./focus_trap.js";
+import ScrollToBottom from "./scroll_to_bottom.js";
 
 const Hooks = {
   BlockList,
@@ -24,6 +26,8 @@ const Hooks = {
   EmojiPicker,
   GlobalKeys,
   TaskBoard,
+  FocusTrap,
+  ScrollToBottom,
 };
 
 export default Hooks;

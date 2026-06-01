@@ -74,6 +74,11 @@ defmodule ConceptWeb.CoreComponents do
   attr :rest, :global, include: ~w(href navigate patch method download name value disabled)
   attr :class, :any
   attr :variant, :string, values: ~w(primary)
+
+  attr :loading, :boolean,
+    default: false,
+    doc: "when true, disables the button, shows a leading spinner, and sets aria-busy"
+
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
@@ -86,17 +91,175 @@ defmodule ConceptWeb.CoreComponents do
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
       ~H"""
-      <.link class={@class} {@rest}>
-        {render_slot(@inner_block)}
+      <.link class={@class} aria-busy={to_string(@loading)} {@rest}>
+        <span :if={@loading} class="ora-spinner mr-1.5" aria-hidden="true" />
+        <span class="ora-btn__label">{render_slot(@inner_block)}</span>
       </.link>
       """
     else
       ~H"""
-      <button class={@class} {@rest}>
-        {render_slot(@inner_block)}
+      <button class={@class} aria-busy={to_string(@loading)} disabled={@loading || @rest[:disabled]} {@rest}>
+        <span :if={@loading} class="ora-spinner mr-1.5" aria-hidden="true" />
+        <span class="ora-btn__label">{render_slot(@inner_block)}</span>
       </button>
       """
     end
+  end
+
+  @doc """
+  A content-shaped loading placeholder. Renders `rows` shimmer lines inside a
+  container marked `aria-busy` / `role="status"` so assistive tech announces a
+  loading region rather than empty content.
+
+  ## Examples
+
+      <.skeleton rows={6} />
+      <.skeleton rows={3} class="px-4" />
+  """
+  attr :rows, :integer, default: 3, doc: "number of shimmer lines"
+  attr :class, :any, default: nil
+  attr :rest, :global
+
+  def skeleton(assigns) do
+    ~H"""
+    <div class={["space-y-1", @class]} role="status" aria-busy="true" aria-label="Loading" {@rest}>
+      <div :for={_ <- 1..@rows} class="ora-skeleton ora-skeleton-line"></div>
+      <span class="sr-only">Loading…</span>
+    </div>
+    """
+  end
+
+  @doc """
+  An activity spinner. Inline by default (inherits `currentColor`). Decorative
+  unless `label` is given, in which case it exposes an accessible status.
+
+  ## Examples
+
+      <.spinner />
+      <.spinner label="Saving…" class="text-notion-blue" />
+  """
+  attr :label, :string, default: nil
+  attr :class, :any, default: nil
+  attr :rest, :global
+
+  def spinner(assigns) do
+    ~H"""
+    <span
+      class={["ora-spinner", @class]}
+      role={@label && "status"}
+      aria-label={@label}
+      aria-hidden={is_nil(@label) && "true"}
+      {@rest}
+    />
+    """
+  end
+
+  @doc """
+  A designed zero-data affordance: icon, title, description, and an optional
+  call-to-action slot. Replaces bare "No items" text across surfaces.
+
+  ## Examples
+
+      <.empty_state icon="🗂️" title="No tasks yet">
+        Create your first task to start tracking work.
+        <:cta><.button variant="primary" phx-click="new_task">New task</.button></:cta>
+      </.empty_state>
+  """
+  attr :icon, :string, default: nil, doc: "emoji or glyph shown above the title"
+  attr :title, :string, required: true
+  attr :class, :any, default: nil
+  attr :rest, :global
+  slot :inner_block, doc: "the description body"
+  slot :cta, doc: "optional call-to-action (e.g. a button)"
+
+  def empty_state(assigns) do
+    ~H"""
+    <div class={["ora-empty", @class]} role="status" {@rest}>
+      <div :if={@icon} class="ora-empty__icon" aria-hidden="true">{@icon}</div>
+      <div class="ora-empty__title">{@title}</div>
+      <div :if={@inner_block != []} class="ora-empty__desc">{render_slot(@inner_block)}</div>
+      <div :if={@cta != []} class="ora-empty__cta">{render_slot(@cta)}</div>
+    </div>
+    """
+  end
+
+  @doc """
+  A humane, retryable error surface. Amber (never raw red), warning icon,
+  plain-language message, and an optional actions slot (e.g. Retry). Use this
+  instead of rendering raw error payloads / status codes to users.
+
+  ## Examples
+
+      <.error_card>
+        I couldn't search the workspace just now.
+        <:actions><.button phx-click="retry">Retry</.button></:actions>
+      </.error_card>
+  """
+  attr :class, :any, default: nil
+  attr :rest, :global
+  slot :inner_block, required: true, doc: "the human-readable message"
+  slot :actions, doc: "optional recovery actions (e.g. a Retry button)"
+
+  def error_card(assigns) do
+    ~H"""
+    <div class={["ora-error-card", @class]} role="alert" {@rest}>
+      <span class="ora-error-card__icon" aria-hidden="true">
+        <.icon name="hero-exclamation-triangle-mini" class="size-4" />
+      </span>
+      <div class="ora-error-card__body">
+        {render_slot(@inner_block)}
+        <div :if={@actions != []} class="ora-error-card__actions">{render_slot(@actions)}</div>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  An accessible modal dialog: centered card over a scrim, `role="dialog"` +
+  `aria-modal`, focus trapped inside (via the `FocusTrap` JS hook), Esc and
+  overlay-click both fire `on_cancel`. Focus is restored to the trigger on
+  close. One primitive behind every overlay (record picker, slide-overs).
+
+  ## Examples
+
+      <.modal :if={@show} id="record-picker" on_cancel={JS.push("close_picker")}>
+        <:title>Link a record</:title>
+        …body…
+      </.modal>
+  """
+  attr :id, :string, required: true
+  attr :on_cancel, JS, default: %JS{}, doc: "command run on Esc / overlay click / close button"
+  attr :class, :any, default: nil
+  attr :rest, :global
+  slot :title
+  slot :inner_block, required: true
+
+  def modal(assigns) do
+    ~H"""
+    <div id={@id} class="ora-modal-root" phx-remove={@on_cancel}>
+      <div class="ora-modal-overlay" aria-hidden="true" phx-click={@on_cancel}></div>
+      <div
+        id={"#{@id}-dialog"}
+        class={["ora-modal-dialog", @class]}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={@title != [] && "#{@id}-title"}
+        phx-hook="FocusTrap"
+        phx-window-keydown={@on_cancel}
+        phx-key="escape"
+        tabindex="-1"
+        {@rest}
+      >
+        <div :if={@title != []} class="ora-modal-header">
+          <h2 id={"#{@id}-title"} class="ora-modal-title">{render_slot(@title)}</h2>
+          <button type="button" class="ora-modal-close" aria-label="Close" phx-click={@on_cancel}>
+            <.icon name="hero-x-mark" class="size-4" />
+          </button>
+        </div>
+        {render_slot(@inner_block)}
+      </div>
+    </div>
+    """
   end
 
   @doc """
