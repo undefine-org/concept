@@ -79,6 +79,9 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:host_picker_open, fn -> false end)
         |> assign_new(:host_picker_query, fn -> "" end)
         |> assign_new(:host_picker_pages, fn -> [] end)
+        |> assign_new(:add_people_open, fn -> false end)
+        |> assign_new(:member_picks, fn -> MapSet.new() end)
+        |> assign_new(:addable_members, fn -> [] end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -402,6 +405,16 @@ defmodule ConceptWeb.ChatComponent do
           <span class="text-xs uppercase tracking-wide text-notion-text-light mr-1">
             In this conversation
           </span>
+          <button
+            type="button"
+            id={"#{@id}-add-people-trigger"}
+            phx-click="open_add_people"
+            phx-target={@myself}
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-dashed border-notion-divider text-notion-text-light hover:text-notion-text hover:border-notion-text-light"
+            title="Add people to this conversation"
+          >
+            <.icon name="hero-plus-micro" class="size-3" /> Add people
+          </button>
           <%!-- The host's grounded voice: a voice, not a person (PLAN-010 §39). --%>
           <span
             class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-notion-blue/10 text-notion-blue"
@@ -644,6 +657,86 @@ defmodule ConceptWeb.ChatComponent do
           </div>
         </div>
       </.modal>
+
+      <%!-- Add-people (T1): the UI for Participant.join. Member checklist → join
+            per selection. The host's grounded voice is a FIXED chip (a voice,
+            not a member, §39) — it has no checkbox and can't be removed. --%>
+      <.modal
+        :if={@add_people_open}
+        id={"#{@id}-add-people"}
+        on_cancel={JS.push("close_add_people", target: @myself)}
+      >
+        <:title>Add people</:title>
+        <div class="px-4 pb-4 flex flex-col gap-3 w-[460px] max-w-full">
+          <%!-- Fixed host-voice presence. --%>
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-notion-blue/10">
+            <.icon name="hero-sparkles-micro" class="size-4 text-notion-blue" />
+            <span class="text-sm text-notion-blue">{host_voice_name(@host_type)}</span>
+            <span class="ml-auto text-xs text-notion-blue/70">AI voice · always present</span>
+          </div>
+
+          <div class="px-1 text-[11px] font-semibold uppercase tracking-wide text-notion-text-light">
+            Workspace members
+          </div>
+          <div class="max-h-72 overflow-y-auto flex flex-col">
+            <button
+              :for={member <- @addable_members}
+              type="button"
+              phx-click="toggle_member_pick"
+              phx-value-id={member.id}
+              phx-target={@myself}
+              class="flex items-center gap-2 w-full text-left px-2 py-2 rounded hover:bg-notion-sidebar-hover text-sm"
+            >
+              <span class={[
+                "inline-flex items-center justify-center size-4 rounded border",
+                MapSet.member?(@member_picks, member.id) && "bg-notion-blue border-notion-blue text-white",
+                !MapSet.member?(@member_picks, member.id) && "border-notion-divider"
+              ]}>
+                <.icon :if={MapSet.member?(@member_picks, member.id)} name="hero-check-micro" class="size-3" />
+              </span>
+              <span class="inline-flex items-center justify-center size-5 rounded-full bg-notion-blue text-white text-[10px] font-semibold shrink-0">
+                {member_initial(member)}
+              </span>
+              <span class="flex-1 truncate">{member_label(member)}</span>
+              <span
+                :if={member.role == :agent}
+                class="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700"
+              >
+                agent
+              </span>
+            </button>
+            <p :if={@addable_members == []} class="px-1 py-2 text-sm text-notion-text-light">
+              Everyone in the workspace is already here.
+            </p>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-notion-divider">
+            <span class="text-xs text-notion-text-light">
+              {MapSet.size(@member_picks)} selected
+            </span>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                phx-click="close_add_people"
+                phx-target={@myself}
+                class="ora-btn ora-btn--ghost ora-btn--sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id={"#{@id}-add-people-confirm"}
+                phx-click="confirm_add_people"
+                phx-target={@myself}
+                disabled={MapSet.size(@member_picks) == 0}
+                class="ora-btn ora-btn--primary ora-btn--sm"
+              >
+                Add to conversation
+              </button>
+            </div>
+          </div>
+        </div>
+      </.modal>
     </div>
     """
   end
@@ -782,6 +875,54 @@ defmodule ConceptWeb.ChatComponent do
     topic = params["topic"] || params["q"]
     topic = if is_binary(topic) and String.trim(topic) != "", do: String.trim(topic), else: nil
     start_conversation(socket, host_type, host_id, topic)
+  end
+
+  def handle_event("open_add_people", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:add_people_open, true)
+     |> assign(:member_picks, MapSet.new())
+     |> assign(:addable_members, addable_members(socket))}
+  end
+
+  def handle_event("close_add_people", _params, socket) do
+    {:noreply, assign(socket, :add_people_open, false)}
+  end
+
+  def handle_event("toggle_member_pick", %{"id" => id}, socket) do
+    picks = socket.assigns[:member_picks] || MapSet.new()
+
+    picks =
+      if MapSet.member?(picks, id), do: MapSet.delete(picks, id), else: MapSet.put(picks, id)
+
+    {:noreply, assign(socket, :member_picks, picks)}
+  end
+
+  def handle_event("confirm_add_people", _params, socket) do
+    conversation = socket.assigns[:conversation]
+    picks = socket.assigns[:member_picks] || MapSet.new()
+
+    if conversation && MapSet.size(picks) > 0 do
+      for membership_id <- picks do
+        Concept.Knowledge.Chat.join_conversation(
+          %{
+            workspace_id: socket.assigns[:workspace_id],
+            conversation_id: conversation.id,
+            membership_id: membership_id
+          },
+          actor: socket.assigns.current_user,
+          tenant: socket.assigns[:workspace_id]
+        )
+      end
+
+      {:noreply,
+       socket
+       |> assign(:add_people_open, false)
+       |> assign(:member_picks, MapSet.new())
+       |> assign(:participants, load_participants(socket, conversation.id))}
+    else
+      {:noreply, assign(socket, :add_people_open, false)}
+    end
   end
 
   def handle_event("toggle_host_category", %{"key" => key}, socket) do
@@ -1148,6 +1289,36 @@ defmodule ConceptWeb.ChatComponent do
     else
       _ -> []
     end
+  end
+
+  # Workspace members who are not already participants of this conversation —
+  # the addable set for the people-picker.
+  defp addable_members(socket) do
+    conversation = socket.assigns[:conversation]
+
+    with %_{} = user <- socket.assigns[:current_user],
+         ws when not is_nil(ws) <- socket.assigns[:workspace_id],
+         {:ok, members} <- Concept.Accounts.list_members(ws, actor: user) do
+      existing =
+        if conversation do
+          (socket.assigns[:participants] || [])
+          |> Enum.map(& &1.membership_id)
+          |> MapSet.new()
+        else
+          MapSet.new()
+        end
+
+      Enum.reject(members, &MapSet.member?(existing, &1.id))
+    else
+      _ -> []
+    end
+  end
+
+  defp member_label(%{user: %{email: email}}) when not is_nil(email), do: to_string(email)
+  defp member_label(_), do: "Member"
+
+  defp member_initial(member) do
+    member |> member_label() |> String.first() |> Kernel.||("?") |> String.upcase()
   end
 
   # Create (or route to) a conversation about the chosen host, then navigate to
