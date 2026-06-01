@@ -109,4 +109,36 @@ defmodule ConceptWeb.ChatResumeTest do
     _ = render(view)
     assert render(view) =~ "ora-chat-panel--open"
   end
+
+  test "B7: message list is top-anchored (oldest→newest) with the scroll hook", ctx do
+    {:ok, _m1} =
+      Chat.create_message(%{text: "first probe message", addresses_host: false},
+        actor: ctx.user,
+        tenant: ctx.ws.id
+      )
+
+    {:ok, _m2} =
+      Chat.create_message(%{text: "second probe message", addresses_host: false},
+        actor: ctx.user,
+        tenant: ctx.ws.id
+      )
+
+    {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}")
+    view |> element("#workspace-root") |> render_hook("toggle_chat", %{})
+    :timer.sleep(100)
+
+    html = render(view)
+
+    # The container drives auto-scroll via the ScrollToBottom hook (B7).
+    assert html =~ ~s(phx-hook="ScrollToBottom"),
+           "expected the message container to carry the ScrollToBottom hook"
+
+    # Natural reading order: oldest message appears BEFORE the newest in the DOM
+    # (top-anchored), not reversed.
+    first_at = :binary.match(html, "first probe message") |> elem(0)
+    second_at = :binary.match(html, "second probe message") |> elem(0)
+
+    assert first_at < second_at,
+           "expected oldest-first DOM order (top-anchored), got newest-first"
+  end
 end

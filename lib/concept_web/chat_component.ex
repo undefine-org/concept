@@ -202,6 +202,19 @@ defmodule ConceptWeb.ChatComponent do
               {host_label(assigns)}
             </p>
           </div>
+          <%!-- Conversation-level action lives in the header (B7), not injected
+                between messages. Only meaningful when the host IS a page. --%>
+          <button
+            :if={@host_type == :page and @host_id != nil and @conversation != nil}
+            type="button"
+            id={"#{@id}-crystallize-btn"}
+            phx-click="crystallize"
+            phx-target={@myself}
+            class="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+            title="Clone this conversation's blocks onto the page (copy, with provenance)"
+          >
+            <.icon name="hero-sparkles-micro" class="size-3" /> Crystallize
+          </button>
         </div>
 
         <div class="ora-chat-body flex-1">
@@ -241,6 +254,7 @@ defmodule ConceptWeb.ChatComponent do
           <div
             id={"#{@id}-message-container"}
             phx-update="stream"
+            phx-hook="ScrollToBottom"
             class="ora-chat-messages"
           >
             <%!-- Dispatch on Concept.Chat.MessageKind.render_mode/1 — the single
@@ -316,22 +330,9 @@ defmodule ConceptWeb.ChatComponent do
           <span class="text-xs uppercase tracking-wide text-notion-text-light mr-1">
             In this conversation
           </span>
-          <%!-- Crystallize: talk becomes durable document on the host page
-               (PLAN-010 §6.4). Only meaningful when the host IS a page. --%>
-          <button
-            :if={@host_type == :page and @host_id}
-            type="button"
-            id={"#{@id}-crystallize-btn"}
-            phx-click="crystallize"
-            phx-target={@myself}
-            class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-            title="Clone this conversation's blocks onto the page (copy, with provenance)"
-          >
-            <.icon name="hero-sparkles-micro" class="size-3" /> Crystallize into Page
-          </button>
           <%!-- The host's grounded voice: a voice, not a person (PLAN-010 §39). --%>
           <span
-            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-notion-blue/10 text-notion-blue"
+            class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-notion-blue/10 text-notion-blue"
             title="The host's grounded AI voice"
           >
             <.icon name="hero-sparkles-micro" class="size-3" />
@@ -601,7 +602,7 @@ defmodule ConceptWeb.ChatComponent do
             |> assign(:agent_responding, true)
             |> assign(:has_messages, true)
             |> assign_message_form()
-            |> stream_insert(:messages, message, at: 0)
+            |> stream_insert(:messages, message, at: -1)
             |> then(&{:noreply, &1})
           else
             send(self(), {:chat_component_navigate, message.conversation_id})
@@ -669,7 +670,9 @@ defmodule ConceptWeb.ChatComponent do
       |> assign(:participants, load_participants(socket, conversation.id))
       |> assign(:agent_responding, agent_response_pending?(messages))
       |> assign(:has_messages, messages != [])
-      |> stream(:messages, messages, reset: true)
+      # message_history! sorts newest-first; the list renders top-anchored
+      # (oldest → newest, newest at the bottom) so we reverse to natural order.
+      |> stream(:messages, Enum.reverse(messages), reset: true)
       |> assign_message_form()
     end
   end
@@ -786,7 +789,7 @@ defmodule ConceptWeb.ChatComponent do
       socket
       |> maybe_warn_tool_data(message)
       |> assign(:has_messages, true)
-      |> stream_insert(:messages, message, at: 0)
+      |> stream_insert(:messages, message, at: -1)
       |> update_agent_responding(message)
     else
       socket
