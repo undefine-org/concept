@@ -44,6 +44,10 @@ defmodule ConceptWeb.InboxLiveTest do
     # Empty state uses CSS `hidden only:block`, so its text is always in the DOM;
     # the meaningful signal is the ABSENCE of conversation rows (the `<a>` items).
     refute has_element?(view, "#inbox-list > a")
+    # E-4: the empty state is the design-system empty_state primitive, not a
+    # bare paragraph.
+    assert has_element?(view, "#inbox-empty.ora-empty")
+    assert render(view) =~ "Your inbox is clear"
   end
 
   test "inbox lists a conversation the user participates in", %{conn: conn, user: user, ws: ws} do

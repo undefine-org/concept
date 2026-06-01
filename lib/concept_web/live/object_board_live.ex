@@ -217,7 +217,9 @@ defmodule ConceptWeb.ObjectBoardLive do
             </div>
 
             <%= if @board_error do %>
-              <div class="text-notion-text-light">{@board_error}</div>
+              <.empty_state id="board-empty" icon="📋" title="No board to show">
+                {@board_error}
+              </.empty_state>
             <% else %>
               <form phx-submit="create_task" id="new-task-form" class="mb-6 flex gap-2">
                 <input

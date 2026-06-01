@@ -157,9 +157,14 @@ defmodule ConceptWeb.WorkLive do
                     </span>
                   </h2>
 
-                  <p :if={@mine_count == 0} class="text-sm text-notion-text-light/70">
-                    Nothing assigned to you yet. Claim something from the right →
-                  </p>
+                  <.empty_state
+                    :if={@mine_count == 0}
+                    icon="✓"
+                    title="Nothing assigned to you yet"
+                    class="py-8"
+                  >
+                    Claim something ready from the right to get started.
+                  </.empty_state>
 
                   <div :for={{category, records} <- @mine_by_category} class="mb-5">
                     <div class="mb-1.5 flex items-center gap-1.5 px-1">
