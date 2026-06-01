@@ -54,7 +54,13 @@ ora-workspace-graph {
   /* ───── Blocks ───── */
   ora-block, ora-block-handle { display: block; }
   ora-block .ora-block { padding: 3px 0; line-height: 1.5; min-height: 1.5em; outline: none; cursor: text; }
-  ora-block [data-editor] { outline: none; min-height: 1.5em; }
+  ora-block [data-editor] { outline: none; min-height: 1.5em; border-radius: 3px; }
+  /* C-5: keyboard focus must be visible (was outline:none everywhere). A11y:
+     mouse focus stays clean, keyboard focus gets a ring. */
+  ora-block [data-editor]:focus-visible,
+  ora-block .ora-block:focus-visible {
+    outline: 2px solid var(--color-notion-blue); outline-offset: 2px;
+  }
   ora-block [data-editor]:empty::before,
   ora-block [data-editor] p:only-child:has(br:only-child)::before {
     content: attr(data-placeholder); color: var(--color-notion-text-light); pointer-events: none;
@@ -135,7 +141,8 @@ ora-workspace-graph {
   .ora-page-emoji-btn { width: 40px; height: 40px; font-size: 28px; line-height: 1; background: var(--color-notion-bg); border: 1px solid var(--color-notion-divider); border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.04); padding: 0; }
   .ora-page-emoji-btn:hover { background: var(--color-notion-hover); }
 
-  .ora-page-title { font-size: 36px; font-weight: 700; line-height: 1.2; color: var(--color-notion-text); outline: none; margin: 0; padding: 4px 0; min-height: 1.2em; cursor: text; }
+  .ora-page-title { font-size: 36px; font-weight: 700; line-height: 1.2; color: var(--color-notion-text); outline: none; margin: 0; padding: 4px 0; min-height: 1.2em; cursor: text; border-radius: 4px; }
+  .ora-page-title:focus-visible { outline: 2px solid var(--color-notion-blue); outline-offset: 2px; }
   .ora-page-title:empty::before { content: attr(data-placeholder); color: var(--color-notion-text-light); pointer-events: none; }
   .ora-page-title:focus { background: rgba(0,0,0,0.02); }
 

@@ -44,10 +44,16 @@ defmodule ConceptWeb.PageEditorLive do
       color: ConceptWeb.Colors.for_user_id(user.id)
     })
 
+    # C-5: on the static (disconnected) mount we have no socket yet — show a
+    # skeleton instead of a blank flash. Blocks load on the connected mount.
     blocks =
-      case Pages.list_for_page(page_id, actor: user, tenant: ws_id) do
-        {:ok, list} -> build_block_tree(list)
-        _ -> []
+      if connected?(socket) do
+        case Pages.list_for_page(page_id, actor: user, tenant: ws_id) do
+          {:ok, list} -> build_block_tree(list)
+          _ -> []
+        end
+      else
+        :loading
       end
 
     socket =
@@ -75,7 +81,15 @@ defmodule ConceptWeb.PageEditorLive do
             (the editor) where the data lives, excluding self. --%>
       <.presence_bar users={collaborators(@presence_users, @current_user)} />
       <div id="page-editor-content" class="space-y-1 relative" phx-hook="AskSelection">
-        <ul :if={@blocks != []} id={"block-list-#{@page_id}"} phx-hook="BlockList" class="space-y-1">
+        <%!-- C-5: skeleton on the disconnected mount so the page never flashes
+              blank before blocks arrive on connect. --%>
+        <.skeleton :if={@blocks == :loading} rows={6} class="py-2" />
+        <ul
+          :if={is_list(@blocks) and @blocks != []}
+          id={"block-list-#{@page_id}"}
+          phx-hook="BlockList"
+          class="space-y-1"
+        >
           <li :for={b <- @blocks} data-block-id={b.id}>
             <ConceptWeb.BlockRender.block
               block={b}
