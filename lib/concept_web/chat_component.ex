@@ -77,7 +77,8 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:draft_text, fn -> "" end)
         |> assign_new(:collapsed_hosts, fn -> MapSet.new() end)
         |> assign_new(:host_picker_open, fn -> false end)
-        |> assign_new(:host_picker_prebound, fn -> nil end)
+        |> assign_new(:host_picker_query, fn -> "" end)
+        |> assign_new(:host_picker_pages, fn -> [] end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -571,6 +572,78 @@ defmodule ConceptWeb.ChatComponent do
           </.form>
         </div>
       </div>
+
+      <%!-- Host-picker (T1): starting a conversation = choosing a host. Search
+            across the workspace + page hosts; pick one (+ optional topic) to
+            create a conversation about it. People/DM hosts arrive in T5. --%>
+      <.modal
+        :if={@host_picker_open}
+        id={"#{@id}-host-picker"}
+        on_cancel={JS.push("close_host_picker", target: @myself)}
+      >
+        <:title>New conversation</:title>
+        <div class="px-4 pb-4 flex flex-col gap-3 w-[480px] max-w-full">
+          <p class="text-xs text-notion-text-light">Start a conversation about…</p>
+          <form phx-change="filter_host_picker" phx-target={@myself} class="relative">
+            <input
+              type="text"
+              name="q"
+              value={@host_picker_query}
+              placeholder="Search pages…"
+              phx-debounce="120"
+              autocomplete="off"
+              class="ora-input w-full"
+            />
+          </form>
+
+          <div class="max-h-80 overflow-y-auto flex flex-col gap-3">
+            <div>
+              <div class="px-1 mb-1 text-[11px] font-semibold uppercase tracking-wide text-notion-text-light">
+                Workspace
+              </div>
+              <button
+                type="button"
+                phx-click="start_conversation"
+                phx-value-host-type="workspace"
+                phx-value-q={@host_picker_query}
+                phx-target={@myself}
+                class="flex items-center gap-2 w-full text-left px-2 py-2 rounded hover:bg-notion-sidebar-hover text-sm"
+              >
+                <.icon name={Concept.Chat.RailModel.glyph(:workspace)} class="size-4 text-notion-blue" />
+                <span class="flex-1">Workspace</span>
+                <span class="text-xs text-notion-text-light">the whole workspace</span>
+              </button>
+            </div>
+
+            <div :if={@host_picker_pages != []}>
+              <div class="px-1 mb-1 text-[11px] font-semibold uppercase tracking-wide text-notion-text-light">
+                Pages
+              </div>
+              <button
+                :for={page <- @host_picker_pages}
+                type="button"
+                phx-click="start_conversation"
+                phx-value-host-type="page"
+                phx-value-host-id={page.id}
+                phx-value-q={@host_picker_query}
+                phx-target={@myself}
+                class="flex items-center gap-2 w-full text-left px-2 py-2 rounded hover:bg-notion-sidebar-hover text-sm"
+              >
+                <.icon name={Concept.Chat.RailModel.glyph(:page)} class="size-4 text-notion-text-light" />
+                <span class="flex-1 truncate">{page.title}</span>
+                <span class="text-xs text-notion-text-light">about this page</span>
+              </button>
+            </div>
+
+            <p
+              :if={@host_picker_query != "" and @host_picker_pages == []}
+              class="px-1 text-sm text-notion-text-light"
+            >
+              No pages match “{@host_picker_query}”. The Workspace host is always available.
+            </p>
+          </div>
+        </div>
+      </.modal>
     </div>
     """
   end
@@ -676,13 +749,39 @@ defmodule ConceptWeb.ChatComponent do
 
   @impl true
   def handle_event("open_host_picker", params, socket) do
-    # T1: open the host-picker (full impl lands with t1-host-picker). A host may
-    # be pre-bound when launched from a category's "+". Stubbed to a no-op-safe
-    # assign so the rail's buttons are wired and testable now.
+    # Starting a conversation = choosing a host. A host may be pre-bound when
+    # launched from a category's "+" (host_type/host_id present) — then we skip
+    # straight to creating about that host. Otherwise open the picker.
+    case prebound_host(params) do
+      %{host_type: ht, host_id: id} ->
+        start_conversation(socket, ht, id, nil)
+
+      nil ->
+        {:noreply,
+         socket
+         |> assign(:host_picker_open, true)
+         |> assign(:host_picker_query, "")
+         |> assign(:host_picker_pages, host_picker_pages(socket, ""))}
+    end
+  end
+
+  def handle_event("close_host_picker", _params, socket) do
+    {:noreply, assign(socket, :host_picker_open, false)}
+  end
+
+  def handle_event("filter_host_picker", %{"q" => q}, socket) do
     {:noreply,
      socket
-     |> assign(:host_picker_open, true)
-     |> assign(:host_picker_prebound, prebound_host(params))}
+     |> assign(:host_picker_query, q)
+     |> assign(:host_picker_pages, host_picker_pages(socket, q))}
+  end
+
+  def handle_event("start_conversation", params, socket) do
+    host_type = String.to_existing_atom(params["host-type"] || "workspace")
+    host_id = params["host-id"]
+    topic = params["topic"] || params["q"]
+    topic = if is_binary(topic) and String.trim(topic) != "", do: String.trim(topic), else: nil
+    start_conversation(socket, host_type, host_id, topic)
   end
 
   def handle_event("toggle_host_category", %{"key" => key}, socket) do
@@ -1028,10 +1127,56 @@ defmodule ConceptWeb.ChatComponent do
 
   defp host_key(group), do: "#{group.host_type}:#{group.host_id || "_"}"
 
-  defp prebound_host(%{"host-type" => t, "host-id" => id}) when is_binary(t),
-    do: %{host_type: t, host_id: id}
+  defp prebound_host(%{"host-type" => t, "host-id" => id}) when is_binary(t) and t != "",
+    do: %{host_type: String.to_existing_atom(t), host_id: id}
 
   defp prebound_host(_), do: nil
+
+  # The page hosts offered by the picker, filtered by the search query. The
+  # workspace host is always offered (rendered statically). DM hosts (users)
+  # arrive in T5 once Accounts.User is Hostable.
+  defp host_picker_pages(socket, query) do
+    q = String.downcase(query || "")
+
+    with %_{} = user <- socket.assigns[:current_user],
+         ws when not is_nil(ws) <- socket.assigns[:workspace_id],
+         {:ok, pages} <- Concept.Pages.list_tree(actor: user, tenant: ws) do
+      pages
+      |> flatten_pages()
+      |> Enum.filter(fn p -> q == "" or String.contains?(String.downcase(p.title || ""), q) end)
+      |> Enum.take(20)
+    else
+      _ -> []
+    end
+  end
+
+  # Create (or route to) a conversation about the chosen host, then navigate to
+  # it. This is the discuss action's resolution: a conversation is always about
+  # a host. An optional topic seeds the conversation title.
+  defp start_conversation(socket, host_type, host_id, topic) do
+    if is_nil(socket.assigns[:current_user]) do
+      {:noreply, put_flash(socket, :error, "You must sign in to start a conversation")}
+    else
+      attrs =
+        %{host_type: host_type, host_id: host_id, workspace_id: socket.assigns[:workspace_id]}
+        |> then(fn a -> if topic, do: Map.put(a, :title, topic), else: a end)
+
+      case Concept.Knowledge.Chat.create_conversation(attrs,
+             actor: socket.assigns.current_user,
+             tenant: socket.assigns[:workspace_id]
+           ) do
+        {:ok, conversation} ->
+          send(self(), {:chat_component_navigate, conversation.id})
+          {:noreply, assign(socket, :host_picker_open, false)}
+
+        {:error, _} ->
+          {:noreply,
+           socket
+           |> assign(:host_picker_open, false)
+           |> put_flash(:error, "Could not start the conversation.")}
+      end
+    end
+  end
 
   defp conv_selected?(nil, _conversation), do: false
   defp conv_selected?(current, conversation), do: current.id == conversation.id
