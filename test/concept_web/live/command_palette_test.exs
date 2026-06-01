@@ -49,6 +49,20 @@ defmodule ConceptWeb.CommandPaletteTest do
            |> render_hook("open_command_palette", %{}) =~ "Search pages or run a command"
   end
 
+  test "E-3: the empty-query cheatsheet renders every registered shortcut", %{
+    conn: conn,
+    ws: ws
+  } do
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}")
+    html = view |> element("#workspace-root") |> render_hook("open_command_palette", %{})
+
+    # Each registry label appears in the rendered cheatsheet (single source of
+    # truth — add a shortcut to the registry, it shows here for free).
+    for sc <- ConceptWeb.Shortcuts.all() do
+      assert html =~ sc.label, "expected the palette to surface shortcut: #{sc.label}"
+    end
+  end
+
   test "typing search query shows matching page", %{conn: conn, ws: ws, page: page} do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}")
 
