@@ -129,4 +129,69 @@ defmodule ConceptWeb.CompositeBlocksTest do
 
     assert length(hook_blocks) == 6
   end
+
+  test "C-6: columns render resize handles and a ratio-driven grid template",
+       %{conn: conn, user: user, ws: ws, page: page} do
+    {:ok, above} =
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    view
+    |> find_live_child("page-editor-#{page.id}")
+    |> render_hook("insert_composite_below", %{
+      "type" => "columns",
+      "count" => 3,
+      "block_id" => above.id
+    })
+
+    html = render(view)
+
+    # The CompositeResize hook is attached and there is one fewer handle than
+    # columns (handles sit BETWEEN tracks).
+    assert html =~ ~s(phx-hook="CompositeResize")
+    handles = Regex.scan(~r/ora-column-resizer/, html)
+    assert length(handles) == 2, "expected 2 resizers for 3 columns"
+
+    # Grid is driven by fr ratios, not a repeat(1fr) fallback.
+    assert html =~ "grid-template-columns:"
+    assert html =~ "fr"
+  end
+
+  test "C-6: resize_columns persists new ratios",
+       %{conn: conn, user: user, ws: ws, page: page} do
+    {:ok, above} =
+      Pages.create_block(:page, page.id, :paragraph, ws.id, nil, actor: user, tenant: ws.id)
+
+    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}/p/#{page.id}")
+
+    editor = find_live_child(view, "page-editor-#{page.id}")
+
+    render_hook(editor, "insert_composite_below", %{
+      "type" => "columns",
+      "count" => 2,
+      "block_id" => above.id
+    })
+
+    {:ok, blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    cols = Enum.find(blocks, &(&1.type == :columns))
+
+    render_hook(editor, "resize_columns", %{
+      "block_id" => cols.id,
+      "ratios" => [0.7, 0.3]
+    })
+
+    {:ok, after_blocks} = Pages.list_for_page(page.id, actor: user, tenant: ws.id)
+    updated = Enum.find(after_blocks, &(&1.id == cols.id))
+    ratios = get_in(updated.props, ["ratios"])
+
+    assert [r1, r2] = ratios
+    assert_in_delta r1, 0.7, 0.001
+    assert_in_delta r2, 0.3, 0.001
+  end
+
+  test "C-6: the Composite flavour declares resizable? true by default" do
+    assert Concept.Pages.BlockTypes.Columns.resizable?()
+    assert Concept.Pages.BlockTypes.Table.resizable?()
+  end
 end

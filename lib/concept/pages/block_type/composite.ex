@@ -46,11 +46,19 @@ defmodule Concept.Pages.BlockType.Composite do
       @impl Concept.Pages.BlockType
       def container?, do: true
 
+      @doc """
+      Whether this composite exposes inline resize handles between its tracks
+      (columns / table columns). Declared once on the flavour so every composite
+      inherits the affordance; override to opt a layout out.
+      """
+      def resizable?, do: true
+
       defoverridable render_kind: 0,
                      default_content: 0,
                      default_props: 0,
                      validate_props: 1,
-                     container?: 0
+                     container?: 0,
+                     resizable?: 0
     end
   end
 end

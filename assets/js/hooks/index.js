@@ -12,6 +12,7 @@ import GlobalKeys from "./global_keys.js";
 import TaskBoard from "./task_board.js";
 import FocusTrap from "./focus_trap.js";
 import ScrollToBottom from "./scroll_to_bottom.js";
+import CompositeResize from "./composite_resize.js";
 
 const Hooks = {
   BlockList,
@@ -28,6 +29,7 @@ const Hooks = {
   TaskBoard,
   FocusTrap,
   ScrollToBottom,
+  CompositeResize,
 };
 
 export default Hooks;

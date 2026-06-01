@@ -122,6 +122,24 @@ ora-workspace-graph {
   }
   .ora-lock-badge__name { font-weight: 600; }
 
+  /* ───── Composite columns + resize handles (C-6, G15) ───── */
+  .ora-columns-grid { position: relative; align-items: start; }
+  .ora-column { min-width: 0; padding: 0 8px; }
+  .ora-column:first-child { padding-left: 0; }
+  .ora-column:last-child { padding-right: 0; }
+  .ora-column-resizer {
+    width: 7px; margin: 0 -3px; cursor: col-resize; position: relative; z-index: 2;
+    border-radius: 3px; transition: background 0.12s ease;
+  }
+  .ora-column-resizer::before {
+    content: ""; position: absolute; left: 50%; top: 4px; bottom: 4px; width: 2px;
+    transform: translateX(-50%); background: transparent; border-radius: 2px;
+    transition: background 0.12s ease;
+  }
+  .ora-column-resizer:hover::before { background: var(--color-notion-blue); }
+  .ora-col-resizing { cursor: col-resize; user-select: none; }
+  .ora-col-resizing .ora-column-resizer::before { background: var(--color-notion-blue); }
+
   /* ───── Page cover & header ───── */
   .ora-cover { height: 200px; width: 100%; border-radius: 0; }
   .ora-cover-default { height: 56px; width: 100%; position: relative; display: flex; align-items: center; justify-content: center; background: transparent; }

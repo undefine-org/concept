@@ -182,7 +182,11 @@ defmodule ConceptWeb.BlockRender do
       |> Enum.sort_by(& &1.position)
 
     count = get_in(assigns.block.props, ["count"]) || length(children)
-    assigns = assign(assigns, children: children, count: count)
+    ratios = column_ratios(assigns.block.props, count)
+    resizable = assigns.mod.resizable?()
+
+    assigns =
+      assign(assigns, children: children, count: count, ratios: ratios, resizable: resizable)
 
     ~H"""
     <div
@@ -191,19 +195,56 @@ defmodule ConceptWeb.BlockRender do
       data-block-id={@block.id}
       data-composite-parent="columns"
       data-count={@count}
+      phx-hook={@resizable && "CompositeResize"}
     >
-      <div class="grid gap-2" style={"grid-template-columns: repeat(#{@count}, minmax(0, 1fr));"}>
-        <div :for={child <- @children} class="ora-column" data-block-id={child.id}>
-          <.block
-            block={child}
-            locked_by={@locked_blocks[child.id]}
-            locked_blocks={@locked_blocks}
-            current_user={@current_user}
-          />
-        </div>
+      <%!-- C-6: tracks sized by the `ratios` prop; a drag handle sits between
+            adjacent columns. The CompositeResize hook turns a drag into a
+            `resize_columns` event that persists new ratios. The grid template
+            is driven by ratios (fr units), so it reflows live as you drag. --%>
+      <div
+        class="grid gap-0 ora-columns-grid"
+        style={"grid-template-columns: #{columns_template(@ratios)};"}
+      >
+        <%= for {child, idx} <- Enum.with_index(@children) do %>
+          <div class="ora-column" data-block-id={child.id} data-col-index={idx}>
+            <.block
+              block={child}
+              locked_by={@locked_blocks[child.id]}
+              locked_blocks={@locked_blocks}
+              current_user={@current_user}
+            />
+          </div>
+          <div
+            :if={@resizable and idx < @count - 1}
+            class="ora-column-resizer"
+            data-resizer-index={idx}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize columns"
+          >
+          </div>
+        <% end %>
       </div>
     </div>
     """
+  end
+
+  # C-6: normalise the ratios prop to exactly `count` positive fractions; fall
+  # back to equal widths if missing or malformed.
+  defp column_ratios(props, count) do
+    case get_in(props, ["ratios"]) do
+      list when is_list(list) and length(list) == count ->
+        Enum.map(list, fn r -> if is_number(r) and r > 0, do: r, else: 1.0 / count end)
+
+      _ ->
+        List.duplicate(1.0 / count, count)
+    end
+  end
+
+  defp columns_template(ratios) do
+    ratios
+    |> Enum.map(fn r -> "#{Float.round(r * 1.0, 4)}fr" end)
+    |> Enum.join(" ")
   end
 
   # C-3: humane lock label. Falls back to a generic phrase if the holder's

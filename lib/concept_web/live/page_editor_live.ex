@@ -291,6 +291,29 @@ defmodule ConceptWeb.PageEditorLive do
   end
 
   @impl true
+  def handle_event("resize_columns", %{"block_id" => id, "ratios" => ratios}, socket) do
+    # C-6: persist new column ratios after a drag. Normalised + validated client
+    # side; we coerce to floats and write through the generic prop update so the
+    # grid template reflects them on the next render (and for other viewers).
+    user = socket.assigns.current_user
+    ws_id = socket.assigns.workspace.id
+    floats = Enum.map(ratios, fn r -> r / 1 end)
+
+    with block when not is_nil(block) <- find_block(socket.assigns.blocks, id),
+         count when is_integer(count) <- get_in(block.props, ["count"]),
+         true <- length(floats) == count,
+         # update_props replaces the whole prop map and re-validates, and
+         # Columns.validate_props requires BOTH count and ratios — so merge over
+         # the existing props rather than sending ratios alone.
+         next_props <- Map.put(block.props, "ratios", floats),
+         {:ok, _} <- Pages.update_props(block, next_props, actor: user, tenant: ws_id) do
+      {:noreply, assign(socket, :blocks, reload_blocks(socket))}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_event("toggle_check", %{"block_id" => id}, socket) do
     # C-1: flip a to-do's `checked` prop. Generic prop write — the block_render
     # marker only appears when a block carries a boolean `checked` prop, so this
