@@ -94,6 +94,19 @@ defmodule ConceptWeb.BlockRender do
           />
         </button>
         <ora-block-handle class="ora-block-handle group-hover:opacity-100" block-id={@block.id} />
+        <%!-- C-3: lock is conveyed by a LABEL + tooltip, never colour alone
+              (a11y). Screen readers announce who is editing; sighted users get
+              a name pill + the coloured rail. --%>
+        <span
+          :if={@locked_by}
+          class="ora-lock-badge"
+          style={"--lock-color: #{@locked_by.color}"}
+          title={lock_label(@locked_by)}
+          aria-label={lock_label(@locked_by)}
+        >
+          <.icon name="hero-lock-closed-micro" class="size-3" />
+          <span class="ora-lock-badge__name">{lock_name(@locked_by)}</span>
+        </span>
         <ora-block
           phx-hook="BlockEditor"
           phx-update="ignore"
@@ -192,6 +205,13 @@ defmodule ConceptWeb.BlockRender do
     </div>
     """
   end
+
+  # C-3: humane lock label. Falls back to a generic phrase if the holder's
+  # display name isn't known (e.g. presence meta without it).
+  defp lock_name(%{display_name: name}) when is_binary(name) and name != "", do: name
+  defp lock_name(_), do: "Someone"
+
+  defp lock_label(locked_by), do: "#{lock_name(locked_by)} is editing this block"
 
   defp composite_children(%{children: %Ash.NotLoaded{}}), do: []
   defp composite_children(%{children: nil}), do: []

@@ -117,9 +117,17 @@ defmodule ConceptWeb.LockIndicatorTest do
     assert html2 =~ "data-locked-by=\"#{user1.id}\""
     assert html2 =~ "--lock-color: #{ConceptWeb.Colors.for_user_id(user1.id)}"
 
-    # Self-LV must not see its own lock indicator
+    # C-3: the lock is also conveyed by a LABEL + tooltip, not colour alone.
+    # user1's display name is the local-part of their email.
+    name1 = user1.email |> to_string() |> String.split("@") |> hd()
+    assert html2 =~ "ora-lock-badge"
+    assert html2 =~ "#{name1} is editing this block", "expected an accessible lock label"
+    assert html2 =~ name1
+
+    # Self-LV must not see its own lock indicator (no rail, no badge).
     html1 = render(view1)
     refute html1 =~ "data-locked-by=\"#{user1.id}\""
+    refute html1 =~ "ora-lock-badge"
   end
 
   test "blur_block removes lock indicator for peer", %{

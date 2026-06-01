@@ -105,6 +105,16 @@ ora-workspace-graph {
     content: ""; position: absolute; left: -8px; top: 0; bottom: 0;
     width: 3px; background: var(--lock-color, var(--color-notion-blue)); border-radius: 2px;
   }
+  /* C-3: a name pill so the lock is not conveyed by colour alone (a11y). */
+  .ora-lock-badge {
+    position: absolute; right: 0; top: -8px; z-index: 5;
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 1px 7px 1px 5px; border-radius: 9999px;
+    font-size: 11px; line-height: 1.4; white-space: nowrap;
+    color: #FFFFFF; background: var(--lock-color, var(--color-notion-blue));
+    box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+  }
+  .ora-lock-badge__name { font-weight: 600; }
 
   /* ───── Page cover & header ───── */
   .ora-cover { height: 200px; width: 100%; border-radius: 0; }

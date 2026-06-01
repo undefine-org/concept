@@ -744,7 +744,11 @@ defmodule ConceptWeb.PageEditorLive do
         |> Enum.filter(&Map.get(&1, :locked_block_id))
         |> Enum.map(fn meta ->
           {meta.locked_block_id,
-           %{user_id: user_id, color: ConceptWeb.Colors.for_user_id(user_id)}}
+           %{
+             user_id: user_id,
+             color: ConceptWeb.Colors.for_user_id(user_id),
+             display_name: Map.get(meta, :display_name)
+           }}
         end)
       end)
       |> Map.new()
