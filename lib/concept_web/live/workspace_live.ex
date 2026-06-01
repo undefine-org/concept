@@ -597,15 +597,43 @@ defmodule ConceptWeb.WorkspaceLive do
       hook="GlobalKeys LiveCitationRail"
     >
       <%= if @current_page == nil do %>
-            <div class="flex flex-col items-center justify-center h-full text-notion-text-light">
-              <p class="mb-4 text-lg">Pick a page or create one</p>
-              <button
-                type="button"
-                phx-click="new_page"
-                class="px-4 py-2 bg-notion-blue text-white rounded hover:opacity-90"
+            <div class="flex flex-col items-center justify-center h-full">
+              <%!-- E-2: distinguish first-run (no pages at all → guided
+                    onboarding) from 'nothing selected yet' (has pages). --%>
+              <.empty_state
+                :if={@pages == []}
+                id="workspace-onboarding"
+                icon="👋"
+                title="Welcome to your workspace"
+                class="max-w-md"
               >
-                + New page
-              </button>
+                This is where your pages, notes, and docs will live. Create your
+                first page to get started — or open chat and ask the workspace
+                anything.
+                <:cta>
+                  <button type="button" phx-click="new_page" class="ora-btn ora-btn--primary">
+                    <.icon name="hero-plus-micro" class="size-4" /> Create your first page
+                  </button>
+                  <button type="button" phx-click="toggle_chat" class="ora-btn ora-btn--ghost">
+                    <.icon name="hero-chat-bubble-left-right-micro" class="size-4" /> Ask the workspace
+                  </button>
+                </:cta>
+              </.empty_state>
+
+              <.empty_state
+                :if={@pages != []}
+                id="workspace-pick-page"
+                icon="📄"
+                title="Pick a page to open"
+                class="max-w-md"
+              >
+                Choose a page from the sidebar, or start a new one.
+                <:cta>
+                  <button type="button" phx-click="new_page" class="ora-btn ora-btn--primary">
+                    <.icon name="hero-plus-micro" class="size-4" /> New page
+                  </button>
+                </:cta>
+              </.empty_state>
             </div>
           <% else %>
             <div class="ora-page-canvas">

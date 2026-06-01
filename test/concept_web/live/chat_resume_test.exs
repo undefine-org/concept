@@ -110,6 +110,18 @@ defmodule ConceptWeb.ChatResumeTest do
     assert render(view) =~ "ora-chat-panel--open"
   end
 
+  test "E-2: a fresh workspace (no pages) shows the onboarding empty state", ctx do
+    {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}")
+
+    assert has_element?(view, "#workspace-onboarding.ora-empty")
+    assert render(view) =~ "Welcome to your workspace"
+    # Both CTAs are present and call known sidebar events.
+    assert has_element?(view, "#workspace-onboarding button[phx-click=\"new_page\"]")
+    assert has_element?(view, "#workspace-onboarding button[phx-click=\"toggle_chat\"]")
+    # The 'pick a page' variant is NOT shown when there are zero pages.
+    refute has_element?(view, "#workspace-pick-page")
+  end
+
   test "B7: message list is top-anchored (oldest→newest) with the scroll hook", ctx do
     {:ok, _m1} =
       Chat.create_message(%{text: "first probe message", addresses_host: false},
