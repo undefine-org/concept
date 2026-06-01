@@ -44,7 +44,17 @@ defmodule Concept.Knowledge.Search do
 
     case Arcana.search(query, search_opts) do
       {:ok, results} ->
-        hits = results |> Enum.with_index(1) |> Enum.map(&normalize_hit/1)
+        # Arcana 2.0's hybrid path rebuilds each hit from a fixed field set and
+        # drops custom chunk metadata (block_id/page_id/breadcrumbs). Reload it
+        # from the persisted chunk rows by id so citations can attribute hits
+        # back to their source block/page.
+        meta_by_id = load_chunk_metadata(results)
+
+        hits =
+          results
+          |> Enum.with_index(1)
+          |> Enum.map(fn {chunk, rank} -> normalize_hit({chunk, rank}, meta_by_id) end)
+
         {:ok, hits}
 
       {:error, reason} ->
@@ -64,12 +74,38 @@ defmodule Concept.Knowledge.Search do
   defp maybe_put(opts, _key, nil), do: opts
   defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 
-  defp normalize_hit({chunk, rank}) do
+  # Load persisted chunk metadata keyed by chunk id, so hits can be enriched
+  # regardless of which fields the active Arcana search mode preserves.
+  defp load_chunk_metadata(results) do
+    ids =
+      results
+      |> Enum.map(fn chunk -> Map.get(chunk, :id) || Map.get(chunk, "id") end)
+      |> Enum.filter(&is_binary/1)
+
+    case ids do
+      [] ->
+        %{}
+
+      ids ->
+        import Ecto.Query
+
+        from(c in "arcana_chunks",
+          where: c.id in ^Enum.map(ids, &Ecto.UUID.dump!/1),
+          select: {c.id, c.metadata}
+        )
+        |> Concept.Repo.all()
+        |> Map.new(fn {id, meta} -> {Ecto.UUID.load!(id), meta || %{}} end)
+    end
+  end
+
+  defp normalize_hit({chunk, rank}, meta_by_id) do
     # Arcana returns chunks with atom keys
-    metadata = Map.get(chunk, :metadata) || Map.get(chunk, "metadata", %{})
+    chunk_id = Map.get(chunk, :id) || Map.get(chunk, "id")
+    inline_meta = Map.get(chunk, :metadata) || Map.get(chunk, "metadata", %{})
+    # Prefer DB-loaded metadata (authoritative); fall back to any inline map.
+    metadata = Map.get(meta_by_id, chunk_id) || inline_meta || %{}
     text = Map.get(chunk, :text) || Map.get(chunk, "text", "")
     score = Map.get(chunk, :score) || Map.get(chunk, "score", 0.0)
-    chunk_id = Map.get(chunk, :id) || Map.get(chunk, "id")
 
     %{
       block_id: Map.get(metadata, "block_id"),

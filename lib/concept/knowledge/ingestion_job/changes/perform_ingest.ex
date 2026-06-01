@@ -84,17 +84,15 @@ defmodule Concept.Knowledge.IngestionJob.Changes.PerformIngest do
            Concept.Pages.Block
            |> Ash.Query.filter(page_id == ^page_id)
            |> Ash.read(actor: actor, tenant: workspace_id) do
-      collection = Config.collection_for(workspace_id)
-      arcana_module = Application.get_env(:concept, :arcana_module, Arcana)
-
-      case arcana_module.ingest("",
-             repo: Concept.Repo,
-             collection: collection,
-             source_id: "page:#{page_id}",
-             chunker_opts: [page: page, blocks: blocks, workspace_id: workspace_id]
+      case Concept.Knowledge.Indexer.ingest_source(
+             workspace_id,
+             "page:#{page_id}",
+             "",
+             page: page,
+             blocks: blocks,
+             workspace_id: workspace_id
            ) do
-        {:ok, result} ->
-          chunk_count = Map.get(result, :chunks, 0)
+        {:ok, chunk_count} ->
           {:ok, chunk_count}
 
         {:error, %{reason: :rate_limited}} ->

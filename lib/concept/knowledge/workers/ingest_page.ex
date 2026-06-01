@@ -15,7 +15,6 @@ defmodule Concept.Knowledge.Workers.IngestPage do
 
   require Logger
 
-  alias Concept.Knowledge.Config
   alias Concept.Pages
 
   @impl Oban.Worker
@@ -87,16 +86,8 @@ defmodule Concept.Knowledge.Workers.IngestPage do
   end
 
   defp do_ingest(workspace_id, source_id, body, chunker_opts) do
-    collection = Config.collection_for(workspace_id)
-    arcana_module = Application.get_env(:concept, :arcana_module, Arcana)
-
-    case arcana_module.ingest(body,
-           repo: Concept.Repo,
-           collection: collection,
-           source_id: source_id,
-           chunker_opts: chunker_opts
-         ) do
-      {:ok, _result} ->
+    case Concept.Knowledge.Indexer.ingest_source(workspace_id, source_id, body, chunker_opts) do
+      {:ok, _chunk_count} ->
         :ok
 
       {:error, reason} = err ->
