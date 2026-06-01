@@ -103,6 +103,15 @@ ora-workspace-graph {
     background: var(--color-notion-blue); border-color: var(--color-notion-blue);
   }
 
+  /* C-4: optimistic block-op states. Removing collapses instantly; pending is a
+     subtle dim while the server confirms a reorder. Both self-heal on the next
+     LiveView patch. */
+  .ora-block-removing { opacity: 0; max-height: 0; overflow: hidden; transition: opacity 0.1s ease, max-height 0.15s ease; pointer-events: none; }
+  .ora-block-pending { opacity: 0.55; transition: opacity 0.12s ease; }
+  @media (prefers-reduced-motion: reduce) {
+    .ora-block-removing { transition: none; }
+  }
+
   .ora-block-row { position: relative; display: flex; align-items: flex-start; gap: 4px; }
   .ora-block-row > ora-block-handle { flex: 0 0 auto; margin-top: 6px; opacity: 0; transition: opacity 0.15s ease; }
   .ora-block-row:hover > ora-block-handle { opacity: 1; }

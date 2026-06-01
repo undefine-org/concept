@@ -19,11 +19,15 @@ const BlockList = {
         const prevId = prevEl?.dataset.blockId || null;
         const nextId = nextEl?.dataset.blockId || null;
 
-        this.pushEvent("reorder_block", {
-          block_id: blockId,
-          prev_id: prevId,
-          next_id: nextId,
-        });
+        // C-4: SortableJS already moved the DOM optimistically. Mark the moved
+        // row pending until the server-driven re-render reconciles position;
+        // if the move is rejected the row snaps back on the next patch.
+        movedEl.classList.add("ora-block-pending");
+        this.pushEvent(
+          "reorder_block",
+          { block_id: blockId, prev_id: prevId, next_id: nextId },
+          () => movedEl.classList.remove("ora-block-pending"),
+        );
       },
     });
   },

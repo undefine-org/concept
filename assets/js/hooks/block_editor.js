@@ -69,6 +69,12 @@ export const BlockEditor = {
       this.pushEvent("insert_paragraph_below", { block_id: this.el.getAttribute("block-id") });
     };
     this._onBackspaceAtStart = (e) => {
+      // C-4: optimistic delete — collapse the row immediately so the keystroke
+      // feels instant, then let the server confirm (it removes the node from
+      // the stream). If the server REJECTS (e.g. lock contention), the next
+      // render re-materialises the row, so the class is self-healing.
+      const row = this.el.closest(".ora-block-row") || this.el;
+      row.classList.add("ora-block-removing");
       this.pushEvent("delete_block_merge", { block_id: this.el.getAttribute("block-id") });
     };
     this.el.addEventListener("ora-block-arrow-up", this._onArrowUp);
