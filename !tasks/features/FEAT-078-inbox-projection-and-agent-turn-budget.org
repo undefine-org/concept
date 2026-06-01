@@ -1,5 +1,5 @@
 #+TITLE: Inbox projection and agent-turn budget
-#+STATE: ITEM
+#+STATE: DOING
 #+SESSION_ID: 14f5a7dfc1bd8c9b
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
 #+CUSTOM_ID: FEAT-078-inbox-projection-and-agent-turn-budget
@@ -53,3 +53,10 @@ budget that bounds chatter AND delegation depth.
   returns the unread conversation.
 - TDD red→green (atomic budget decrement under concurrency; inbox projection;
   fan-out); reviewer sign-off; mid-flight report.
+
+* CHECKPOINT [2026-05-30] — Waves 0-4 gate-green (precommit 622/0, commit dd79f5d)
+Budget half DONE: agent_turn_budget (default 5), decrement_budget (GREATEST
+fragment floor), replenish_budget (set_attribute), needs_host_response gains
+budget>0 conjunct, decrement in Respond.do_stream, replenish best-effort on
+human post. Inbox-projection half = task-12 (Wave 4b). Reviewer wave caught +
+fixed a P0 (undefined Chat.message_blocks/2) and added sender auto-join.

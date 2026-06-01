@@ -1,0 +1,51 @@
+#+TITLE: Conversation lineage source — composite RAG scope for threads
+#+STATE: ITEM
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: FEAT-081-conversation-lineage-source-composite-ra
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Parent: PLAN-010 Wave 3b (was task-11, BLOCKED on Arcana single source_id).
+
+* The blocker, precisely
+Arcana's retrieval filters by a SINGLE source_id:
+  deps/arcana/lib/arcana/vector_store/pgvector.ex:249
+  `AND ($4::text IS NULL OR d.source_id = $4::text)`
+So a conversation cannot retrieve a UNION of {host subgraph + this conversation +
+ancestor threads} in one query. The thread STRUCTURE (parent_conversation_id,
+seed_message_id) is shipped; only the union-retrieval is blocked.
+
+* User's idea: "create a source that links to the other sources"
+Two viable designs, neither needs an Arcana change:
+
+** Option A — Denormalized lineage source_id on chunks (RECOMMENDED)
+When ingesting a thread's message blocks, tag the chunk's source_id with the
+ROOT conversation id (or a stable lineage key), not the per-message id. Then a
+single source_id = "lineage:<root_convo_id>" retrieves the whole tree. The host
+subgraph is a SEPARATE concern already handled (page:<id>). Cost: ingestion
+writes a lineage key; walking parent_conversation_id at ingest time (bounded).
+Pro: one-equality filter works as-is. Con: re-parenting a thread needs re-ingest.
+
+** Option B — N queries merged client-side
+Walk the lineage in Search, issue one Arcana.search per source_id
+(host + each ancestor), merge+dedupe+rerank in Concept.Knowledge.Search. Pro: no
+ingest change, exact. Con: N round-trips, manual rerank.
+
+** Option C — extend Arcana to accept source_ids list (upstream)
+maybe_filter_source_id already List.wrap()s; the SQL needs `d.source_id = ANY($4)`.
+Smallest dep change; best long-term. File upstream.
+
+* Recommendation
+Ship Option A (lineage source_id) for the common case (host voice answering in a
+thread sees the whole thread), keep host:<id> scope as the union's other half via
+a SECOND search call merged in Search (a tiny, bounded 2-query merge). Revisit
+Option C upstream.
+
+* Acceptance
+A host voice replying in a child thread retrieves context from the parent
+thread's messages AND the host's own subgraph; verified by a lineage RAG test.

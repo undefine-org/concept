@@ -1,0 +1,41 @@
+#+TITLE: Retire ai_answer hand-rolled conversation plumbing (Wave 5b)
+#+STATE: ITEM
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: FEAT-082-retire-ai-answer-hand-rolled-conversatio
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Parent: PLAN-010 Wave 5b (was task-13).
+
+* Goal — the net-deletion the host model was built to enable
+The AI Answer block (Block.Changes.EvaluateAi) was the host-model-in-embryo: it
+hand-rolls get_or_create_conversation keyed on block.props["conversation_id"],
+scopes RAG to the block subtree, and renders the result back into itself. That is
+EXACTLY what the host model now does generically. Retiring the bespoke plumbing
+is cleanup that REMOVES code rather than adding it.
+
+* Scope
+- EvaluateAi.get_or_create_conversation → use the general host mechanism. Either:
+  (a) make Block a Hostable (host_type :block, scope :subtree) and route via
+      message_create host addressing, OR
+  (b) keep block.props["conversation_id"] but create it via the same
+      Conversation.:create + host fields path (no parallel logic).
+- Prefer (a): it makes "talk to this block" a first-class instance of the host
+  model, and an ai_answer block becomes "a Block-hosted conversation rendered
+  inline" — the design's own framing (§25).
+- DELETE the now-redundant conversation-creation code in EvaluateAi.
+
+* Risk
+EvaluateAi has sensitive 4-state UI tests (block_evaluate_ai_test.exs:83 etc.)
+and streaming/citation/staleness behavior. This is a refactor-cutover, NOT a
+rewrite — preserve exact UX. Do with the full ai_answer test suite green
+before/after; manual browser check of the 4 states.
+
+* Acceptance
+ai_answer block works identically (4 states, citations, staleness) with ZERO
+bespoke conversation code; diff is a net deletion; block_evaluate_ai_test green.

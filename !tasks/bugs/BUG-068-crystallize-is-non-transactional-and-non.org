@@ -1,0 +1,36 @@
+#+TITLE: Crystallize is non-transactional and non-idempotent
+#+STATE: DONE
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: BUG-068-crystallize-is-non-transactional-and-non
+#+COMPLETION_HASH: 1f33adc4829ce5a0
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Source: reviewer swarm on PLAN-010 Wave 5 (FEAT-079).
+File: lib/concept/knowledge/chat/reactors/steps/clone_blocks.ex:22-36
+
+* Problem
+CloneBlocks clones blocks one-by-one (Enum.map + Ash.create each, + create_link
+each), then marks the conversation crystallized — NO surrounding transaction, no
+undo/compensation. If a mid-loop clone fails, the {:ok, nb} = match raises →
+rescue returns {:error}, but already-created page blocks + Links persist and the
+conversation is left UNMARKED. Re-invoking clones the whole conversation again
+(no guard on crystallized_page_id; Link unique_triple won't dedupe because each
+run yields a new target_block_id). Net: half-crystallized pages on failure,
+duplicate clones/links on retry.
+
+* Fix
+(1) Wrap the clone loop in Concept.Repo.transaction so partial failure rolls
+back. (2) Idempotency guard: if conversation.crystallized_page_id already set,
+no-op (or return existing). Add tests: failure mid-clone leaves page unchanged;
+double-crystallize is a no-op.
+
+* Acceptance
+Crystallize is all-or-nothing; calling it twice does not duplicate blocks/links.
+
+NOTE [2026-05-30]: Fixed in b344644: Ash.transaction wraps clone loop (all-or-nothing); crystallized_page_id guard makes second call a no-op. Test: "crystallize is idempotent".

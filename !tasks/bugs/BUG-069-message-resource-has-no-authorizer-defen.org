@@ -1,0 +1,39 @@
+#+TITLE: Message resource has no authorizer (defense-in-depth gap)
+#+STATE: ITEM
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: BUG-069-message-resource-has-no-authorizer-defen
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Source: reviewer swarm on PLAN-010 (FEAT-076).
+File: lib/concept/knowledge/chat/message.ex:2-7
+
+* Problem
+Message declares data_layer/extensions/notifiers but NO authorizers:
+[Ash.Policy.Authorizer] and no policies block — the only workspace-tenanted chat
+resource without one (Conversation adds one even as plain Ash.Resource;
+Participant uses WorkspaceTenanted). Cross-tenant isolation is NOT currently
+broken: multitenancy global? false forces+filters tenant, and the only entry
+points (MCP plug verifies membership/binds API key to workspace; LiveView
+derives tenant from Workspace.for_user) never hand the actor a foreign tenant.
+BUT: (1) message reads apply no participant gating — any actor with the tenant
+reads every conversation's messages, defeating the participant-gating
+Conversation.read added for private conversations; (2) no defense-in-depth — if
+any future call path sets tenant from untrusted input, message content
+(the sensitive payload) is fully exposed.
+
+* Fix
+Add authorizers: [Ash.Policy.Authorizer] + policy floor mirroring Conversation
+(system bypass; read = participant OR WorkspaceMember; create =
+WorkspaceMemberCreate), OR `use Concept.Resources.WorkspaceTenanted`. Verify
+blast radius (upsert_response, Oban respond, EvaluateAi all authorize?:false —
+should be unaffected by the bypass).
+
+* Acceptance
+A workspace member who is NOT a participant of a private conversation cannot
+read its messages; existing internal/system paths still green.

@@ -1,0 +1,30 @@
+#+TITLE: Agent-turn budget gate/decrement TOCTOU allows bounded over-run
+#+STATE: ITEM
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: BUG-070-agent-turn-budget-gate-decrement-toctou
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Source: reviewer swarm on PLAN-010 Wave 4 (FEAT-078). Low priority — errs safe.
+File: lib/concept/knowledge/chat/message.ex:367-372 + respond.ex:159
+
+* Problem
+needs_host_response gate (agent_turn_budget > 0) and the in-flight decrement
+(do_stream → decrement_budget) are not in one transaction. Two messages enqueued
+while budget==1 can each evaluate the gate true before either commits its
+GREATEST(?-1,0) decrement → one extra host turn beyond the cap. Bounded over-run
+proportional to concurrency, NOT a loop-escape (floor + per-message re-enqueue
+still terminate). Errs safe.
+
+* Fix (optional)
+Decrement-and-check in one atomic step, or gate the respond worker on a
+conditional decrement that returns whether a turn was granted. Only worth doing
+if precise budget accounting matters.
+
+* Acceptance
+Under N concurrent host-addressed messages at budget==1, at most 1 host turn runs.

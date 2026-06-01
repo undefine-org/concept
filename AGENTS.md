@@ -1,5 +1,7 @@
 This is a web application written using the Phoenix web framework.
 
+Port: localhost:4279
+
 ## Principle: MCP parity by construction
 
 > Every Ash action with a `description` is a feature.

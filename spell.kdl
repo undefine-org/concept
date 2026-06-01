@@ -1,0 +1,11 @@
+mcp {
+	// Concept's own MCP surface (PLAN-007 AutoTools): every described Ash
+	// action is a tool. Workspace-bound API key → tenant is implicit, the
+	// mcp-workspace-id header is ignored (see AGENTS.md tenancy rule).
+	// Key minted for the dev workspace; revoke at /admin or via ApiKey :destroy.
+	server concept type=http {
+		url "http://localhost:4279/mcp"
+		// Spell resolves this to the env var's value (full "Bearer concept_..." string).
+		headers "Authorization" "CONCEPT_MCP_BEARER"
+	}
+}

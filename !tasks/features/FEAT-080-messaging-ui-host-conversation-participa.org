@@ -1,5 +1,5 @@
 #+TITLE: Messaging UI: host conversation, participants, crystallize, inbox
-#+STATE: ITEM
+#+STATE: DONE
 #+SESSION_ID: 14f5a7dfc1bd8c9b
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
 #+CUSTOM_ID: FEAT-080-messaging-ui-host-conversation-participa
@@ -47,3 +47,133 @@ ONLY (Credo LiveViewPurity EX9001 — no Ash.Query in lib/concept_web/).
 - TDD: LiveView tests via Phoenix.LiveViewTest keyed on element IDs (composer,
   participant rail, crystallize button, inbox list).
 - Reviewer sign-off; final report.
+
+* HANDOFF [2026-05-30] — UI wave NOT started (domain complete; env-gated)
+Domain layer (Waves 0-5 + 4b) is complete and gate-green (precommit 622/0). The
+UI wave is deliberately not started under degraded conditions (DB
+too_many_connections, concurrent-agent build locks, tool truncation) to avoid
+shipping unverifiable LiveView/browser code.
+
+Ready-to-consume domain surface for the UI (all code-interface fns, EX9001-safe):
+- Chat.inbox (actor) → conversations the user participates in, recent-first
+- Chat.conversations_for_host(:page|:workspace, host_id)
+- Chat.message_history(conversation_id) ; Chat.create_message(%{text, host_type,
+  host_id, addresses_host, mentions, reply_to_message_id})
+- Chat.participants_for_conversation(conversation_id) (load :membership, :kind)
+- Chat.crystallize_conversation(conversation_id, target_page_id, workspace_id)
+- PubSub topics: "chat:messages:<conversation_id>" (existing) + per-user
+  "inbox:<user_id>" emitting {:inbox_activity, %{conversation_id, message_id}}
+UI plan: extend lib/concept_web/chat_component.ex (do NOT fork). Host-conversation
+view (doc+thread one surface), participant rail (humans/agents/host-voice badges),
+@-mention + / slash composer, "Crystallize into Page" button → crystallize_
+conversation, inbox LiveView subscribing inbox:<current_user.id>. Tests via
+Phoenix.LiveViewTest keyed on element ids; puppeteer browser pass once env stable.
+
+* IMPLEMENTATION PLAN [2026-05-30] — Wave 6 broken into 5 atomic deliverables
+
+Each deliverable = one atomic commit, one mockup, one slice of ScenarioTest.
+Principle: EXTEND lib/concept_web/chat_component.ex (+ ChatPanel), do NOT fork.
+No new domain code — every piece rides an existing Chat code-interface fn. If a
+LiveView reaches for Ash.Query, that is the signal a domain action is missing
+(Credo EX9001 enforces this).
+
+** 6.1 — Host-aware ChatComponent
+- Accept host_type/host_id assigns (default :workspace → unchanged behaviour);
+  page view passes host_type: :page, host_id: current_page.id.
+- create_message gains host_type/host_id in base_args; drop private
+  conversation_id injection when a host is given (find-or-create routes it via
+  CreateConversationIfNotProvided → for_host ROOT match, threads excluded).
+- Render by sender_kind calc (NOT legacy source): :human avatar / :agent violet
+  robot / :host|:concept_ai violet sparkle ("This page"/"This task"/"Concept AI")
+  keeping <.why_this_answer> + citation pills.
+- Render message.blocks via existing BlockRender dispatcher when present.
+- Header shows host ("Conversation about <page title>"); page blocks above a
+  divider, thread below (mockup 3).
+- Data: conversations_for_host/2, message_history/1, create_message,
+  get_conversation/1. RT: existing chat:messages:<id>.
+
+** 6.2 — Participant rail
+- Right-rail partial: participants_for_conversation/1 (load [:membership,:kind])
+  + synthetic host-voice entry (no Participant row by design, §39).
+- Badges: human initial / :agent robot violet / host-voice sparkle violet.
+- Presence: ConceptWeb.Presence on conversation:<id>:presence (mirrors page
+  presence) for who-is-viewing green dot. Ephemeral, off the log.
+
+** 6.3 — @-mention + / slash composer
+- Colocated JS hook (:type={Phoenix.LiveView.ColocatedHook}); on "@"
+  pushEvent("mention_search",…) → component replies members + hostables; select
+  appends chip + id into message mentions array (server dispatch already exists).
+- "/" slash menu reuses page editor's menu so a message can carry real blocks
+  (attach via message_id — content membrane already built).
+- Setting addresses_host: true when host voice is @-mentioned is the UI's job;
+  human↔human leaves it false (kills the reflex in practice).
+- Placeholder: "Message — @ a person, an agent, or this page".
+
+** 6.4 — Crystallize control
+- "Crystallize into Page" button in rail (mockup 4) → crystallize_conversation(
+  conversation_id, target_page_id, workspace_id); page-hosted defaults target to
+  host page. Re-render page stream; green "just added"+"from conversation" chip.
+  Idempotent (BUG-068 fixed) — second click safe no-op.
+
+** 6.5 — Inbox LiveView
+- New route in :authenticated_routes: live "/w/:workspace_slug/inbox", InboxLive.
+- mount → subscribe inbox:<current_user.id>; list Chat.inbox/0 recent-first,
+  context-rich (shows host); on {:inbox_activity,…} re-stream + unread badge;
+  click navigates to host conversation. mark_participant_read/2 clears unread.
+- Agent results + human mentions in ONE feed.
+
+** Process (per deliverable, sequential, main thread)
+1. Build (code-interface only). 2. mix credo --strict on touched files (EX9001
+   first). 3. Phoenix.LiveViewTest keyed on element ids (#chat-composer,
+   #participant-rail, #crystallize-btn, #inbox-list) — assert outcomes not raw
+   HTML. 4. compile --warnings-as-errors + targeted test green. 5. atomic commit.
+After all 5: puppeteer browser pass (screenshots) → UI reviewer wave → isolated
+mix precommit gate → mark FEAT-080 DONE.
+
+** Risks
+- BlockRender may assume page context → minimal generalization if a message-block
+  needs page assigns (domain-adjacent, not a fork).
+- Mention hook DOM → phx-update="ignore".
+- Stream identity → stable id={"msg-#{id}"} across thread nesting.
+- sender_kind on legacy source-based rows → verify maps cleanly.
+
+Files: chat_component.ex (evolve), chat_panel.ex (evolve), inbox_live.ex (new),
+router.ex (1 route), assets/js colocated hook. Mockups: docs/messaging_design.md.
+
+* DONE [2026-05-30] — Wave 6 UI complete, gate-green, browser-verified
+
+All 5 deliverables shipped on feat/plan-010-conversation-substrate (atomic commits
+a8c53d9 → 3f63ba2):
+- 6.1 Host-aware ChatComponent (sender_kind presentation, host header, host-routed create)
+- 6.2 Participant rail (host-voice synthetic chip + member/agent badges)
+- 6.3 @-mention picker + host-reply toggle (server-driven, no custom JS)
+- 6.4 Crystallize-into-Page control (page-host only, idempotent)
+- 6.5 Inbox LiveView (/w/:slug/inbox, inbox:<user_id> PubSub, sidebar link)
+
+Methodology delivered as promised: per-deliverable build → credo(EX9001) → LiveView
+test → commit; then browser pass → reviewer wave → gate.
+
+GATE: mix credo --strict clean (1919 mods/funs, EX9001 included); mix
+concept.docs.mcp_surface --check = no drift (Wave 6 added 0 MCP tools — pure
+projection); mix test = 643 tests, 0 failures.
+
+BROWSER (puppeteer on :4279) verified end-to-end and caught 3 real bugs the
+skipped tests had hidden — now fixed + regression-tested:
+1. broadcast-clause update/2 bypassed assign_new → missing @host_type at render
+   → crash on every message. Fixed via mount/1 instance defaults.
+2. host_type/host_id/mentions/addresses_host are ACCEPT attrs; placing them only
+   in form-build params (replaced by submit) dropped them → page messages
+   mis-routed to :workspace. Fixed via addressing_params/1 merged at BOTH build
+   and submit.
+3. {:chat_component_navigate,_} handler never existed in WorkspaceLive → first
+   message to a host crashed. Added handler + chat_conversation_id tracking.
+
+Reviewer wave: 2 reviewers, both SOUND, no P0/P1; 2 quality nits fixed (inbox
+error logging, draft preservation on host rebuild).
+
+New tests: workspace_chat_panel_test (host routing: workspace→:workspace,
+page→:page; send-render), inbox_live_test (empty/participation/re-stream).
+
+Domain (PLAN-010 Waves 0-5) was already complete; this wave is the human
+projection riding existing Chat code-interface fns with ZERO new domain code —
+MCP parity preserved by construction.

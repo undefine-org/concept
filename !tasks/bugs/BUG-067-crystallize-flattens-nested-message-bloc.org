@@ -1,0 +1,37 @@
+#+TITLE: Crystallize flattens nested message blocks and misorders them
+#+STATE: DONE
+#+SESSION_ID: 14f5a7dfc1bd8c9b
+#+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
+#+CUSTOM_ID: BUG-067-crystallize-flattens-nested-message-bloc
+#+COMPLETION_HASH: 08aac6f2129627d9
+
+* Initial Message
+
+i'd like Concept to replace my needs for both Notion *and Slack*. Right now the messaging tab is very focused on the idea of talking to a single AI. What if we could talk to each other (to each other *humans* and to each other *agents* AND to the internal Concept AI?)? What would be the messaging model? Look up the current architecture, the ideas behind Ash/Spark, and different messaging models, with tradeoffs w.r.t what Concept brings and how to enable collaboration. I want to finish with something that is truly Concept-ual.
+
+This is a DESIGN BRAINSTORM. I want you to research online and to make the right architecture + design (you can use the Generate UI Screen tool btw)
+
+Source: reviewer swarm on PLAN-010 Wave 5 (FEAT-079).
+File: lib/concept/knowledge/chat/reactors/steps/clone_blocks.ex:55-69
+
+* Problem
+clone_block/4 copies only [page_id, type, content, props, workspace_id] and
+DROPS parent_block_id. Nested message blocks (bulleted list w/ children, toggle,
+columns) are cloned as TOP-LEVEL page blocks → hierarchy flattened. Worse:
+list_for_message sorts [parent_block_id: :asc, position: :asc]; Postgres orders
+NULL last under ASC, so nil-parent (top-level) blocks sort AFTER their children
+→ children cloned before parents (AssignAfterLastSibling appends in iteration
+order). Moduledoc claims "render order" but nested content is de-nested AND
+misordered. Flat single-level messages unaffected (why current tests pass).
+
+* Fix
+Build an old→new id map during clone so cloned children point at cloned parents
+(set parent_block_id on the clone to the mapped new parent). Clone parents
+before children (sort nil-parent first, or two-pass). Add a test with a nested
+message block.
+
+* Acceptance
+A message containing a parent block + child blocks crystallizes to the page with
+the SAME hierarchy and order; new parent/child ids are internally consistent.
+
+NOTE [2026-05-30]: Fixed in b344644: old→new id map rewires parent_block_id, parents cloned before children. Test: "crystallize preserves block hierarchy".

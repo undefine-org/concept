@@ -40,3 +40,4 @@ npm-debug.log
 
 .spell/*/workspace.bin
 .spell/edit-history.jsonl
+/.local

@@ -92,7 +92,12 @@ defmodule Concept.Pages.BlockTypes.RecordRefTest do
     end
 
     test "renders a link affordance when record_id is nil", ctx do
-      block = %Concept.Pages.Block{id: Ecto.UUID.generate(), workspace_id: ctx.ws, props: %{"record_id" => nil}}
+      block = %Concept.Pages.Block{
+        id: Ecto.UUID.generate(),
+        workspace_id: ctx.ws,
+        props: %{"record_id" => nil}
+      }
+
       html = render_block(block)
       assert html =~ "Link a record"
       assert html =~ "open_record_picker"

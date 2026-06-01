@@ -63,3 +63,57 @@ RAG, and crystallize provenance. This is the spine of "conversation is knowledge
 Highest-infra wave. The source_id generalization touches ingest, search, and
 debounce together — land it deliberately with tests at each seam, not as a
 drive-by. It pays off Wave 3 (RAG union), Wave 5 (crystallize), and Pillar 2.
+
+* MID-FLIGHT REPORT [2026-05-30] — Wave 2a complete (commit 388d645); Wave 2b split out
+
+** Work done (Wave 2a — the content membrane, +proving tests)
+- Block: page_id now NULLABLE + message_id; belongs_to :message; CHECK
+  num_nonnulls(page_id, message_id)=1 (a block lives under a page XOR a message);
+  index (workspace_id, message_id, position). Both container attrs explicit +
+  writable?: true; both belongs_to use define_attribute?: false to bind to them.
+- Message.blocks has_many (rich body); text retained as plain-text shim.
+- AssignAfterLastSibling: sibling/position query keyed off page XOR message.
+- KnowledgeReindex.maybe_enqueue guards nil page_id (message blocks skip the
+  page-ingest path; conversation-source ingestion is Wave 2b).
+- Migration: page_id→nullable, message_id FK, check constraint. Existing rows
+  all page-owned (num_nonnulls=1) → safe.
+- Proving: block_container_test (4: message-contains-blocks, neither-rejected,
+  both-rejected, page-unchanged). Full precommit 611/0 in an ISOLATED run.
+
+** Decisions / deviations
+- SPLIT FEAT-075 into 2a (content membrane — DONE) and 2b (source_id
+  generalization — task-11, pending). Rationale: the membrane is independently
+  shippable and green; the ingest/RAG generalization (page:<id> →
+  {source_type,id} so message/conversation blocks are searchable) is a
+  separable, equally-sized piece that is load-bearing for Wave 5 crystallize.
+  Shipping 2a green now de-risks the schema change before layering RAG on top.
+
+** Process learnings (important for remaining waves)
+- The shared tree has HEAVY concurrent-agent activity. Build-lock races
+  (`Waiting for lock … held by process NNNN`) and _build/test clobbering produce
+  TRANSIENT, misleading failures: false EXIT=1 from --warnings-as-errors and a
+  phantom "Block does not have field message_id" Spark error mid-run. The fix:
+  `MIX_ENV=test mix compile --force` then re-run; verify in an ISOLATED run.
+  Source correctness was provable via `git diff HEAD` (empty) + a quiet
+  force-compile (EXIT=0).
+- Parallel edit calls to the SAME file race and corrupt it (duplicate
+  belongs_to, reverted attrs). Rule for remaining waves: ONE atomic multi-op
+  edit per file; verify on disk before the next step; never batch edits to a
+  hot file with concurrent writers active.
+- Recover corrupted files via `git show <commit>:path > path` (read+write,
+  never checkout/reset — per the hard no-destructive-git rule).
+
+** Work to be done
+- Wave 2b (task-11): KnowledgeReindex message→conversation dispatch;
+  IngestPage→IngestSource over conversation; BlockChunker accept conversation
+  source; Search.scope_opts + debounce key gain conversation:<id>.
+- Waves 3-6 unchanged.
+
+* REVIEWER WAVE [2026-05-30] — Waves 1-2b reviewed, no blocking issues
+- Verdict: sound, precommit 615/0 corroborated. Safe to proceed.
+- Finding #2 (HIGH, actioned now): participants never created → participant
+  read-path untested + Wave 4 inbox would be empty. Fix: auto-join the sender
+  as a Participant on create_message.
+- Finding #1 (HIGH, Wave 4 precondition): mentions array not validated against
+  real participant ids — validate when inbox fan-out is wired (Wave 4).
+- Mediums/lows: no action needed (verified OK).

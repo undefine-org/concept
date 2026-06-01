@@ -1,5 +1,5 @@
 #+TITLE: Threads and GraphRAG over conversation lineage
-#+STATE: ITEM
+#+STATE: DOING
 #+SESSION_ID: 14f5a7dfc1bd8c9b
 #+TRANSCRIPT_PATH: [[file:/home/user/.spell/agent/sessions/-code-ora-concept/2026-05-30T15-04-22-534Z_14f5a7dfc1bd8c9b.jsonl]]
 #+CUSTOM_ID: FEAT-077-threads-and-graphrag-over-conversation-l
