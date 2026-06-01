@@ -21,6 +21,7 @@ defmodule Concept.Chat.MessageKindTest do
 
     test "host answering a message (no participant, has response_to) → :host_seep" do
       assert MessageKind.render_mode(%{source: :host, response_to_id: "m1"}) == :host_seep
+
       assert MessageKind.render_mode(%{"source" => "host", "response_to_id" => "m1"}) ==
                :host_seep
     end

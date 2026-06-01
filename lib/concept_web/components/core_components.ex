@@ -98,7 +98,12 @@ defmodule ConceptWeb.CoreComponents do
       """
     else
       ~H"""
-      <button class={@class} aria-busy={to_string(@loading)} disabled={@loading || @rest[:disabled]} {@rest}>
+      <button
+        class={@class}
+        aria-busy={to_string(@loading)}
+        disabled={@loading || @rest[:disabled]}
+        {@rest}
+      >
         <span :if={@loading} class="ora-spinner mr-1.5" aria-hidden="true" />
         <span class="ora-btn__label">{render_slot(@inner_block)}</span>
       </button>

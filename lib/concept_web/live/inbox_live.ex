@@ -38,7 +38,12 @@ defmodule ConceptWeb.InboxLive do
 
         {:ok,
          socket
-         |> assign(workspace: ws, pages: pages, page_title: "Inbox", inbox_count: length(conversations))
+         |> assign(
+           workspace: ws,
+           pages: pages,
+           page_title: "Inbox",
+           inbox_count: length(conversations)
+         )
          |> stream(:conversations, conversations)}
 
       _ ->
@@ -92,56 +97,60 @@ defmodule ConceptWeb.InboxLive do
       <div id="inbox-shell" class="flex min-h-screen" phx-hook="GlobalKeys">
         <.sidebar workspace={@workspace} pages={@pages} current_user={@current_user} />
         <main class="flex-1 overflow-y-auto bg-notion-bg">
-      <div class="max-w-3xl mx-auto p-6">
-        <div class="mb-6 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <.icon name="hero-bell" class="size-5 text-notion-text" />
-            <h1 class="text-2xl font-bold text-notion-text">Inbox</h1>
-            <span class="text-sm text-notion-text-light">
-              {@inbox_count} active {ngettext("conversation", "conversations", @inbox_count)}
-            </span>
-          </div>
-          <.link
-            navigate={~p"/w/#{@workspace.slug}"}
-            class="text-sm text-notion-text-light hover:text-notion-text"
-          >
-            ← Workspace
-          </.link>
-        </div>
-
-        <div id="inbox-list" phx-update="stream" class="flex flex-col divide-y divide-notion-divider">
-          <div id="inbox-empty" class="hidden only:block py-12 text-center text-notion-text-light">
-            <.icon name="hero-inbox" class="size-8 mx-auto mb-2 opacity-50" />
-            <p>No conversations yet. Start one from a page or the chat panel.</p>
-          </div>
-
-          <.link
-            :for={{dom_id, conversation} <- @streams.conversations}
-            id={dom_id}
-            navigate={~p"/w/#{@workspace.slug}"}
-            class="flex items-center gap-3 py-3 px-2 rounded hover:bg-notion-sidebar-hover no-underline"
-          >
-            <span class={[
-              "inline-flex items-center justify-center size-8 rounded-full shrink-0",
-              host_badge_class(conversation.host_type)
-            ]}>
-              <.icon name={host_icon(conversation.host_type)} class="size-4" />
-            </span>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium text-notion-text truncate">
-                {conversation_title(conversation)}
-              </p>
-              <p class="text-xs text-notion-text-light truncate">
-                {host_context(conversation.host_type)}
-              </p>
+          <div class="max-w-3xl mx-auto p-6">
+            <div class="mb-6 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <.icon name="hero-bell" class="size-5 text-notion-text" />
+                <h1 class="text-2xl font-bold text-notion-text">Inbox</h1>
+                <span class="text-sm text-notion-text-light">
+                  {@inbox_count} active {ngettext("conversation", "conversations", @inbox_count)}
+                </span>
+              </div>
+              <.link
+                navigate={~p"/w/#{@workspace.slug}"}
+                class="text-sm text-notion-text-light hover:text-notion-text"
+              >
+                ← Workspace
+              </.link>
             </div>
-            <span class="text-xs text-notion-text-light shrink-0">
-              {relative_time(conversation.updated_at)}
-            </span>
-          </.link>
-        </div>
-      </div>
-      </main>
+
+            <div
+              id="inbox-list"
+              phx-update="stream"
+              class="flex flex-col divide-y divide-notion-divider"
+            >
+              <div id="inbox-empty" class="hidden only:block py-12 text-center text-notion-text-light">
+                <.icon name="hero-inbox" class="size-8 mx-auto mb-2 opacity-50" />
+                <p>No conversations yet. Start one from a page or the chat panel.</p>
+              </div>
+
+              <.link
+                :for={{dom_id, conversation} <- @streams.conversations}
+                id={dom_id}
+                navigate={~p"/w/#{@workspace.slug}"}
+                class="flex items-center gap-3 py-3 px-2 rounded hover:bg-notion-sidebar-hover no-underline"
+              >
+                <span class={[
+                  "inline-flex items-center justify-center size-8 rounded-full shrink-0",
+                  host_badge_class(conversation.host_type)
+                ]}>
+                  <.icon name={host_icon(conversation.host_type)} class="size-4" />
+                </span>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-notion-text truncate">
+                    {conversation_title(conversation)}
+                  </p>
+                  <p class="text-xs text-notion-text-light truncate">
+                    {host_context(conversation.host_type)}
+                  </p>
+                </div>
+                <span class="text-xs text-notion-text-light shrink-0">
+                  {relative_time(conversation.updated_at)}
+                </span>
+              </.link>
+            </div>
+          </div>
+        </main>
       </div>
     </Layouts.shell>
     """

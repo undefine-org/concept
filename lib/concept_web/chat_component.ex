@@ -243,7 +243,7 @@ defmodule ConceptWeb.ChatComponent do
             phx-update="stream"
             class="ora-chat-messages"
           >
-              <%!-- Dispatch on Concept.Chat.MessageKind.render_mode/1 — the single
+            <%!-- Dispatch on Concept.Chat.MessageKind.render_mode/1 — the single
                     source of truth. Host replies SEEP in (fused continuation,
                     no avatar); humans/agents take a row. Raw tool plumbing never
                     renders in the stream — it lives behind "Why this answer?". --%>
