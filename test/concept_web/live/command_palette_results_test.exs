@@ -72,6 +72,20 @@ defmodule ConceptWeb.CommandPaletteResultsTest do
            "expected a title result button for the matching page in the palette"
   end
 
+  test "E-6: the matched query term is highlighted in the result title", %{
+    conn: conn,
+    ws: ws,
+    page: _page
+  } do
+    {:ok, view, _} = live(conn, ~p"/w/#{ws.slug}")
+    open(view)
+    html = search(view, "oad")
+
+    # 'Roadmap' matched on 'oad' — that substring is wrapped in a highlight mark.
+    assert html =~ ~s(<mark class="ora-hl">oad</mark>),
+           "expected the matched query term to be highlighted in the result"
+  end
+
   test "empty query renders recent pages as title rows", %{conn: conn, ws: ws, page: page} do
     {:ok, view, _} = live(conn, ~p"/w/#{ws.slug}")
     open(view)

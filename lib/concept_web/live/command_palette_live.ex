@@ -149,10 +149,20 @@ defmodule ConceptWeb.CommandPaletteLive do
                       page_id={page.id}
                       icon="hero-document-text"
                       type={:title}
+                      query={@query}
                       myself={@myself}
                     />
                   </div>
                 <% end %>
+
+                <%!-- E-6: while semantic search is in flight, a skeleton tells
+                      the user results are coming (not that there are none). --%>
+                <div :if={@query != "" and semantic_loading?(assigns)} class="px-4 pt-3 pb-1">
+                  <div class="text-xs font-medium text-notion-text-light uppercase tracking-wide mb-2">
+                    Semantic matches
+                  </div>
+                  <.skeleton rows={3} />
+                </div>
 
                 <%!-- Semantic results bucket --%>
                 <% semantic_hits = semantic_hits(assigns) %>
@@ -247,10 +257,33 @@ defmodule ConceptWeb.CommandPaletteLive do
       <% else %>
         <span class="text-base">{@icon_emoji || "📄"}</span>
       <% end %>
-      <span class="truncate text-notion-text">{@title || "Untitled"}</span>
+      <span class="truncate text-notion-text">{highlight(@title || "Untitled", @query)}</span>
     </.palette_item>
     """
   end
+
+  # E-6: wrap occurrences of the query in <mark> so the user sees WHY a result
+  # matched. Case-insensitive, escapes the query for regex + the surrounding
+  # text for HTML safety; returns safe iodata.
+  defp highlight(text, query) when is_binary(text) and is_binary(query) do
+    trimmed = String.trim(query)
+
+    if trimmed == "" do
+      text
+    else
+      pattern = Regex.compile!("(" <> Regex.escape(trimmed) <> ")", "i")
+
+      text
+      |> Phoenix.HTML.html_escape()
+      |> Phoenix.HTML.safe_to_string()
+      |> then(fn escaped ->
+        Regex.replace(pattern, escaped, "<mark class=\"ora-hl\">\\1</mark>")
+      end)
+      |> Phoenix.HTML.raw()
+    end
+  end
+
+  defp highlight(text, _), do: text
 
   defp semantic_item(assigns) do
     ~H"""
@@ -375,6 +408,15 @@ defmodule ConceptWeb.CommandPaletteLive do
   defp title_count(async), do: length(title_pages(async))
 
   defp semantic_count(assigns), do: length(semantic_hits(assigns))
+
+  # E-6: true while the semantic async result is still resolving (not yet ok?,
+  # no error). Drives the loading skeleton.
+  defp semantic_loading?(assigns) do
+    case assigns.semantic_results do
+      %Phoenix.LiveView.AsyncResult{loading: loading} when loading not in [nil, false] -> true
+      _ -> false
+    end
+  end
 
   defp ask_count(assigns) do
     if assigns.query != "", do: 1, else: 0
