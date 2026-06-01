@@ -2,17 +2,19 @@ defmodule Concept.Knowledge.MockEmbedder do
   @moduledoc """
   Deterministic, offline embedder for tests. Implements `Arcana.Embedder`.
 
-  Vector is derived from a SHA-256 of the input text, projected into 384 floats
-    in `[-1, 1)` — deterministic and reproducible
-  and free of network calls. Two identical inputs produce identical vectors.
+  Vector is derived from a SHA-256 of the input text, projected into 768 floats
+  in `[-1, 1)` — deterministic, reproducible, and free of network calls. Two
+  identical inputs produce identical vectors. The dimensionality matches the
+  production embedder (`GeminiEmbedder`, 768d) so the `arcana_chunks.embedding`
+  `vector(768)` column accepts test vectors.
 
   Configure in `config/test.exs`:
 
-      config :arcana, embedder: {:custom, module: Concept.Knowledge.MockEmbedder}
+      config :arcana, embedder: Concept.Knowledge.MockEmbedder
   """
   @behaviour Arcana.Embedder
 
-  @dim 384
+  @dim 768
 
   @impl Arcana.Embedder
   def dimensions(_opts), do: @dim
