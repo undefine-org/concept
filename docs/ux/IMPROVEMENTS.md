@@ -148,3 +148,15 @@ Concept.Chat.MessageKind            # behaviour + registry (twin of BlockType)
   system; the reason loading/empty/error states were never built.
 - **A `FocusTrap` + `ScrollToBottom` hook pair** — reused by modal, slide-over,
   record-picker, chat. Build once.
+
+---
+
+## E-1 mobile layout — shipped & verified
+
+Delivered intrinsically as part of `Layouts.workspace/1` (commit `f57f89a`): a
+sticky hamburger bar < md, a slide-in drawer wrapping the shared sidebar, and a
+scrim that closes on tap (pure client JS, `prefers-reduced-motion` guarded).
+Tested in `test/concept_web/components/workspace_shell_test.exs` (mobile
+affordances present in the DOM, drawer closed by default). Live-verified at 390px:
+`docs/ux/live/SHELL-mobile-closed.png` (drawer off-canvas, hamburger + title bar)
+and `docs/ux/live/SHELL-mobile-open.png` (drawer over a dimmed scrim).
