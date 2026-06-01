@@ -173,6 +173,11 @@ ora-workspace-graph {
   .ora-chat-message--seep { align-self: stretch; max-width: 100%; margin-left: 36px; padding-left: 12px; border-left: 2px solid var(--color-notion-blue); }
   .ora-chat-message--seep .ora-chat-bubble { background: rgba(46, 170, 220, 0.06); color: var(--color-notion-text); border-radius: 6px; }
   .ora-chat-seep-label { font-weight: 500; }
+  .ora-typing { display: inline-flex; gap: 3px; align-items: center; }
+  .ora-typing i { width: 4px; height: 4px; border-radius: 9999px; background: var(--color-notion-blue); opacity: 0.4; animation: ora-typing-bounce 1.2s ease-in-out infinite; }
+  .ora-typing i:nth-child(2) { animation-delay: 0.15s; }
+  .ora-typing i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes ora-typing-bounce { 0%, 60%, 100% { opacity: 0.4; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
   .ora-chat-avatar { width: 28px; height: 28px; border-radius: 9999px; background: var(--color-notion-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
   .ora-chat-toolcall { font-size: 11px; opacity: 0.7; padding: 2px 6px; border: 1px solid var(--color-notion-divider); border-radius: 4px; display: inline-block; margin-right: 4px; }
   .ora-chat-toolresult { font-size: 11px; padding: 4px 6px; background: var(--color-notion-hover); border-radius: 4px; margin-top: 4px; }
@@ -354,5 +359,6 @@ ora-workspace-graph {
     .ora-spinner { animation-duration: 1.4s; }
     .ora-pill-indexing::before { animation: none; }
     .ora-modal-overlay, .ora-modal-dialog { animation: none; }
+    .ora-typing i { animation: none; opacity: 0.6; }
   }
 }

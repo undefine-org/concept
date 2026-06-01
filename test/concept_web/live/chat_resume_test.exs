@@ -75,6 +75,24 @@ defmodule ConceptWeb.ChatResumeTest do
              html =~ "Try asking"
   end
 
+  test "clicking a seed prompt sends immediately (one-click)", ctx do
+    {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}")
+    view |> element("#workspace-root") |> render_hook("toggle_chat", %{})
+    :timer.sleep(80)
+
+    # Click a seed prompt button — it must SEND, not just fill the composer.
+    view
+    |> element("button[phx-value-prompt='Summarize this workspace']")
+    |> render_click()
+
+    :timer.sleep(120)
+    html = render(view)
+    # The prompt now appears as a sent message (a conversation exists / responding).
+    assert html =~ "Summarize this workspace"
+    # And it left the blank seed-only state: a responding cue or the message stream.
+    assert html =~ "is thinking" or html =~ "ora-chat-message"
+  end
+
   test "panel stays open across a re-render after opening", ctx do
     {:ok, _msg} =
       Chat.create_message(%{text: "keepopen probe", addresses_host: false},

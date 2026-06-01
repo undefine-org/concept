@@ -291,12 +291,21 @@ defmodule ConceptWeb.ChatComponent do
           </div>
         </div>
 
-        <div
-          :if={@agent_responding}
-          class="px-4 py-2 text-xs text-notion-text-light flex items-center gap-2"
-        >
-          <span class="inline-block w-2 h-2 rounded-full bg-notion-blue animate-pulse" />
-          <span>AshAi is responding…</span>
+        <%!-- Responding cue rendered AS a forming seep (blue rail + skeleton),
+              so a multi-second grounded answer reads as alive, not frozen. --%>
+        <div :if={@agent_responding} class="ora-chat-message ora-chat-message--seep">
+          <div class="flex flex-col gap-1 min-w-0 flex-1">
+            <div class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue">
+              <.icon name="hero-sparkles-micro" class="size-3" />
+              <span>{String.downcase(host_voice_name(@host_type || :workspace))} is thinking</span>
+              <span class="ora-typing" aria-hidden="true"><i></i><i></i><i></i></span>
+            </div>
+            <div class="space-y-1 mt-1" role="status" aria-label="Generating answer">
+              <div class="ora-skeleton ora-skeleton-line"></div>
+              <div class="ora-skeleton ora-skeleton-line"></div>
+              <div class="ora-skeleton ora-skeleton-line"></div>
+            </div>
+          </div>
         </div>
 
         <div
@@ -448,8 +457,15 @@ defmodule ConceptWeb.ChatComponent do
               class="ora-input flex-1"
               autocomplete="off"
             />
-            <button type="submit" class="ora-btn ora-btn--primary">
-              <.icon name="hero-paper-airplane-micro" class="size-4" /> Send
+            <button
+              type="submit"
+              class="ora-btn ora-btn--primary"
+              aria-busy={to_string(@agent_responding)}
+              disabled={@agent_responding}
+            >
+              <span :if={@agent_responding} class="ora-spinner mr-1.5" aria-hidden="true" />
+              <.icon :if={!@agent_responding} name="hero-paper-airplane-micro" class="size-4" />
+              <span class="ora-btn__label">Send</span>
             </button>
           </.form>
         </div>
@@ -507,35 +523,7 @@ defmodule ConceptWeb.ChatComponent do
 
   @impl true
   def handle_event("send_message", %{"form" => params}, socket) do
-    if true && is_nil(socket.assigns.current_user) do
-      {:noreply, put_flash(socket, :error, "You must sign in to send messages")}
-    else
-      # Re-merge addressing into the submit params: AshPhoenix.Form.submit/2 with
-      # `params:` REPLACES the param set built in assign_message_form, so host_type/
-      # host_id/mentions/addresses_host must be present here too or the action
-      # defaults (→ :workspace) win and a page message would mis-route.
-      params = Map.merge(addressing_params(socket), params)
-
-      case AshPhoenix.Form.submit(socket.assigns.message_form, params: params) do
-        {:ok, message} ->
-          socket = reset_composer(socket)
-
-          if socket.assigns.conversation do
-            socket
-            |> assign(:agent_responding, true)
-            |> assign(:has_messages, true)
-            |> assign_message_form()
-            |> stream_insert(:messages, message, at: 0)
-            |> then(&{:noreply, &1})
-          else
-            send(self(), {:chat_component_navigate, message.conversation_id})
-            {:noreply, assign_message_form(socket)}
-          end
-
-        {:error, form} ->
-          {:noreply, assign(socket, :message_form, form)}
-      end
-    end
+    submit_message(socket, params)
   end
 
   @impl true
@@ -587,12 +575,43 @@ defmodule ConceptWeb.ChatComponent do
 
   @impl true
   def handle_event("seed_prompt", %{"prompt" => prompt}, socket) do
-    socket =
-      socket
-      |> assign(:initial_text, prompt)
-      |> assign_message_form()
+    # One-click: a seed prompt sends immediately (B6/C7), same path as Send.
+    submit_message(socket, %{"text" => prompt})
+  end
 
-    {:noreply, socket}
+  # Shared submit path for the composer form AND one-click seed prompts. Builds
+  # the same addressing merge + form submit + optimistic stream insert so a seed
+  # button behaves exactly like typing the prompt and hitting Send (B6/C7).
+  defp submit_message(socket, params) do
+    if is_nil(socket.assigns.current_user) do
+      {:noreply, put_flash(socket, :error, "You must sign in to send messages")}
+    else
+      # Re-merge addressing into the submit params: AshPhoenix.Form.submit/2 with
+      # `params:` REPLACES the param set built in assign_message_form, so host_type/
+      # host_id/mentions/addresses_host must be present here too or the action
+      # defaults (→ :workspace) win and a page message would mis-route.
+      params = Map.merge(addressing_params(socket), params)
+
+      case AshPhoenix.Form.submit(socket.assigns.message_form, params: params) do
+        {:ok, message} ->
+          socket = reset_composer(socket)
+
+          if socket.assigns.conversation do
+            socket
+            |> assign(:agent_responding, true)
+            |> assign(:has_messages, true)
+            |> assign_message_form()
+            |> stream_insert(:messages, message, at: 0)
+            |> then(&{:noreply, &1})
+          else
+            send(self(), {:chat_component_navigate, message.conversation_id})
+            {:noreply, assign_message_form(socket)}
+          end
+
+        {:error, form} ->
+          {:noreply, assign(socket, :message_form, form)}
+      end
+    end
   end
 
   # B1: find the most-recent existing conversation for the current host so the
