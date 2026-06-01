@@ -64,6 +64,39 @@ ora-workspace-graph {
   .ora-block.h2 { font-size: 26px; font-weight: 600; padding: 20px 0 4px 0; }
   .ora-block.h3 { font-size: 20px; font-weight: 600; padding: 16px 0 4px 0; }
 
+  /* ───── Lists & to-dos render as real lists/checkboxes (C-1, G22) ───── */
+  /* Bulleted: a leading disc marker on the editor surface. */
+  .ora-block.ora-list--bulleted { position: relative; padding-left: 24px; }
+  .ora-block.ora-list--bulleted::before {
+    content: "•"; position: absolute; left: 8px; top: 3px;
+    color: var(--color-notion-text); font-size: 18px; line-height: 1.5; pointer-events: none;
+  }
+  /* Numbered: a CSS counter over the block list so each numbered item shows
+     its ordinal. Counter increments per numbered block; resets at the list. */
+  [id^="block-list-"] { counter-reset: ora-ol; }
+  .ora-block.ora-list--numbered { position: relative; padding-left: 28px; counter-increment: ora-ol; }
+  .ora-block.ora-list--numbered::before {
+    content: counter(ora-ol) "."; position: absolute; left: 4px; top: 3px;
+    color: var(--color-notion-text); font-size: 14px; line-height: 1.5;
+    font-variant-numeric: tabular-nums; pointer-events: none;
+  }
+  /* To-do: the clickable checkbox lives in the row (block_render), so the
+     editor surface just gets left padding to align with bulleted/numbered. */
+  .ora-block.ora-list--todo { padding-left: 4px; }
+  .ora-block-row[data-checked="true"] .ora-block.ora-list--todo {
+    color: var(--color-notion-text-light); text-decoration: line-through;
+  }
+  .ora-todo-check {
+    flex: 0 0 auto; margin-top: 5px; width: 16px; height: 16px; border-radius: 4px;
+    border: 1.5px solid var(--color-notion-text-light);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #FFFFFF; cursor: pointer; transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .ora-todo-check:hover { border-color: var(--color-notion-blue); }
+  .ora-block-row[data-checked="true"] .ora-todo-check {
+    background: var(--color-notion-blue); border-color: var(--color-notion-blue);
+  }
+
   .ora-block-row { position: relative; display: flex; align-items: flex-start; gap: 4px; }
   .ora-block-row > ora-block-handle { flex: 0 0 auto; margin-top: 6px; opacity: 0; transition: opacity 0.15s ease; }
   .ora-block-row:hover > ora-block-handle { opacity: 1; }

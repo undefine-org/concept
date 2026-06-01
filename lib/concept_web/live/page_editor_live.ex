@@ -271,6 +271,24 @@ defmodule ConceptWeb.PageEditorLive do
   end
 
   @impl true
+  def handle_event("toggle_check", %{"block_id" => id}, socket) do
+    # C-1: flip a to-do's `checked` prop. Generic prop write — the block_render
+    # marker only appears when a block carries a boolean `checked` prop, so this
+    # never needs to know which concrete type it is.
+    user = socket.assigns.current_user
+    ws_id = socket.assigns.workspace.id
+
+    with block when not is_nil(block) <- find_block(socket.assigns.blocks, id),
+         current <- get_in(block.props, ["checked"]) == true,
+         {:ok, _} <-
+           Pages.update_props(block, %{"checked" => !current}, actor: user, tenant: ws_id) do
+      {:noreply, assign(socket, :blocks, reload_blocks(socket))}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_event("save_content", %{"block_id" => id, "state" => json_string}, socket) do
     user = socket.assigns.current_user
     ws_id = socket.assigns.workspace.id

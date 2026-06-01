@@ -23,4 +23,6 @@ defmodule Concept.Pages.BlockTypes.ToDo do
 
   @impl Concept.Pages.BlockType
   def placeholder, do: "To-do"
+  @impl Concept.Pages.BlockType
+  def editor_class, do: "ora-block ora-list ora-list--todo"
 end

@@ -16,4 +16,6 @@ defmodule Concept.Pages.BlockTypes.BulletedListItem do
 
   @impl Concept.Pages.BlockType
   def placeholder, do: "List"
+  @impl Concept.Pages.BlockType
+  def editor_class, do: "ora-block ora-list ora-list--bulleted"
 end

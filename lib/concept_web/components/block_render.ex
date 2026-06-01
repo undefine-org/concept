@@ -16,6 +16,7 @@ defmodule ConceptWeb.BlockRender do
   use Phoenix.Component
 
   import Phoenix.HTML
+  import ConceptWeb.CoreComponents, only: [icon: 1]
 
   alias Concept.Pages.BlockTypes
 
@@ -70,8 +71,28 @@ defmodule ConceptWeb.BlockRender do
         class="ora-block-row group"
         data-block-id={@block.id}
         data-locked-by={@locked_by && @locked_by.user_id}
+        data-checked={to_string(get_in(@block.props, ["checked"]) == true)}
         style={@locked_by && "--lock-color: #{@locked_by.color}"}
       >
+        <%!-- To-do checkbox marker. Clickable only when the block carries a
+              `checked` prop (to_do); a no-op decoration otherwise. The type
+              module owns its editor_class; this marker is driven by the prop,
+              not a hardcoded type check. --%>
+        <button
+          :if={is_boolean(get_in(@block.props, ["checked"]))}
+          type="button"
+          class="ora-todo-check"
+          phx-click="toggle_check"
+          phx-value-block_id={@block.id}
+          aria-pressed={to_string(get_in(@block.props, ["checked"]) == true)}
+          aria-label="Toggle to-do"
+        >
+          <.icon
+            :if={get_in(@block.props, ["checked"]) == true}
+            name="hero-check-micro"
+            class="size-3"
+          />
+        </button>
         <ora-block-handle class="ora-block-handle group-hover:opacity-100" block-id={@block.id} />
         <ora-block
           phx-hook="BlockEditor"

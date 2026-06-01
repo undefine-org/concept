@@ -21,4 +21,6 @@ defmodule Concept.Pages.BlockTypes.NumberedListItem do
 
   @impl Concept.Pages.BlockType
   def placeholder, do: "List"
+  @impl Concept.Pages.BlockType
+  def editor_class, do: "ora-block ora-list ora-list--numbered"
 end
