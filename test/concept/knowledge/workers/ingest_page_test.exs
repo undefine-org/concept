@@ -8,8 +8,8 @@ defmodule Concept.Knowledge.Workers.IngestPageTest do
   every Oban job.
 
   Also asserts the worker hands the loaded page + blocks to `Arcana.ingest/2`
-  via `chunker_opts` so the custom `Concept.Knowledge.BlockChunker` can build
-  chunks deterministically.
+  via the per-call `:chunker` override (`{BlockChunker, opts}`) so the custom
+  `Concept.Knowledge.BlockChunker` can build chunks deterministically.
   """
   use Concept.DataCase, async: false
 
@@ -67,7 +67,7 @@ defmodule Concept.Knowledge.Workers.IngestPageTest do
       assert :ok = IngestPage.perform(job)
     end
 
-    test "passes the loaded page + blocks to Arcana via chunker_opts" do
+    test "passes the loaded page + blocks to Arcana via the chunker override" do
       %{workspace: ws, page: page} = fixtures()
 
       job = %Oban.Job{
@@ -81,7 +81,10 @@ defmodule Concept.Knowledge.Workers.IngestPageTest do
       assert :ok = IngestPage.perform(job)
 
       assert_receive {:ingest_called, _text, opts}, 500
-      chunker_opts = Keyword.fetch!(opts, :chunker_opts)
+      # Chunker inputs ride on the per-call `:chunker` override
+      # (`{BlockChunker, opts}`), which Arcana threads to the chunker. A bare
+      # `:chunker_opts` key is silently dropped by `Arcana.Ingest.ingest/2`.
+      {Concept.Knowledge.BlockChunker, chunker_opts} = Keyword.fetch!(opts, :chunker)
       assert Keyword.fetch!(chunker_opts, :page).id == page.id
       assert Keyword.fetch!(chunker_opts, :workspace_id) == ws.id
       blocks = Keyword.fetch!(chunker_opts, :blocks)
@@ -120,7 +123,8 @@ defmodule Concept.Knowledge.Workers.IngestPageTest do
       assert :ok = IngestPage.perform(job)
       assert_receive {:ingest_called, _text, opts}, 500
       assert opts[:source_id] == "message:#{msg.id}"
-      assert Keyword.fetch!(opts, :chunker_opts)[:message_id] == msg.id
+      {Concept.Knowledge.BlockChunker, chunker_opts} = Keyword.fetch!(opts, :chunker)
+      assert chunker_opts[:message_id] == msg.id
     end
   end
 end
