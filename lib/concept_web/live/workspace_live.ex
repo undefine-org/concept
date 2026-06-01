@@ -2,8 +2,6 @@ defmodule ConceptWeb.WorkspaceLive do
   @moduledoc "Workspace shell — full Notion-style application shell."
   use ConceptWeb, :live_view
 
-
-
   import ConceptWeb.Components.IndexingPill
   import ConceptWeb.Components.LinkThisModal
   import ConceptWeb.Components.LiveCitationRail
@@ -597,64 +595,64 @@ defmodule ConceptWeb.WorkspaceLive do
       hook="GlobalKeys LiveCitationRail"
     >
       <%= if @current_page == nil do %>
-            <div class="flex flex-col items-center justify-center h-full">
-              <%!-- E-2: distinguish first-run (no pages at all → guided
+        <div class="flex flex-col items-center justify-center h-full">
+          <%!-- E-2: distinguish first-run (no pages at all → guided
                     onboarding) from 'nothing selected yet' (has pages). --%>
-              <.empty_state
-                :if={@pages == []}
-                id="workspace-onboarding"
-                icon="👋"
-                title="Welcome to your workspace"
-                class="max-w-md"
-              >
-                This is where your pages, notes, and docs will live. Create your
-                first page to get started — or open chat and ask the workspace
-                anything.
-                <:cta>
-                  <button type="button" phx-click="new_page" class="ora-btn ora-btn--primary">
-                    <.icon name="hero-plus-micro" class="size-4" /> Create your first page
-                  </button>
-                  <button type="button" phx-click="toggle_chat" class="ora-btn ora-btn--ghost">
-                    <.icon name="hero-chat-bubble-left-right-micro" class="size-4" /> Ask the workspace
-                  </button>
-                </:cta>
-              </.empty_state>
+          <.empty_state
+            :if={@pages == []}
+            id="workspace-onboarding"
+            icon="👋"
+            title="Welcome to your workspace"
+            class="max-w-md"
+          >
+            This is where your pages, notes, and docs will live. Create your
+            first page to get started — or open chat and ask the workspace
+            anything.
+            <:cta>
+              <button type="button" phx-click="new_page" class="ora-btn ora-btn--primary">
+                <.icon name="hero-plus-micro" class="size-4" /> Create your first page
+              </button>
+              <button type="button" phx-click="toggle_chat" class="ora-btn ora-btn--ghost">
+                <.icon name="hero-chat-bubble-left-right-micro" class="size-4" /> Ask the workspace
+              </button>
+            </:cta>
+          </.empty_state>
 
-              <.empty_state
-                :if={@pages != []}
-                id="workspace-pick-page"
-                icon="📄"
-                title="Pick a page to open"
-                class="max-w-md"
-              >
-                Choose a page from the sidebar, or start a new one.
-                <:cta>
-                  <button type="button" phx-click="new_page" class="ora-btn ora-btn--primary">
-                    <.icon name="hero-plus-micro" class="size-4" /> New page
-                  </button>
-                </:cta>
-              </.empty_state>
-            </div>
-          <% else %>
-            <div class="ora-page-canvas">
-              <%!-- Presence is now rendered inside PageEditorLive (C-2), where it
+          <.empty_state
+            :if={@pages != []}
+            id="workspace-pick-page"
+            icon="📄"
+            title="Pick a page to open"
+            class="max-w-md"
+          >
+            Choose a page from the sidebar, or start a new one.
+            <:cta>
+              <button type="button" phx-click="new_page" class="ora-btn ora-btn--primary">
+                <.icon name="hero-plus-micro" class="size-4" /> New page
+              </button>
+            </:cta>
+          </.empty_state>
+        </div>
+      <% else %>
+        <div class="ora-page-canvas">
+          <%!-- Presence is now rendered inside PageEditorLive (C-2), where it
                     is computed and self is excluded. No bar here. --%>
-              <.live_component
-                module={ConceptWeb.Components.PageHeader}
-                id={"page-header-#{@current_page.id}"}
-                page={@current_page}
-                current_user={@current_user}
-              />
-              {live_render(@socket, ConceptWeb.PageEditorLive,
-                id: "page-editor-#{@current_page.id}",
-                session: %{
-                  "workspace_id" => @workspace.id,
-                  "page_id" => @current_page.id,
-                  "user_id" => @current_user.id
-                }
-              )}
-            </div>
-          <% end %>
+          <.live_component
+            module={ConceptWeb.Components.PageHeader}
+            id={"page-header-#{@current_page.id}"}
+            page={@current_page}
+            current_user={@current_user}
+          />
+          {live_render(@socket, ConceptWeb.PageEditorLive,
+            id: "page-editor-#{@current_page.id}",
+            session: %{
+              "workspace_id" => @workspace.id,
+              "page_id" => @current_page.id,
+              "user_id" => @current_user.id
+            }
+          )}
+        </div>
+      <% end %>
 
       <:overlays>
         <.live_citation_rail
@@ -665,46 +663,46 @@ defmodule ConceptWeb.WorkspaceLive do
         />
 
         <div class="fixed bottom-4 right-4 z-30">
-        <.indexing_pill
-          state={
-            if @indexing_state.failed?,
-              do: :error,
-              else: if(@indexing_state.count > 0, do: :indexing, else: :idle)
-          }
-          count={@indexing_state.count}
-          last_succeeded_at={@indexing_state.last_succeeded_at}
-          show_details={@show_indexing_details}
-          jobs={Map.get(assigns, :indexing_jobs, [])}
+          <.indexing_pill
+            state={
+              if @indexing_state.failed?,
+                do: :error,
+                else: if(@indexing_state.count > 0, do: :indexing, else: :idle)
+            }
+            count={@indexing_state.count}
+            last_succeeded_at={@indexing_state.last_succeeded_at}
+            show_details={@show_indexing_details}
+            jobs={Map.get(assigns, :indexing_jobs, [])}
+            workspace={@workspace}
+            current_user={@current_user}
+          />
+        </div>
+
+        <.live_component
+          :if={@chat_open?}
+          module={ConceptWeb.WorkspaceLive.ChatPanel}
+          id="chat-panel"
           workspace={@workspace}
           current_user={@current_user}
+          open={@chat_open?}
+          initial_prompt={@chat_initial_prompt}
+          conversation_id={@chat_conversation_id}
+          current_page={@current_page}
         />
-      </div>
 
-      <.live_component
-        :if={@chat_open?}
-        module={ConceptWeb.WorkspaceLive.ChatPanel}
-        id="chat-panel"
-        workspace={@workspace}
-        current_user={@current_user}
-        open={@chat_open?}
-        initial_prompt={@chat_initial_prompt}
-        conversation_id={@chat_conversation_id}
-        current_page={@current_page}
-      />
+        <.live_component
+          module={ConceptWeb.CommandPaletteLive}
+          id="command-palette"
+          workspace={@workspace}
+          current_user={@current_user}
+          show_palette={@show_palette}
+        />
 
-      <.live_component
-        module={ConceptWeb.CommandPaletteLive}
-        id="command-palette"
-        workspace={@workspace}
-        current_user={@current_user}
-        show_palette={@show_palette}
-      />
-
-      <.link_this_modal
-        :if={@link_modal_state}
-        show={@link_modal_state != nil}
-        source_block_id={@link_modal_state && @link_modal_state.source_block_id}
-        target_block_id={@link_modal_state && @link_modal_state.target_block_id}
+        <.link_this_modal
+          :if={@link_modal_state}
+          show={@link_modal_state != nil}
+          source_block_id={@link_modal_state && @link_modal_state.source_block_id}
+          target_block_id={@link_modal_state && @link_modal_state.target_block_id}
           error={@link_modal_state && @link_modal_state.error}
         />
       </:overlays>

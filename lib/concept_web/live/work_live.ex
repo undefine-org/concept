@@ -18,8 +18,6 @@ defmodule ConceptWeb.WorkLive do
   """
   use ConceptWeb, :live_view
 
-
-
   alias Concept.Accounts
   alias Concept.Objects
   alias Concept.Pages
@@ -133,124 +131,124 @@ defmodule ConceptWeb.WorkLive do
       pages={@pages}
       current_user={@current_user}
     >
-          <div id="work-root" class="mx-auto max-w-5xl p-6">
-            <div class="mb-6 flex items-center justify-between">
-              <h1 class="text-2xl font-bold text-notion-text">My work</h1>
-              <.link
-                navigate={~p"/w/#{@workspace.slug}"}
-                class="text-sm text-notion-text-light hover:text-notion-text"
+      <div id="work-root" class="mx-auto max-w-5xl p-6">
+        <div class="mb-6 flex items-center justify-between">
+          <h1 class="text-2xl font-bold text-notion-text">My work</h1>
+          <.link
+            navigate={~p"/w/#{@workspace.slug}"}
+            class="text-sm text-notion-text-light hover:text-notion-text"
+          >
+            ← Workspace
+          </.link>
+        </div>
+
+        <%= if @work_error do %>
+          <div class="text-notion-text-light">{@work_error}</div>
+        <% else %>
+          <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <%!-- My work --%>
+            <section id="my-work">
+              <h2 class="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-notion-text-light">
+                Assigned to me
+                <span class="rounded-full bg-notion-gray px-1.5 py-0.5 text-notion-text-light">
+                  {@mine_count}
+                </span>
+              </h2>
+
+              <.empty_state
+                :if={@mine_count == 0}
+                icon="✓"
+                title="Nothing assigned to you yet"
+                class="py-8"
               >
-                ← Workspace
-              </.link>
-            </div>
+                Claim something ready from the right to get started.
+              </.empty_state>
 
-            <%= if @work_error do %>
-              <div class="text-notion-text-light">{@work_error}</div>
-            <% else %>
-              <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
-                <%!-- My work --%>
-                <section id="my-work">
-                  <h2 class="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-notion-text-light">
-                    Assigned to me
-                    <span class="rounded-full bg-notion-gray px-1.5 py-0.5 text-notion-text-light">
-                      {@mine_count}
-                    </span>
-                  </h2>
+              <div :for={{category, records} <- @mine_by_category} class="mb-5">
+                <div class="mb-1.5 flex items-center gap-1.5 px-1">
+                  <span class={["h-2 w-2 rounded-full", category_dot(category)]} />
+                  <span class="text-xs font-medium uppercase tracking-wide text-notion-text-light">
+                    {category}
+                  </span>
+                </div>
 
-                  <.empty_state
-                    :if={@mine_count == 0}
-                    icon="✓"
-                    title="Nothing assigned to you yet"
-                    class="py-8"
+                <ul class="space-y-2">
+                  <li
+                    :for={record <- records}
+                    id={"mine-#{record.id}"}
+                    class="rounded-md border border-notion-divider bg-white p-3 shadow-sm"
                   >
-                    Claim something ready from the right to get started.
-                  </.empty_state>
-
-                  <div :for={{category, records} <- @mine_by_category} class="mb-5">
-                    <div class="mb-1.5 flex items-center gap-1.5 px-1">
-                      <span class={["h-2 w-2 rounded-full", category_dot(category)]} />
-                      <span class="text-xs font-medium uppercase tracking-wide text-notion-text-light">
-                        {category}
+                    <div class="flex items-start justify-between gap-2">
+                      <span class="text-sm font-medium text-notion-text">
+                        {record_title(record)}
+                      </span>
+                      <span
+                        :if={MapSet.member?(@blocked_ids, record.id)}
+                        class="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-600"
+                        title="Waiting on an unfinished dependency"
+                      >
+                        🚧 Blocked
                       </span>
                     </div>
-
-                    <ul class="space-y-2">
-                      <li
-                        :for={record <- records}
-                        id={"mine-#{record.id}"}
-                        class="rounded-md border border-notion-divider bg-white p-3 shadow-sm"
-                      >
-                        <div class="flex items-start justify-between gap-2">
-                          <span class="text-sm font-medium text-notion-text">
-                            {record_title(record)}
-                          </span>
-                          <span
-                            :if={MapSet.member?(@blocked_ids, record.id)}
-                            class="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-600"
-                            title="Waiting on an unfinished dependency"
-                          >
-                            🚧 Blocked
-                          </span>
-                        </div>
-                        <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          <span class="rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text-light">
-                            {type_name(record)}
-                          </span>
-                          <span :if={record.state} class="text-xs text-notion-text-light">
-                            {record.state.name}
-                          </span>
-                        </div>
-                      </li>
-                    </ul>
-                  </div>
-                </section>
-
-                <%!-- Ready to pick --%>
-                <section id="ready-to-pick">
-                  <h2 class="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-notion-text-light">
-                    Ready to pick
-                    <span class="rounded-full bg-notion-gray px-1.5 py-0.5 text-notion-text-light">
-                      {length(@ready)}
-                    </span>
-                  </h2>
-
-                  <p :if={@ready == []} class="text-sm text-notion-text-light/70">
-                    No unclaimed work is ready right now.
-                  </p>
-
-                  <ul class="space-y-2">
-                    <li
-                      :for={record <- @ready}
-                      id={"ready-#{record.id}"}
-                      class="flex items-center justify-between gap-2 rounded-md border border-notion-divider bg-white p-3 shadow-sm"
-                    >
-                      <div class="min-w-0">
-                        <div class="truncate text-sm font-medium text-notion-text">
-                          {record_title(record)}
-                        </div>
-                        <div class="mt-1 flex flex-wrap items-center gap-1.5">
-                          <span class="rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text-light">
-                            {type_name(record)}
-                          </span>
-                          <span :if={record.state} class="text-xs text-notion-text-light">
-                            {record.state.name}
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        phx-click="claim"
-                        phx-value-record={record.id}
-                        class="shrink-0 rounded-md bg-notion-text px-2.5 py-1 text-xs font-medium text-white transition hover:opacity-80"
-                      >
-                        Claim
-                      </button>
-                    </li>
-                  </ul>
-                </section>
+                    <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <span class="rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text-light">
+                        {type_name(record)}
+                      </span>
+                      <span :if={record.state} class="text-xs text-notion-text-light">
+                        {record.state.name}
+                      </span>
+                    </div>
+                  </li>
+                </ul>
               </div>
-            <% end %>
+            </section>
+
+            <%!-- Ready to pick --%>
+            <section id="ready-to-pick">
+              <h2 class="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-notion-text-light">
+                Ready to pick
+                <span class="rounded-full bg-notion-gray px-1.5 py-0.5 text-notion-text-light">
+                  {length(@ready)}
+                </span>
+              </h2>
+
+              <p :if={@ready == []} class="text-sm text-notion-text-light/70">
+                No unclaimed work is ready right now.
+              </p>
+
+              <ul class="space-y-2">
+                <li
+                  :for={record <- @ready}
+                  id={"ready-#{record.id}"}
+                  class="flex items-center justify-between gap-2 rounded-md border border-notion-divider bg-white p-3 shadow-sm"
+                >
+                  <div class="min-w-0">
+                    <div class="truncate text-sm font-medium text-notion-text">
+                      {record_title(record)}
+                    </div>
+                    <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span class="rounded bg-notion-gray px-1.5 py-0.5 text-xs text-notion-text-light">
+                        {type_name(record)}
+                      </span>
+                      <span :if={record.state} class="text-xs text-notion-text-light">
+                        {record.state.name}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    phx-click="claim"
+                    phx-value-record={record.id}
+                    class="shrink-0 rounded-md bg-notion-text px-2.5 py-1 text-xs font-medium text-white transition hover:opacity-80"
+                  >
+                    Claim
+                  </button>
+                </li>
+              </ul>
+            </section>
           </div>
+        <% end %>
+      </div>
     </Layouts.workspace>
     """
   end
