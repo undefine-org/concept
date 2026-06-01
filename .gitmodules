@@ -1,0 +1,3 @@
+[submodule "vendor/arcana"]
+	path = vendor/arcana
+	url = git@github.com:undefine-org/arcana.git

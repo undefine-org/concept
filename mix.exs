@@ -97,7 +97,12 @@ defmodule Concept.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-      {:arcana, "~> 2.0"},
+      # Vendored fork (git submodule at vendor/arcana) carrying upstream fixes
+      # not yet released to hex: ingest persists per-chunk metadata
+      # (undefine-org/arcana#1) and search exposes it in results
+      # (undefine-org/arcana#2). The submodule pins the exact commit; bump it
+      # (and run `git submodule update`) when upstream releases.
+      {:arcana, path: "vendor/arcana"},
       {:pgvector, "~> 0.2"},
       {:req_llm, "~> 1.2"},
       {:earmark, "~> 1.4"},
