@@ -81,4 +81,19 @@ defmodule ConceptWeb.PageTreeTest do
       assert {:error, _} = Pages.get_page(page.id, actor: user, tenant: ws.id)
     end
   end
+
+  describe "structural transitions (E-5)" do
+    test "an expanded subtree renders inside an animated ora-tree-children list",
+         %{conn: conn, user: user, ws: ws, page: page} do
+      {:ok, _child} =
+        Pages.create_page("Milestones", ws.id, page.id, actor: user, tenant: ws.id)
+
+      {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}")
+
+      # Roots are expanded by default, so the child's subtree <ul> is present
+      # and carries the entrance-animation class.
+      assert has_element?(view, "ul.ora-tree-children")
+      assert has_element?(view, "ul.ora-tree-children a", "Milestones")
+    end
+  end
 end

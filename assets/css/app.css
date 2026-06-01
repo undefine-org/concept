@@ -449,6 +449,17 @@ ora-workspace-graph {
   /* E-6: matched-term highlight in command-palette results. */
   .ora-hl { background: rgba(46,170,220,0.22); color: inherit; border-radius: 2px; padding: 0 1px; font-weight: 600; }
 
+  /* ───── Structural-change transitions (E-5, G16/G18) ───── */
+  /* Played once when LiveView inserts the node (block added, subtree expanded).
+     Subtle — a short fade + rise so the change reads as physical, not a jump. */
+  @keyframes ora-enter { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+  @keyframes ora-tree-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+  .ora-block-enter { animation: ora-enter 0.16s ease-out; }
+  .ora-tree-children { animation: ora-tree-in 0.14s ease-out; transform-origin: top; }
+  @media (prefers-reduced-motion: reduce) {
+    .ora-block-enter, .ora-tree-children { animation: none; }
+  }
+
   /* Error card — humane, retryable. Amber, never raw red JSON. */
   .ora-error-card { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid #E9A23B; background: #FEF6E7; border-radius: 6px; color: #7A4F12; font-size: 13px; }
   .ora-error-card__icon { flex: 0 0 auto; margin-top: 1px; }

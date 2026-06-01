@@ -133,7 +133,7 @@ defmodule ConceptWeb.Components.PageTree do
       </div>
 
       <%= if @expanded? and @has_children? do %>
-        <ul class="space-y-0.5">
+        <ul class="space-y-0.5 ora-tree-children">
           <%= for child <- @children do %>
             <.page_row page={child} depth={@depth + 1} {assigns} />
           <% end %>

@@ -90,7 +90,7 @@ defmodule ConceptWeb.PageEditorLive do
           phx-hook="BlockList"
           class="space-y-1"
         >
-          <li :for={b <- @blocks} data-block-id={b.id}>
+          <li :for={b <- @blocks} data-block-id={b.id} class="ora-block-enter">
             <ConceptWeb.BlockRender.block
               block={b}
               locked_by={@locked_blocks[b.id]}
