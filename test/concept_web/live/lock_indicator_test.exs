@@ -171,4 +171,45 @@ defmodule ConceptWeb.LockIndicatorTest do
     :timer.sleep(200)
     refute render(view2) =~ "data-locked-by=\"#{user1.id}\""
   end
+
+  test "C-2: each peer sees the OTHER collaborator in the presence bar, not itself",
+       %{conn1: conn1, conn2: conn2, user1: user1, user2: user2, ws: ws, page: page} do
+    session1 = %{
+      "workspace_id" => ws.id,
+      "page_id" => page.id,
+      "user_id" => user1.id,
+      "user_email" => user1.email
+    }
+
+    {:ok, view1, _html} =
+      conn1
+      |> Phoenix.ConnTest.init_test_session(session1)
+      |> live_isolated(ConceptWeb.PageEditorLive, session: session1)
+
+    session2 = %{
+      "workspace_id" => ws.id,
+      "page_id" => page.id,
+      "user_id" => user2.id,
+      "user_email" => user2.email
+    }
+
+    {:ok, view2, _html} =
+      conn2
+      |> Phoenix.ConnTest.init_test_session(session2)
+      |> live_isolated(ConceptWeb.PageEditorLive, session: session2)
+
+    :timer.sleep(250)
+
+    html1 = render(view1)
+    html2 = render(view2)
+
+    # The bar appears ("Active") and each viewer sees the other's colour avatar,
+    # but NOT their own (collaborators excludes self).
+    assert html1 =~ "Active"
+    assert html1 =~ "background-color: #{ConceptWeb.Colors.for_user_id(user2.id)}"
+    refute html1 =~ "background-color: #{ConceptWeb.Colors.for_user_id(user1.id)}"
+
+    assert html2 =~ "background-color: #{ConceptWeb.Colors.for_user_id(user1.id)}"
+    refute html2 =~ "background-color: #{ConceptWeb.Colors.for_user_id(user2.id)}"
+  end
 end

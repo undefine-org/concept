@@ -2,6 +2,8 @@ defmodule ConceptWeb.PageEditorLive do
   @moduledoc "LiveView for editing a single page's blocks."
   use ConceptWeb, :live_view
 
+  import ConceptWeb.Components.PresenceBar
+
   alias Concept.Pages
 
   require Logger
@@ -68,6 +70,10 @@ defmodule ConceptWeb.PageEditorLive do
   def render(assigns) do
     ~H"""
     <div id="page-editor-root" phx-hook=".PageScroll">
+      <%!-- C-2 (G9): live collaborators on this page. presence_users is computed
+            from the real Presence topic on every presence_diff; render it here
+            (the editor) where the data lives, excluding self. --%>
+      <.presence_bar users={collaborators(@presence_users, @current_user)} />
       <div id="page-editor-content" class="space-y-1 relative" phx-hook="AskSelection">
         <ul :if={@blocks != []} id={"block-list-#{@page_id}"} phx-hook="BlockList" class="space-y-1">
           <li :for={b <- @blocks} data-block-id={b.id}>
@@ -782,6 +788,13 @@ defmodule ConceptWeb.PageEditorLive do
       {:ok, records} -> records
       _ -> []
     end
+  end
+
+  # C-2: collaborators = everyone present on the page except the viewer. The
+  # presence bar is a "who else is here" affordance, so self is excluded.
+  defp collaborators(presence_users, current_user) do
+    self_id = current_user && current_user.id
+    Enum.reject(presence_users || [], fn u -> u.id == self_id end)
   end
 
   defp find_block(blocks, id) do

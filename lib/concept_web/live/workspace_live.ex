@@ -3,7 +3,7 @@ defmodule ConceptWeb.WorkspaceLive do
   use ConceptWeb, :live_view
 
 
-  import ConceptWeb.Components.PresenceBar
+
   import ConceptWeb.Components.IndexingPill
   import ConceptWeb.Components.LinkThisModal
   import ConceptWeb.Components.LiveCitationRail
@@ -609,7 +609,8 @@ defmodule ConceptWeb.WorkspaceLive do
             </div>
           <% else %>
             <div class="ora-page-canvas">
-              <.presence_bar users={@presence_users} />
+              <%!-- Presence is now rendered inside PageEditorLive (C-2), where it
+                    is computed and self is excluded. No bar here. --%>
               <.live_component
                 module={ConceptWeb.Components.PageHeader}
                 id={"page-header-#{@current_page.id}"}
