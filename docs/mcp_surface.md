@@ -278,7 +278,7 @@ Hybrid vector+graph search over the workspace's pages and blocks.
 
 ---
 ## Concept.Knowledge.Chat
-### Tools (14)
+### Tools (18)
 
 #### `conversation_create`
 
@@ -429,6 +429,53 @@ Advance this participant's unread cursor to a message they've now seen.
 
 - **Resource**: `Concept.Knowledge.Chat.Participant`
 - **Action**: `:mark_read` (update)
+
+
+#### `reaction_for_conversation`
+
+List all reactions on the messages of a conversation.
+
+- **Resource**: `Concept.Knowledge.Chat.Reaction`
+- **Action**: `:for_conversation` (read)
+
+**Arguments:**
+
+  - `conversation_id` (`UUID`, required) — Conversation whose message reactions to load.
+
+
+#### `reaction_for_message`
+
+List the reactions on a message.
+
+- **Resource**: `Concept.Knowledge.Chat.Reaction`
+- **Action**: `:for_message` (read)
+
+**Arguments:**
+
+  - `message_id` (`UUID`, required) — Message whose reactions to load.
+
+
+#### `reaction_react`
+
+Add an emoji reaction to a message (idempotent: re-reacting is a no-op).
+
+- **Resource**: `Concept.Knowledge.Chat.Reaction`
+- **Action**: `:react` (create)
+
+**Arguments:**
+
+  - `workspace_id` (`UUID`, required) — Workspace the reaction belongs to.
+  - `message_id` (`UUID`, required) — The message being reacted to.
+  - `membership_id` (`UUID`, required) — Membership (identity) of the reactor.
+  - `emoji` (`String`, required) — The emoji, e.g. "👍".
+
+
+#### `reaction_unreact`
+
+Remove a previously added emoji reaction from a message.
+
+- **Resource**: `Concept.Knowledge.Chat.Reaction`
+- **Action**: `:unreact` (destroy)
 
 
 ---
