@@ -92,7 +92,19 @@ defmodule Concept.Knowledge.Chat.Message do
         description "Spawn (or continue) a thread: a child conversation seeded from this message, inheriting the parent's host. Omit to post in the conversation directly."
       end
 
+      # The block type the message body becomes (PLAN-010 §27): a message's text
+      # is mirrored into a Block of this type under the message, so the body is
+      # the same content unit as a page. Defaults to :paragraph.
+      argument :block_type, :atom do
+        public? true
+        default :paragraph
+        constraints one_of: [:paragraph, :heading_1, :heading_2, :heading_3, :bulleted_list_item, :numbered_list_item, :to_do, :quote]
+
+        description "The block type the message body becomes (paragraph, heading_1–3, bulleted_list_item, numbered_list_item, to_do, quote). The text is mirrored into a Block of this type so talk carries the editor's content unit and crystallizes by cloning."
+      end
+
       change Concept.Knowledge.Chat.Message.Changes.CreateConversationIfNotProvided
+      change Concept.Knowledge.Chat.Message.Changes.MirrorTextToBlock
       change Concept.Knowledge.Chat.Message.Changes.JoinSenderAsParticipant
       change Concept.Knowledge.Chat.Message.Changes.BroadcastInbox
       change run_oban_trigger(:respond)

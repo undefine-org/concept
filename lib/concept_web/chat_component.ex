@@ -91,6 +91,7 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:reactions_map, fn -> %{} end)
         |> assign_new(:my_membership_id, fn -> nil end)
         |> assign_new(:emoji_pop_for, fn -> nil end)
+        |> assign_new(:composer_block_type, fn -> "paragraph" end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -833,6 +834,23 @@ defmodule ConceptWeb.ChatComponent do
             phx-submit="send_message"
             class="flex items-center gap-2 w-full"
           >
+            <%!-- Block-type selector (T6): the message body becomes a Block of
+                  this type — talk carries the editor's content unit. --%>
+            <select
+              id={"#{@id}-block-type-select"}
+              name="form[block_type]"
+              class="ora-input shrink-0 w-auto text-xs py-1"
+              title="Send as a block type"
+              aria-label="Block type"
+            >
+              <option
+                :for={{label, value} <- composer_block_types()}
+                value={value}
+                selected={to_string(@composer_block_type) == value}
+              >
+                {label}
+              </option>
+            </select>
             <%!-- The reflex-killer: toggle whether the host's AI voice replies. --%>
             <button
               type="button"
@@ -957,14 +975,19 @@ defmodule ConceptWeb.ChatComponent do
                 phx-target={@myself}
                 class="flex items-center gap-2 w-full text-left px-2 py-2 rounded hover:bg-notion-sidebar-hover text-sm"
               >
-                <.icon name={Concept.Chat.RailModel.glyph(:user)} class="size-4 text-notion-text-light" />
+                <.icon
+                  name={Concept.Chat.RailModel.glyph(:user)}
+                  class="size-4 text-notion-text-light"
+                />
                 <span class="flex-1 truncate">{person.label}</span>
                 <span class="text-xs text-notion-text-light">direct message</span>
               </button>
             </div>
 
             <p
-              :if={@host_picker_query != "" and @host_picker_pages == [] and @host_picker_people == []}
+              :if={
+                @host_picker_query != "" and @host_picker_pages == [] and @host_picker_people == []
+              }
               class="px-1 text-sm text-notion-text-light"
             >
               No pages match “{@host_picker_query}”. The Workspace host is always available.
@@ -1064,6 +1087,13 @@ defmodule ConceptWeb.ChatComponent do
   @impl true
   def handle_event("validate_message", %{"form" => params}, socket) do
     text = params["text"] || ""
+
+    # Persist the composer's block-type selection across re-renders (T6).
+    socket =
+      case params["block_type"] do
+        bt when is_binary(bt) and bt != "" -> assign(socket, :composer_block_type, bt)
+        _ -> socket
+      end
 
     {mention_query, suggestions} = mention_state(text, socket)
 
@@ -2361,8 +2391,21 @@ defmodule ConceptWeb.ChatComponent do
       "host_type" => to_string(socket.assigns[:host_type] || :workspace),
       "host_id" => socket.assigns[:host_id],
       "mentions" => Enum.map(socket.assigns[:pending_mentions] || [], & &1.id),
-      "addresses_host" => socket.assigns[:addresses_host] != false
+      "addresses_host" => socket.assigns[:addresses_host] != false,
+      "block_type" => to_string(socket.assigns[:composer_block_type] || :paragraph)
     }
+  end
+
+  # The block types offered in the composer selector (label, value).
+  defp composer_block_types do
+    [
+      {"Text", "paragraph"},
+      {"Heading", "heading_1"},
+      {"Bulleted", "bulleted_list_item"},
+      {"Numbered", "numbered_list_item"},
+      {"To-do", "to_do"},
+      {"Quote", "quote"}
+    ]
   end
 
   defp maybe_warn_tool_data(socket, messages) when is_list(messages) do
