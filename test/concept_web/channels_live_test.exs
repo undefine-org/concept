@@ -88,6 +88,27 @@ defmodule ConceptWeb.ChannelsLiveTest do
     assert render(view) =~ "Jump back in"
   end
 
+  test "a pinned conversation surfaces in the rail Pinned section (R6)", ctx do
+    {:ok, msg} =
+      Chat.create_message(%{text: "pin this", addresses_host: false},
+        actor: ctx.user,
+        tenant: ctx.ws.id
+      )
+
+    mine =
+      Chat.participants_for_conversation!(msg.conversation_id,
+        actor: ctx.user,
+        tenant: ctx.ws.id,
+        load: [:membership]
+      )
+      |> Enum.find(fn p -> match?(%{membership: %{user_id: uid}} when uid == ctx.user.id, p) end)
+
+    {:ok, _} = Chat.pin_participant(mine, actor: ctx.user, tenant: ctx.ws.id)
+
+    {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/channels")
+    assert has_element?(view, "[id$='-pinned-section']")
+  end
+
   test "the sidebar Channels link shows an unread badge", ctx do
     # A fresh conversation the actor authored: cursor nil → unread → badge shows.
     {:ok, _msg} =

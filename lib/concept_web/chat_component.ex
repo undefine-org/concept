@@ -102,6 +102,7 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:member_names, fn -> %{} end)
         |> assign_new(:thread_dock, fn -> :overlay end)
         |> assign_new(:rail_query, fn -> "" end)
+        |> assign_new(:pinned_ids, fn -> MapSet.new() end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -220,7 +221,7 @@ defmodule ConceptWeb.ChatComponent do
           class={[
             "ora-chat-message",
             mine?(reply, assigns) && "ora-chat-message--mine",
-            not mine?(reply, assigns) and not Concept.Chat.MessageKind.host?(reply) &&
+            (not mine?(reply, assigns) and not Concept.Chat.MessageKind.host?(reply)) &&
               "ora-chat-message--other",
             Concept.Chat.MessageKind.host?(reply) && "ora-chat-message--seep"
           ]}
@@ -353,6 +354,45 @@ defmodule ConceptWeb.ChatComponent do
                 Concept.Chat.RailModel. ≥2 convos → a collapsible host category;
                 exactly 1 → the conversation inline with a muted in-<host> ref. --%>
           <nav id={"#{@id}-rail"} class="flex flex-col gap-4" aria-label="Conversations">
+            <%!-- Pinned (R6): the member's pinned conversations, surfaced above
+                  the host sections. Per-user; hidden while searching. --%>
+            <div
+              :if={@rail_query == "" && @pinned_conversations != []}
+              id={"#{@id}-pinned-section"}
+              class="flex flex-col"
+            >
+              <div class="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wide text-notion-text-light flex items-center gap-1">
+                <.icon name="hero-bookmark-micro" class="size-3" /> Pinned
+              </div>
+              <div
+                :for={conversation <- @pinned_conversations}
+                class="group/pin flex items-center gap-1 px-2 py-1 rounded hover:bg-notion-sidebar-hover"
+              >
+                <.icon
+                  name={Concept.Chat.RailModel.glyph(host_type_of(conversation))}
+                  class="size-4 shrink-0 text-notion-text-light"
+                />
+                <button
+                  phx-click="select_conversation"
+                  phx-target={@myself}
+                  phx-value-id={conversation.id}
+                  class="flex-1 min-w-0 text-left text-sm truncate text-notion-text"
+                >
+                  {rail_conversation_title(conversation)}
+                </button>
+                <button
+                  type="button"
+                  phx-click="unpin_conversation"
+                  phx-value-id={conversation.id}
+                  phx-target={@myself}
+                  class="opacity-0 group-hover/pin:opacity-100 transition shrink-0 text-notion-blue"
+                  title="Unpin"
+                  aria-label="Unpin conversation"
+                >
+                  <.icon name="hero-bookmark-slash-micro" class="size-3.5" />
+                </button>
+              </div>
+            </div>
             <div :for={section <- rail_sections(@rail_groups)} class="flex flex-col">
               <div class="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wide text-notion-text-light">
                 {Concept.Chat.RailModel.section_label(section.section)}
@@ -499,6 +539,41 @@ defmodule ConceptWeb.ChatComponent do
               {c.display_name |> String.first() |> Kernel.||("?") |> String.upcase()}
             </span>
           </div>
+          <%!-- Pin (R6): pin/unpin THIS conversation for me (per-user). Pinned
+                conversations surface in the rail's Pinned section. --%>
+          <button
+            :if={@conversation}
+            type="button"
+            id={"#{@id}-pin-btn"}
+            phx-click={
+              if(conversation_pinned?(assigns), do: "unpin_conversation", else: "pin_conversation")
+            }
+            phx-value-id={@conversation && @conversation.id}
+            phx-target={@myself}
+            class={[
+              "shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs",
+              conversation_pinned?(assigns) && "bg-notion-blue/10 text-notion-blue",
+              !conversation_pinned?(assigns) &&
+                "bg-notion-sidebar text-notion-text hover:bg-notion-sidebar-hover"
+            ]}
+            title={
+              if(conversation_pinned?(assigns),
+                do: "Unpin this conversation",
+                else: "Pin this conversation"
+              )
+            }
+          >
+            <.icon
+              name={
+                if(conversation_pinned?(assigns),
+                  do: "hero-bookmark-slash-micro",
+                  else: "hero-bookmark-micro"
+                )
+              }
+              class="size-3"
+            /> {if(conversation_pinned?(assigns), do: "Pinned", else: "Pin")}
+          </button>
+
           <%!-- Conversation-level action lives in the header (B7), not injected
                 between messages. Only meaningful when the host IS a page. --%>
           <button
@@ -661,217 +736,219 @@ defmodule ConceptWeb.ChatComponent do
             phx-hook="ScrollToBottom"
             class="ora-chat-messages"
           >
-          <div
-            id={"#{@id}-message-container"}
-            phx-update="stream"
-            phx-hook="MarkRead"
-            phx-target={@myself}
-            data-latest-id={@unread_boundary_id && latest_message_id(assigns)}
-            class="flex flex-col gap-3"
-          >
-            <%!-- Dispatch on Concept.Chat.MessageKind.render_mode/1 — the single
+            <div
+              id={"#{@id}-message-container"}
+              phx-update="stream"
+              phx-hook="MarkRead"
+              phx-target={@myself}
+              data-latest-id={@unread_boundary_id && latest_message_id(assigns)}
+              class="flex flex-col gap-3"
+            >
+              <%!-- Dispatch on Concept.Chat.MessageKind.render_mode/1 — the single
                     source of truth. Host replies SEEP in (fused continuation,
                     no avatar); humans/agents take a row. Raw tool plumbing never
                     renders in the stream — it lives behind "Why this answer?". --%>
-            <%= for {id, message} <- @streams.messages do %>
-              <% mode = Concept.Chat.MessageKind.render_mode(message) %>
-              <% mine = mine?(message, assigns) %>
-              <% is_boundary = @unread_boundary_id && message_id_of(message) == @unread_boundary_id %>
-              <div
-                id={id}
-                data-render-mode={mode}
-                class={["ora-chat-row", is_boundary && "ora-chat-unread-boundary"]}
-              >
-                <%!-- Unread "New" divider (T2): a full-width flow rule above the
+              <%= for {id, message} <- @streams.messages do %>
+                <% mode = Concept.Chat.MessageKind.render_mode(message) %>
+                <% mine = mine?(message, assigns) %>
+                <% is_boundary = @unread_boundary_id && message_id_of(message) == @unread_boundary_id %>
+                <div
+                  id={id}
+                  data-render-mode={mode}
+                  class={["ora-chat-row", is_boundary && "ora-chat-unread-boundary"]}
+                >
+                  <%!-- Unread "New" divider (T2): a full-width flow rule above the
                       boundary message (NOT absolute — that trapped it inside the
                       bubble's width). Inside the stream item so re-streaming on
                       mark_read cleanly removes it. --%>
-                <div :if={is_boundary} id={"#{@id}-unread-divider"} class="ora-chat-divider">
-                  <span class="ora-chat-divider-line"></span>
-                  <span>New</span>
-                  <span class="ora-chat-divider-line"></span>
-                </div>
-                <div class={[
-                  "ora-chat-message group/msg relative",
-                  mine && "ora-chat-message--mine",
-                  not mine and mode in [:human_row, :agent_row] && "ora-chat-message--other",
-                  mode in [:host_seep, :host_note] && "ora-chat-message--seep"
-                ]}>
-                  <%!-- Hover toolbar (T2): every message is a unit of work. Reply
+                  <div :if={is_boundary} id={"#{@id}-unread-divider"} class="ora-chat-divider">
+                    <span class="ora-chat-divider-line"></span>
+                    <span>New</span>
+                    <span class="ora-chat-divider-line"></span>
+                  </div>
+                  <div class={[
+                    "ora-chat-message group/msg relative",
+                    mine && "ora-chat-message--mine",
+                    (not mine and mode in [:human_row, :agent_row]) && "ora-chat-message--other",
+                    mode in [:host_seep, :host_note] && "ora-chat-message--seep"
+                  ]}>
+                    <%!-- Hover toolbar (T2): every message is a unit of work. Reply
                       in thread + copy link are real now; React (T4) and
                       Crystallize-this-message (T6, once bodies are blocks) slot
                       in here. No dead buttons — absent until real. --%>
-                  <div
-                    id={"#{@id}-msg-toolbar-#{message_id_of(message)}"}
-                    class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-white border border-notion-divider rounded-lg shadow-sm px-0.5 py-0.5 z-10"
-                  >
-                    <button
-                      type="button"
-                      id={"#{@id}-react-#{message_id_of(message)}"}
-                      phx-click="open_emoji_pop"
-                      phx-value-message={message_id_of(message)}
-                      phx-target={@myself}
-                      class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
-                      title="Add reaction"
-                      aria-label="Add reaction"
+                    <div
+                      id={"#{@id}-msg-toolbar-#{message_id_of(message)}"}
+                      class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-white border border-notion-divider rounded-lg shadow-sm px-0.5 py-0.5 z-10"
                     >
-                      <.icon name="hero-face-smile-micro" class="size-4" />
-                    </button>
-                    <button
-                      type="button"
-                      phx-click="open_thread"
-                      phx-value-seed={message_id_of(message)}
-                      phx-target={@myself}
-                      class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
-                      title="Reply in thread"
-                      aria-label="Reply in thread"
-                    >
-                      <.icon name="hero-chat-bubble-left-right-micro" class="size-4" />
-                    </button>
-                    <button
-                      type="button"
-                      id={"#{@id}-msg-copylink-#{message_id_of(message)}"}
-                      phx-hook="CopyToClipboard"
-                      data-clipboard-text={message_link(assigns, message)}
-                      class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
-                      title="Copy link to message"
-                      aria-label="Copy link to message"
-                    >
-                      <.icon name="hero-link-micro" class="size-4" />
-                    </button>
-                  </div>
-                  <%!-- Sender avatar (R1): only OTHER members get an avatar on
+                      <button
+                        type="button"
+                        id={"#{@id}-react-#{message_id_of(message)}"}
+                        phx-click="open_emoji_pop"
+                        phx-value-message={message_id_of(message)}
+                        phx-target={@myself}
+                        class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
+                        title="Add reaction"
+                        aria-label="Add reaction"
+                      >
+                        <.icon name="hero-face-smile-micro" class="size-4" />
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="open_thread"
+                        phx-value-seed={message_id_of(message)}
+                        phx-target={@myself}
+                        class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
+                        title="Reply in thread"
+                        aria-label="Reply in thread"
+                      >
+                        <.icon name="hero-chat-bubble-left-right-micro" class="size-4" />
+                      </button>
+                      <button
+                        type="button"
+                        id={"#{@id}-msg-copylink-#{message_id_of(message)}"}
+                        phx-hook="CopyToClipboard"
+                        data-clipboard-text={message_link(assigns, message)}
+                        class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
+                        title="Copy link to message"
+                        aria-label="Copy link to message"
+                      >
+                        <.icon name="hero-link-micro" class="size-4" />
+                      </button>
+                    </div>
+                    <%!-- Sender avatar (R1): only OTHER members get an avatar on
                         the left — a colored initial keyed to the sender, agents
                         in violet with a chip glyph. My own messages need no
                         avatar (they sit right, as bubbles). --%>
-                  <span
-                    :if={not mine and mode in [:human_row, :agent_row]}
-                    class="ora-chat-avatar text-white text-[11px] font-bold"
-                    style={"background-color: #{sender_color(message, assigns)}"}
-                    title={sender_display_name(message, assigns)}
-                  >
-                    <.icon :if={mode == :agent_row} name="hero-cpu-chip-micro" class="size-4" />
-                    <span :if={mode == :human_row}>{sender_initial(message, assigns)}</span>
-                  </span>
-                  <div class="flex flex-col gap-1 min-w-0 flex-1">
-                    <%!-- Sender name line (R1): shown for OTHER members so a
-                          channel reads as multi-party, not a monologue. --%>
-                    <div
+                    <span
                       :if={not mine and mode in [:human_row, :agent_row]}
-                      class="flex items-center gap-1.5 text-xs"
+                      class="ora-chat-avatar text-white text-[11px] font-bold"
+                      style={"background-color: #{sender_color(message, assigns)}"}
+                      title={sender_display_name(message, assigns)}
                     >
-                      <span class="font-medium text-notion-text">
-                        {sender_display_name(message, assigns)}
-                      </span>
-                      <span :if={mode == :agent_row} class="text-violet-500">agent</span>
-                    </div>
-                    <%!-- Host seep: a quiet "from this <host>" voice label, not a
+                      <.icon :if={mode == :agent_row} name="hero-cpu-chip-micro" class="size-4" />
+                      <span :if={mode == :human_row}>{sender_initial(message, assigns)}</span>
+                    </span>
+                    <div class="flex flex-col gap-1 min-w-0 flex-1">
+                      <%!-- Sender name line (R1): shown for OTHER members so a
+                          channel reads as multi-party, not a monologue. --%>
+                      <div
+                        :if={not mine and mode in [:human_row, :agent_row]}
+                        class="flex items-center gap-1.5 text-xs"
+                      >
+                        <span class="font-medium text-notion-text">
+                          {sender_display_name(message, assigns)}
+                        </span>
+                        <span :if={mode == :agent_row} class="text-violet-500">agent</span>
+                      </div>
+                      <%!-- Host seep: a quiet "from this <host>" voice label, not a
                         person's name. The blue rail comes from --seep. --%>
-                    <div
-                      :if={mode in [:host_seep, :host_note]}
-                      class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
-                    >
-                      <.icon name="hero-sparkles-micro" class="size-3" />
-                      <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
-                    </div>
-                    <div :if={String.trim(message.text || "") != ""} class="ora-chat-bubble">
-                      {to_markdown(message.text || "")}
-                    </div>
-                    <div :if={Concept.Chat.MessageKind.host?(message)} class="mt-1">
-                      <.why_this_answer message={message} />
-                    </div>
-                    <%!-- Thread chip (T2): present iff this message seeded a child
+                      <div
+                        :if={mode in [:host_seep, :host_note]}
+                        class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
+                      >
+                        <.icon name="hero-sparkles-micro" class="size-3" />
+                        <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
+                      </div>
+                      <div :if={String.trim(message.text || "") != ""} class="ora-chat-bubble">
+                        {to_markdown(message.text || "")}
+                      </div>
+                      <div :if={Concept.Chat.MessageKind.host?(message)} class="mt-1">
+                        <.why_this_answer message={message} />
+                      </div>
+                      <%!-- Thread chip (T2): present iff this message seeded a child
                         conversation. Makes seed_message_id visible. --%>
-                    <button
-                      :if={thread_for(assigns, message)}
-                      type="button"
-                      id={"#{@id}-thread-chip-#{message_id_of(message)}"}
-                      phx-click="open_thread"
-                      phx-value-seed={message_id_of(message)}
-                      phx-target={@myself}
-                      class="mt-1 inline-flex items-center gap-1 text-xs text-notion-blue hover:underline"
-                    >
-                      <.icon name="hero-chat-bubble-left-right-micro" class="size-3.5" />
-                      {thread_reply_count(thread_for(assigns, message))}
-                    </button>
-
-                    <%!-- Reaction chips (T4): own-reaction outlined; click toggles. --%>
-                    <div
-                      :if={reactions_for(assigns, message) != []}
-                      id={"#{@id}-reactions-#{message_id_of(message)}"}
-                      class="mt-1 flex flex-wrap gap-1"
-                    >
                       <button
-                        :for={chip <- reactions_for(assigns, message)}
+                        :if={thread_for(assigns, message)}
                         type="button"
-                        phx-click="toggle_reaction"
-                        phx-value-message={message_id_of(message)}
-                        phx-value-emoji={chip.emoji}
+                        id={"#{@id}-thread-chip-#{message_id_of(message)}"}
+                        phx-click="open_thread"
+                        phx-value-seed={message_id_of(message)}
                         phx-target={@myself}
-                        class={[
-                          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border",
-                          chip.mine? && "border-notion-blue bg-notion-blue/10 text-notion-blue",
-                          !chip.mine? && "border-notion-divider bg-notion-sidebar text-notion-text"
-                        ]}
+                        class="mt-1 inline-flex items-center gap-1 text-xs text-notion-blue hover:underline"
                       >
-                        <span>{chip.emoji}</span>
-                        <span>{chip.count}</span>
+                        <.icon name="hero-chat-bubble-left-right-micro" class="size-3.5" />
+                        {thread_reply_count(thread_for(assigns, message))}
                       </button>
-                    </div>
 
-                    <%!-- Compact emoji picker opened from the toolbar react btn. --%>
-                    <div
-                      :if={@emoji_pop_for == message_id_of(message)}
-                      id={"#{@id}-emoji-pop-#{message_id_of(message)}"}
-                      class="mt-1 inline-flex items-center gap-1 p-1 rounded-lg bg-white border border-notion-divider shadow-sm"
-                    >
-                      <button
-                        :for={emoji <- reaction_palette()}
-                        type="button"
-                        phx-click="react"
-                        phx-value-message={message_id_of(message)}
-                        phx-value-emoji={emoji}
-                        phx-target={@myself}
-                        class="p-0.5 rounded hover:bg-notion-sidebar-hover text-base leading-none"
-                        aria-label={"React " <> emoji}
+                      <%!-- Reaction chips (T4): own-reaction outlined; click toggles. --%>
+                      <div
+                        :if={reactions_for(assigns, message) != []}
+                        id={"#{@id}-reactions-#{message_id_of(message)}"}
+                        class="mt-1 flex flex-wrap gap-1"
                       >
-                        {emoji}
-                      </button>
+                        <button
+                          :for={chip <- reactions_for(assigns, message)}
+                          type="button"
+                          phx-click="toggle_reaction"
+                          phx-value-message={message_id_of(message)}
+                          phx-value-emoji={chip.emoji}
+                          phx-target={@myself}
+                          class={[
+                            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border",
+                            chip.mine? && "border-notion-blue bg-notion-blue/10 text-notion-blue",
+                            !chip.mine? && "border-notion-divider bg-notion-sidebar text-notion-text"
+                          ]}
+                        >
+                          <span>{chip.emoji}</span>
+                          <span>{chip.count}</span>
+                        </button>
+                      </div>
+
+                      <%!-- Compact emoji picker opened from the toolbar react btn. --%>
+                      <div
+                        :if={@emoji_pop_for == message_id_of(message)}
+                        id={"#{@id}-emoji-pop-#{message_id_of(message)}"}
+                        class="mt-1 inline-flex items-center gap-1 p-1 rounded-lg bg-white border border-notion-divider shadow-sm"
+                      >
+                        <button
+                          :for={emoji <- reaction_palette()}
+                          type="button"
+                          phx-click="react"
+                          phx-value-message={message_id_of(message)}
+                          phx-value-emoji={emoji}
+                          phx-target={@myself}
+                          class="p-0.5 rounded hover:bg-notion-sidebar-hover text-base leading-none"
+                          aria-label={"React " <> emoji}
+                        >
+                          {emoji}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            <% end %>
-          </div>
+              <% end %>
+            </div>
 
-          <%!-- Human typing cue (T3) and host "is thinking" cue (R2) live INSIDE
+            <%!-- Human typing cue (T3) and host "is thinking" cue (R2) live INSIDE
                 the scroll viewport, after the stream, so they read as the live
                 tail of the feed and scroll with it. --%>
-          <div
-            :if={chat_typing_names(assigns) != []}
-            id={"#{@id}-typing-cue"}
-            class="py-1 text-xs text-notion-text-light flex items-center gap-1"
-          >
-            <span class="ora-typing" aria-hidden="true"><i></i><i></i><i></i></span>
-            {chat_typing_label(chat_typing_names(assigns))}
-          </div>
+            <div
+              :if={chat_typing_names(assigns) != []}
+              id={"#{@id}-typing-cue"}
+              class="py-1 text-xs text-notion-text-light flex items-center gap-1"
+            >
+              <span class="ora-typing" aria-hidden="true"><i></i><i></i><i></i></span>
+              {chat_typing_label(chat_typing_names(assigns))}
+            </div>
 
-          <%!-- Responding cue rendered AS a forming seep (blue rail + skeleton),
+            <%!-- Responding cue rendered AS a forming seep (blue rail + skeleton),
                 so a multi-second grounded answer reads as alive, not frozen. --%>
-          <div :if={@agent_responding} class="ora-chat-message ora-chat-message--seep">
-            <div class="flex flex-col gap-1 min-w-0 flex-1">
-              <div class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue">
-                <.icon name="hero-sparkles-micro" class="size-3" />
-                <span>{String.downcase(host_voice_name(@host_type || :workspace))} is thinking</span>
-                <span class="ora-typing" aria-hidden="true"><i></i><i></i><i></i></span>
-              </div>
-              <div class="space-y-1 mt-1" role="status" aria-label="Generating answer">
-                <div class="ora-skeleton ora-skeleton-line"></div>
-                <div class="ora-skeleton ora-skeleton-line"></div>
-                <div class="ora-skeleton ora-skeleton-line"></div>
+            <div :if={@agent_responding} class="ora-chat-message ora-chat-message--seep">
+              <div class="flex flex-col gap-1 min-w-0 flex-1">
+                <div class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue">
+                  <.icon name="hero-sparkles-micro" class="size-3" />
+                  <span>
+                    {String.downcase(host_voice_name(@host_type || :workspace))} is thinking
+                  </span>
+                  <span class="ora-typing" aria-hidden="true"><i></i><i></i><i></i></span>
+                </div>
+                <div class="space-y-1 mt-1" role="status" aria-label="Generating answer">
+                  <div class="ora-skeleton ora-skeleton-line"></div>
+                  <div class="ora-skeleton ora-skeleton-line"></div>
+                  <div class="ora-skeleton ora-skeleton-line"></div>
+                </div>
               </div>
             </div>
-          </div>
           </div>
 
           <%!-- Thread panel — OVERLAY variant (peek / narrow): covers the
@@ -1433,6 +1510,14 @@ defmodule ConceptWeb.ChatComponent do
     {:noreply, assign(socket, :rail_query, q)}
   end
 
+  def handle_event("pin_conversation", %{"id" => id}, socket) do
+    {:noreply, set_pin(socket, id, &Concept.Knowledge.Chat.pin_participant/2)}
+  end
+
+  def handle_event("unpin_conversation", %{"id" => id}, socket) do
+    {:noreply, set_pin(socket, id, &Concept.Knowledge.Chat.unpin_participant/2)}
+  end
+
   def handle_event("clear_rail_search", _params, socket) do
     {:noreply, assign(socket, :rail_query, "")}
   end
@@ -1916,6 +2001,34 @@ defmodule ConceptWeb.ChatComponent do
       id
     else
       _ -> nil
+    end
+  end
+
+  # True when the active conversation is pinned by the current member.
+  defp conversation_pinned?(assigns) do
+    case assigns[:conversation] do
+      %{id: id} -> MapSet.member?(assigns[:pinned_ids] || MapSet.new(), id)
+      _ -> false
+    end
+  end
+
+  # Resolve my participant for a conversation and apply a pin/unpin action
+  # (a 1-arg-record code-interface fn), then refresh the rail's pinned set.
+  # Best-effort: a failure leaves the rail unchanged rather than crashing.
+  defp set_pin(socket, conversation_id, fun) do
+    user = socket.assigns[:current_user]
+    tenant = socket.assigns[:workspace_id]
+
+    with %_{} <- user,
+         parts <- load_participants(socket, conversation_id),
+         %{} = mine <-
+           Enum.find(parts, fn p ->
+             match?(%{membership: %{user_id: uid}} when uid == user.id, p)
+           end),
+         {:ok, _} <- fun.(mine, actor: user, tenant: tenant) do
+      assign_rail(socket)
+    else
+      _ -> socket
     end
   end
 
@@ -2498,12 +2611,30 @@ defmodule ConceptWeb.ChatComponent do
   defp assign_rail(socket) do
     conversations = rail_conversations(socket)
 
+    pinned_ids = load_pinned_ids(socket)
+
     socket
     |> assign(:rail_conversations, conversations)
     |> assign(:rail_groups, Concept.Chat.RailModel.group_by_host(conversations))
     |> assign(:rail_stats, Concept.Chat.RailModel.stats(conversations))
     |> assign(:rail_recents, Enum.take(conversations, 5))
+    |> assign(:pinned_ids, pinned_ids)
+    |> assign(
+      :pinned_conversations,
+      Enum.filter(conversations, &MapSet.member?(pinned_ids, &1.id))
+    )
     |> assign(:page_labels, page_label_map(socket, conversations))
+  end
+
+  # The set of conversation ids the current member has pinned (per-user).
+  defp load_pinned_ids(socket) do
+    with %_{} = user <- socket.assigns[:current_user],
+         ws when not is_nil(ws) <- socket.assigns[:workspace_id],
+         {:ok, pins} <- Concept.Knowledge.Chat.my_pinned_participants(actor: user, tenant: ws) do
+      MapSet.new(pins, & &1.conversation_id)
+    else
+      _ -> MapSet.new()
+    end
   end
 
   # Rail search (R5): narrow the grouped rail by a case-insensitive substring
@@ -2526,7 +2657,13 @@ defmodule ConceptWeb.ChatComponent do
 
   defp rail_match?(conversation, query, assigns) do
     title = rail_conversation_title(conversation)
-    host = host_group_label(%{host_type: host_type_of(conversation), host_id: host_id_of(conversation)}, assigns)
+
+    host =
+      host_group_label(
+        %{host_type: host_type_of(conversation), host_id: host_id_of(conversation)},
+        assigns
+      )
+
     String.contains?(String.downcase(title), query) or
       String.contains?(String.downcase(host || ""), query)
   end

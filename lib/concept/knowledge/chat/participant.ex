@@ -72,6 +72,18 @@ defmodule Concept.Knowledge.Chat.Participant do
       accept [:last_read_message_id]
     end
 
+    update :pin do
+      description "Pin this conversation for the current member, surfacing it at the top of their rail. Per-user — pinning is not visible to others."
+      accept []
+      change set_attribute(:pinned_at, &DateTime.utc_now/0)
+    end
+
+    update :unpin do
+      description "Unpin this conversation for the current member."
+      accept []
+      change set_attribute(:pinned_at, nil)
+    end
+
     read :for_conversation do
       description "List the participants (members) of a conversation."
 
@@ -80,6 +92,13 @@ defmodule Concept.Knowledge.Chat.Participant do
         description: "Conversation whose participants to load."
 
       filter expr(conversation_id == ^arg(:conversation_id))
+    end
+
+    read :my_pinned do
+      description "List the actor's pinned participant rows (pinned_at set), most recently pinned first. The conversation ids power the rail's Pinned section."
+
+      filter expr(membership.user_id == ^actor(:id) and not is_nil(pinned_at))
+      prepare build(sort: [pinned_at: :desc])
     end
 
     read :my_unread do
@@ -113,6 +132,13 @@ defmodule Concept.Knowledge.Chat.Participant do
       allow_nil? true
 
       description "The last message this participant has read; powers the unread/inbox projection."
+    end
+
+    attribute :pinned_at, :utc_datetime_usec do
+      public? true
+      allow_nil? true
+
+      description "When this member pinned the conversation (per-user). Non-null = pinned; pinned conversations surface at the top of the rail. Mirrors the read cursor's per-participant grain."
     end
 
     timestamps()

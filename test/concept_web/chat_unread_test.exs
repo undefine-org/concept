@@ -56,7 +56,11 @@ defmodule ConceptWeb.ChatUnreadTest do
   defp open_conversation(view, conversation_id) do
     view |> element("#workspace-root") |> render_hook("toggle_chat", %{})
     :timer.sleep(80)
-    view |> element("button[phx-value-id='#{conversation_id}']") |> render_click()
+
+    view
+    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{conversation_id}']")
+    |> render_click()
+
     :timer.sleep(120)
   end
 
@@ -90,7 +94,10 @@ defmodule ConceptWeb.ChatUnreadTest do
     assert participant.last_read_message_id == latest.id
 
     # Re-opening now shows no New divider (all read).
-    view |> element("button[phx-value-id='#{ctx.conversation_id}']") |> render_click()
+    view
+    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{ctx.conversation_id}']")
+    |> render_click()
+
     :timer.sleep(100)
     refute has_element?(view, "[id$='-unread-divider']")
   end

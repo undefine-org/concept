@@ -37,6 +37,9 @@ defmodule Concept.Knowledge.Chat do
       define :participants_for_conversation, action: :for_conversation, args: [:conversation_id]
       define :mark_participant_read, action: :mark_read
       define :my_unread_participants, action: :my_unread
+      define :pin_participant, action: :pin
+      define :unpin_participant, action: :unpin
+      define :my_pinned_participants, action: :my_pinned
     end
 
     resource Concept.Knowledge.Chat.Reaction do

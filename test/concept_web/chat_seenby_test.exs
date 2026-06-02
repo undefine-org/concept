@@ -93,7 +93,11 @@ defmodule ConceptWeb.ChatSeenByTest do
   defp open_conversation(view, conversation_id) do
     view |> element("#workspace-root") |> render_hook("toggle_chat", %{})
     :timer.sleep(80)
-    view |> element("button[phx-value-id='#{conversation_id}']") |> render_click()
+
+    view
+    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{conversation_id}']")
+    |> render_click()
+
     :timer.sleep(120)
   end
 

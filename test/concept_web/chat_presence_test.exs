@@ -51,7 +51,11 @@ defmodule ConceptWeb.ChatPresenceTest do
   defp open_conversation(view, conversation_id) do
     view |> element("#workspace-root") |> render_hook("toggle_chat", %{})
     :timer.sleep(80)
-    view |> element("button[phx-value-id='#{conversation_id}']") |> render_click()
+
+    view
+    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{conversation_id}']")
+    |> render_click()
+
     :timer.sleep(120)
   end
 
@@ -112,7 +116,10 @@ defmodule ConceptWeb.ChatPresenceTest do
            |> Map.has_key?(ctx.user.id)
 
     # Switch directly to the second conversation (no close in between).
-    view |> element("button[phx-value-id='#{conv2.id}']") |> render_click()
+    view
+    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{conv2.id}']")
+    |> render_click()
+
     :timer.sleep(120)
 
     # No longer tracked on the first conversation; tracked on the second.

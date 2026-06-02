@@ -67,7 +67,10 @@ defmodule ConceptWeb.ChatAddPeopleTest do
     {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}")
     open_chat(view)
     # Select the seeded conversation so the participant rail renders.
-    view |> element("button[phx-value-id='#{ctx.conversation_id}']") |> render_click()
+    view
+    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{ctx.conversation_id}']")
+    |> render_click()
+
     :timer.sleep(80)
     assert has_element?(view, "[id$='-add-people-trigger']")
   end
@@ -75,7 +78,11 @@ defmodule ConceptWeb.ChatAddPeopleTest do
   test "opening the modal lists workspace members and the fixed host voice", ctx do
     {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}")
     open_chat(view)
-    view |> element("button[phx-value-id='#{ctx.conversation_id}']") |> render_click()
+
+    view
+    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{ctx.conversation_id}']")
+    |> render_click()
+
     :timer.sleep(80)
     view |> element("[id$='-add-people-trigger']") |> render_click()
 
@@ -88,7 +95,11 @@ defmodule ConceptWeb.ChatAddPeopleTest do
   test "selecting a member and confirming joins them as a participant", ctx do
     {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}")
     open_chat(view)
-    view |> element("button[phx-value-id='#{ctx.conversation_id}']") |> render_click()
+
+    view
+    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{ctx.conversation_id}']")
+    |> render_click()
+
     :timer.sleep(80)
     view |> element("[id$='-add-people-trigger']") |> render_click()
 

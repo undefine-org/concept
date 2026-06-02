@@ -278,7 +278,7 @@ Hybrid vector+graph search over the workspace's pages and blocks.
 
 ---
 ## Concept.Knowledge.Chat
-### Tools (21)
+### Tools (24)
 
 #### `conversation_create`
 
@@ -448,12 +448,36 @@ Advance this participant's unread cursor to a message they've now seen.
 - **Action**: `:mark_read` (update)
 
 
+#### `participant_my_pinned`
+
+List the actor's pinned participant rows (pinned_at set), most recently pinned first. The conversation ids power the rail's Pinned section.
+
+- **Resource**: `Concept.Knowledge.Chat.Participant`
+- **Action**: `:my_pinned` (read)
+
+
 #### `participant_my_unread`
 
 List the actor's participant rows with unread messages — the conversation has a latest message the participant's cursor has not reached. One row per unread conversation; count them for an unread badge.
 
 - **Resource**: `Concept.Knowledge.Chat.Participant`
 - **Action**: `:my_unread` (read)
+
+
+#### `participant_pin`
+
+Pin this conversation for the current member, surfacing it at the top of their rail. Per-user — pinning is not visible to others.
+
+- **Resource**: `Concept.Knowledge.Chat.Participant`
+- **Action**: `:pin` (update)
+
+
+#### `participant_unpin`
+
+Unpin this conversation for the current member.
+
+- **Resource**: `Concept.Knowledge.Chat.Participant`
+- **Action**: `:unpin` (update)
 
 
 #### `reaction_for_conversation`
