@@ -54,7 +54,8 @@ defmodule ConceptWeb.ChatAddPeopleTest do
     {:ok, msg} =
       Chat.create_message(%{text: "kickoff", addresses_host: false}, actor: user, tenant: ws.id)
 
-    {:ok, conn: conn, user: user, ws: ws, teammate: teammate, conversation_id: msg.conversation_id}
+    {:ok,
+     conn: conn, user: user, ws: ws, teammate: teammate, conversation_id: msg.conversation_id}
   end
 
   defp open_chat(view) do

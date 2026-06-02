@@ -43,7 +43,10 @@ defmodule ConceptWeb.ChatSeenByTest do
     {:ok, _m} = Accounts.add_member(ws.id, to_string(teammate.email), actor: user)
 
     {:ok, msg} =
-      Chat.create_message(%{text: "seen probe", addresses_host: false}, actor: user, tenant: ws.id)
+      Chat.create_message(%{text: "seen probe", addresses_host: false},
+        actor: user,
+        tenant: ws.id
+      )
 
     # Join the teammate to the conversation so they can have a read cursor.
     {:ok, mate_membership} = Accounts.get_membership(teammate.id, ws.id, actor: user)

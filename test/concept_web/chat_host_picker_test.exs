@@ -98,7 +98,9 @@ defmodule ConceptWeb.ChatHostPickerTest do
   end
 
   test "the picker filters hosts by the search query", ctx do
-    {:ok, _p2} = Pages.create_page("Q3 Roadmap", ctx.ws.id, nil, actor: ctx.user, tenant: ctx.ws.id)
+    {:ok, _p2} =
+      Pages.create_page("Q3 Roadmap", ctx.ws.id, nil, actor: ctx.user, tenant: ctx.ws.id)
+
     {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}")
     open_chat(view)
     view |> element("[id$='-new-conversation']") |> render_click()

@@ -32,6 +32,7 @@ defmodule Concept.Chat.RailModelTest do
 
     test "a host with exactly 1 conversation is :inline" do
       p = Ash.UUID.generate()
+
       assert [%{host_type: :page, host_id: ^p, mode: :inline}] =
                RailModel.group_by_host([conv(:page, p)])
     end

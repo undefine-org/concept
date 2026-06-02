@@ -99,7 +99,9 @@ defmodule ConceptWeb.ChatReactionsTest do
 
     # Click the chip (own reaction) to toggle off.
     view
-    |> element("[phx-click='toggle_reaction'][phx-value-message='#{ctx.msg.id}'][phx-value-emoji='👍']")
+    |> element(
+      "[phx-click='toggle_reaction'][phx-value-message='#{ctx.msg.id}'][phx-value-emoji='👍']"
+    )
     |> render_click()
 
     :timer.sleep(80)
