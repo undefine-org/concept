@@ -84,6 +84,8 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:addable_members, fn -> [] end)
         |> assign_new(:thread_map, fn -> %{} end)
         |> assign_new(:open_thread, fn -> nil end)
+        |> assign_new(:unread_boundary_id, fn -> nil end)
+        |> assign_new(:latest_message_id, fn -> nil end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -342,7 +344,9 @@ defmodule ConceptWeb.ChatComponent do
           <div
             id={"#{@id}-message-container"}
             phx-update="stream"
-            phx-hook="ScrollToBottom"
+            phx-hook="ScrollToBottom MarkRead"
+            phx-target={@myself}
+            data-latest-id={@unread_boundary_id && latest_message_id(assigns)}
             class="ora-chat-messages"
           >
             <%!-- Dispatch on Concept.Chat.MessageKind.render_mode/1 — the single
@@ -351,16 +355,30 @@ defmodule ConceptWeb.ChatComponent do
                     renders in the stream — it lives behind "Why this answer?". --%>
             <%= for {id, message} <- @streams.messages do %>
               <% mode = Concept.Chat.MessageKind.render_mode(message) %>
+              <% is_boundary = @unread_boundary_id && message_id_of(message) == @unread_boundary_id %>
               <div
                 id={id}
                 data-render-mode={mode}
                 class={[
                   "ora-chat-message group/msg relative",
+                  is_boundary && "ora-chat-unread-boundary",
                   mode == :human_row && "ora-chat-message--user",
                   mode == :agent_row && "ora-chat-message--agent",
                   mode in [:host_seep, :host_note] && "ora-chat-message--seep"
                 ]}
               >
+                <%!-- Unread "New" divider (T2): rendered INSIDE the boundary
+                      message's stream item so re-streaming it (on mark_read)
+                      cleanly removes the divider. --%>
+                <div
+                  :if={is_boundary}
+                  id={"#{@id}-unread-divider"}
+                  class="absolute -top-2 left-0 right-0 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-rose-500"
+                >
+                  <span class="h-px flex-1 bg-rose-200"></span>
+                  New
+                  <span class="h-px flex-1 bg-rose-200"></span>
+                </div>
                 <%!-- Hover toolbar (T2): every message is a unit of work. Reply
                       in thread + copy link are real now; React (T4) and
                       Crystallize-this-message (T6, once bodies are blocks) slot
@@ -1021,6 +1039,41 @@ defmodule ConceptWeb.ChatComponent do
     start_conversation(socket, host_type, host_id, nil)
   end
 
+  def handle_event("mark_read", %{"message_id" => message_id}, socket) do
+    # Advance my participant's read cursor to the viewed message (the unread
+    # cursor that powers the divider and, later, the inbox). Idempotent-ish:
+    # find my participant, mark_read. Clear the divider locally on success.
+    conversation = socket.assigns[:conversation]
+    user = socket.assigns[:current_user]
+
+    with %_{} <- user,
+         %{} = conv <- conversation,
+         participants <- load_participants(socket, conv.id),
+         %{} = mine <-
+           Enum.find(participants, fn p ->
+             match?(%{membership: %{user_id: uid}} when uid == user.id, p)
+           end),
+         {:ok, _} <-
+           Concept.Knowledge.Chat.mark_participant_read(mine, %{last_read_message_id: message_id},
+             actor: user,
+             tenant: socket.assigns[:workspace_id]
+           ) do
+      # The divider lives inside a streamed message item; clearing the boundary
+      # assign alone won't re-render an existing stream item, so re-stream the
+      # ex-boundary message to drop its divider from the DOM.
+      boundary = socket.assigns[:unread_boundary_id]
+
+      socket =
+        socket
+        |> assign(:unread_boundary_id, nil)
+        |> restream_message(boundary)
+
+      {:noreply, socket}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
   def handle_event("open_thread", %{"seed" => seed_id}, socket) do
     # Open the thread for a seed message. A thread may not exist yet (opened from
     # the toolbar's Reply-in-thread on a message that has no replies): show an
@@ -1271,12 +1324,56 @@ defmodule ConceptWeb.ChatComponent do
       |> assign(:participants, load_participants(socket, conversation.id))
       |> assign(:thread_map, load_thread_map(socket, conversation.id))
       |> assign(:open_thread, nil)
+      |> assign(:unread_boundary_id, unread_boundary(socket, conversation.id, messages))
+      |> assign(:latest_message_id, messages |> Enum.at(0) |> message_id_of())
       |> assign(:agent_responding, agent_response_pending?(messages))
       |> assign(:has_messages, messages != [])
       # message_history! sorts newest-first; the list renders top-anchored
       # (oldest → newest, newest at the bottom) so we reverse to natural order.
       |> stream(:messages, Enum.reverse(messages), reset: true)
       |> assign_message_form()
+    end
+  end
+
+  # Unread boundary (T2): the id of the FIRST message past my participant's
+  # last_read_message_id cursor — the stream renders a "New" divider before it.
+  # nil when nothing is unread (cursor at/after the latest message). `messages`
+  # is newest-first (message_history! order).
+  defp unread_boundary(socket, conversation_id, messages) do
+    cursor = my_read_cursor(socket, conversation_id)
+    # natural (oldest→newest) order to find the first unread
+    ordered = Enum.reverse(messages)
+
+    cond do
+      ordered == [] -> nil
+      # No cursor → everything is unread; boundary is the first message.
+      is_nil(cursor) -> ordered |> Enum.at(0) |> message_id_of()
+      true ->
+        # First message whose id sorts after the cursor (uuid_v7 ids are
+        # time-ordered, so string compare = chronological).
+        ordered
+        |> Enum.find(fn m -> message_id_of(m) > cursor end)
+        |> case do
+          nil -> nil
+          m -> message_id_of(m)
+        end
+    end
+  end
+
+  # My participant's read cursor for this conversation (nil if none / not joined).
+  defp my_read_cursor(socket, conversation_id) do
+    user = socket.assigns[:current_user]
+
+    with %_{} <- user,
+         participants when is_list(participants) <-
+           load_participants(socket, conversation_id),
+         %{} = mine <-
+           Enum.find(participants, fn p ->
+             match?(%{membership: %{user_id: uid}} when uid == user.id, p)
+           end) do
+      mine.last_read_message_id
+    else
+      _ -> nil
     end
   end
 
@@ -1324,6 +1421,22 @@ defmodule ConceptWeb.ChatComponent do
   defp message_id_of(%{"id" => id}), do: id
   defp message_id_of(_), do: nil
 
+  defp latest_message_id(assigns), do: assigns[:latest_message_id]
+
+  # Re-insert a single message into the stream by id (e.g. to re-render its
+  # wrapper after the unread boundary moved off it). No-op when id/conv is nil.
+  defp restream_message(socket, nil), do: socket
+
+  defp restream_message(socket, message_id) do
+    case Concept.Knowledge.Chat.get_message(message_id,
+           actor: socket.assigns[:current_user],
+           tenant: socket.assigns[:workspace_id]
+         ) do
+      {:ok, message} -> stream_insert(socket, :messages, message)
+      _ -> socket
+    end
+  end
+
   # The seed message's text, read from the current stream-backing thread_map's
   # parent conversation. We refetch the single message to render the seed pinned.
   defp seed_message_text(socket, seed_id) do
@@ -1365,6 +1478,8 @@ defmodule ConceptWeb.ChatComponent do
     |> assign(:has_messages, false)
     |> assign(:thread_map, %{})
     |> assign(:open_thread, nil)
+    |> assign(:unread_boundary_id, nil)
+    |> assign(:latest_message_id, nil)
     |> stream(:messages, [], reset: true)
     |> assign_message_form()
   end

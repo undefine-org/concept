@@ -14,6 +14,7 @@ import FocusTrap from "./focus_trap.js";
 import ScrollToBottom from "./scroll_to_bottom.js";
 import CompositeResize from "./composite_resize.js";
 import CopyToClipboard from "./copy_to_clipboard.js";
+import MarkRead from "./mark_read.js";
 
 const Hooks = {
   BlockList,
@@ -32,6 +33,7 @@ const Hooks = {
   ScrollToBottom,
   CompositeResize,
   CopyToClipboard,
+  MarkRead,
 };
 
 export default Hooks;
