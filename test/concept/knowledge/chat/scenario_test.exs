@@ -77,9 +77,11 @@ defmodule Concept.Knowledge.Chat.ScenarioTest do
 
     assert code_block.container_type == :message
     assert code_block.container_id == m1.id
-    # …and a block lives under exactly one container (page XOR message).
+    # …and a block lives under exactly one container (page XOR message). The
+    # message also auto-mirrors its text into a block on send (T6), so assert
+    # the explicit code_block is among the message's blocks (membership).
     {:ok, msg_blocks} = Pages.list_for_message(m1.id, actor: maya, tenant: ws.id)
-    assert Enum.map(msg_blocks, & &1.id) == [code_block.id]
+    assert code_block.id in Enum.map(msg_blocks, & &1.id)
 
     # ── USE CASE 3: Spawn a focused thread from a message ──────────────────
     # The "competitor comparison" tangent becomes a child conversation,

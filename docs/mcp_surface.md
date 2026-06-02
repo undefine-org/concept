@@ -399,6 +399,7 @@ Send a message to a host (a page, a record, or the workspace). If no conversatio
   - `host_type` (`Atom`, optional) — What this message is about: :workspace (whole tenant) or a registered host type such as :page.
   - `host_id` (`UUID`, optional) — The host record id (e.g. the page id). Omit for the :workspace host.
   - `reply_to_message_id` (`UUID`, optional) — Spawn (or continue) a thread: a child conversation seeded from this message, inheriting the parent's host. Omit to post in the conversation directly.
+  - `block_type` (`Atom`, optional) — The block type the message body becomes (paragraph, heading_1–3, bulleted_list_item, numbered_list_item, to_do, quote). The text is mirrored into a Block of this type so talk carries the editor's content unit and crystallizes by cloning.
 
 
 #### `message_for_conversation`
