@@ -355,12 +355,43 @@ defmodule ConceptWeb.ChatComponent do
                 id={id}
                 data-render-mode={mode}
                 class={[
-                  "ora-chat-message",
+                  "ora-chat-message group/msg relative",
                   mode == :human_row && "ora-chat-message--user",
                   mode == :agent_row && "ora-chat-message--agent",
                   mode in [:host_seep, :host_note] && "ora-chat-message--seep"
                 ]}
               >
+                <%!-- Hover toolbar (T2): every message is a unit of work. Reply
+                      in thread + copy link are real now; React (T4) and
+                      Crystallize-this-message (T6, once bodies are blocks) slot
+                      in here. No dead buttons — absent until real. --%>
+                <div
+                  id={"#{@id}-msg-toolbar-#{message_id_of(message)}"}
+                  class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-white border border-notion-divider rounded-lg shadow-sm px-0.5 py-0.5 z-10"
+                >
+                  <button
+                    type="button"
+                    phx-click="open_thread"
+                    phx-value-seed={message_id_of(message)}
+                    phx-target={@myself}
+                    class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
+                    title="Reply in thread"
+                    aria-label="Reply in thread"
+                  >
+                    <.icon name="hero-chat-bubble-left-right-micro" class="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    id={"#{@id}-msg-copylink-#{message_id_of(message)}"}
+                    phx-hook="CopyToClipboard"
+                    data-clipboard-text={message_link(assigns, message)}
+                    class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
+                    title="Copy link to message"
+                    aria-label="Copy link to message"
+                  >
+                    <.icon name="hero-link-micro" class="size-4" />
+                  </button>
+                </div>
                 <span :if={mode == :human_row} class="ora-chat-avatar">
                   <.icon name="hero-user-micro" class="size-4 text-notion-text-light" />
                 </span>
@@ -991,27 +1022,23 @@ defmodule ConceptWeb.ChatComponent do
   end
 
   def handle_event("open_thread", %{"seed" => seed_id}, socket) do
-    thread_map = socket.assigns[:thread_map] || %{}
+    # Open the thread for a seed message. A thread may not exist yet (opened from
+    # the toolbar's Reply-in-thread on a message that has no replies): show an
+    # empty panel anchored on the seed; the first reply spawns the child
+    # conversation. If it exists, load + subscribe to its messages.
+    thread = Map.get(socket.assigns[:thread_map] || %{}, seed_id)
+    seed_text = seed_message_text(socket, seed_id)
+    replies = if thread, do: Enum.sort_by(thread.messages || [], & &1.inserted_at, DateTime), else: []
 
-    case Map.get(thread_map, seed_id) do
-      nil ->
-        {:noreply, socket}
+    if thread, do: ConceptWeb.Endpoint.subscribe("chat:messages:#{thread.id}")
 
-      thread ->
-        seed_text = seed_message_text(socket, seed_id)
-        replies = Enum.sort_by(thread.messages || [], & &1.inserted_at, DateTime)
-
-        # Subscribe to the child conversation so thread replies stream live.
-        ConceptWeb.Endpoint.subscribe("chat:messages:#{thread.id}")
-
-        {:noreply,
-         assign(socket, :open_thread, %{
-           seed_id: seed_id,
-           seed_text: seed_text,
-           thread: thread,
-           replies: replies
-         })}
-    end
+    {:noreply,
+     assign(socket, :open_thread, %{
+       seed_id: seed_id,
+       seed_text: seed_text,
+       thread: thread,
+       replies: replies
+     })}
   end
 
   def handle_event("close_thread", _params, socket) do
@@ -1267,6 +1294,18 @@ defmodule ConceptWeb.ChatComponent do
     |> Map.new(fn thread -> {thread.seed_message_id, thread} end)
   rescue
     _ -> %{}
+  end
+
+  # A shareable link to a message: the workspace URL anchored on the message id.
+  # A message is already addressable by id; the link is a pure client-side copy.
+  defp message_link(assigns, message) do
+    base = ConceptWeb.Endpoint.url()
+    mid = message_id_of(message)
+
+    case assigns[:conversation] do
+      %{id: cid} -> "#{base}/chat/#{cid}#msg-#{mid}"
+      _ -> "#{base}/chat#msg-#{mid}"
+    end
   end
 
   # The thread seeded from this message, if any (nil otherwise).
