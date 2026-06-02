@@ -101,6 +101,7 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:rail_scope, fn -> :mine end)
         |> assign_new(:member_names, fn -> %{} end)
         |> assign_new(:thread_dock, fn -> :overlay end)
+        |> assign_new(:rail_query, fn -> "" end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -290,7 +291,10 @@ defmodule ConceptWeb.ChatComponent do
   def render(assigns) do
     # Resolve "my" participant once per render so the stream can split mine
     # (right) from other members (left) without re-deriving per message.
-    assigns = assign(assigns, :my_participant_id, my_participant_id(assigns))
+    assigns =
+      assigns
+      |> assign(:my_participant_id, my_participant_id(assigns))
+      |> assign(:rail_groups, filtered_rail_groups(assigns))
 
     ~H"""
     <div id={@id} class="flex bg-white min-h-full max-h-full">
@@ -309,6 +313,41 @@ defmodule ConceptWeb.ChatComponent do
           >
             <.icon name="hero-plus-micro" class="size-4" /> New conversation
           </button>
+
+          <%!-- Rail search (R5): filter the conversation list by topic or host
+                name. Read-only client-driven narrowing over the already-loaded
+                rail — a ⌘K-style find without a round-trip per keystroke. --%>
+          <form
+            class="relative mb-3"
+            phx-change="filter_rail"
+            phx-submit="filter_rail"
+            phx-target={@myself}
+          >
+            <.icon
+              name="hero-magnifying-glass-micro"
+              class="size-4 absolute left-2 top-1/2 -translate-y-1/2 text-notion-text-light pointer-events-none"
+            />
+            <input
+              type="text"
+              id={"#{@id}-rail-search"}
+              name="rail_query"
+              value={@rail_query}
+              phx-debounce="120"
+              placeholder="Search conversations…"
+              autocomplete="off"
+              class="ora-input w-full pl-7 text-sm"
+            />
+            <button
+              :if={@rail_query != ""}
+              type="button"
+              phx-click="clear_rail_search"
+              phx-target={@myself}
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-notion-text-light hover:text-notion-text"
+              aria-label="Clear search"
+            >
+              <.icon name="hero-x-mark-micro" class="size-3.5" />
+            </button>
+          </form>
 
           <%!-- Adaptive rail (T1): host › conversation, grouped by
                 Concept.Chat.RailModel. ≥2 convos → a collapsible host category;
@@ -411,7 +450,16 @@ defmodule ConceptWeb.ChatComponent do
                 <% end %>
               </div>
             </div>
-            <p :if={@rail_groups == []} class="px-2 text-sm text-notion-text-light">
+            <p
+              :if={@rail_groups == [] && @rail_query != ""}
+              class="px-2 text-sm text-notion-text-light"
+            >
+              No conversations match “{@rail_query}”.
+            </p>
+            <p
+              :if={@rail_groups == [] && @rail_query == ""}
+              class="px-2 text-sm text-notion-text-light"
+            >
               No conversations yet.
             </p>
           </nav>
@@ -1381,6 +1429,14 @@ defmodule ConceptWeb.ChatComponent do
   end
 
   @impl true
+  def handle_event("filter_rail", %{"rail_query" => q}, socket) do
+    {:noreply, assign(socket, :rail_query, q)}
+  end
+
+  def handle_event("clear_rail_search", _params, socket) do
+    {:noreply, assign(socket, :rail_query, "")}
+  end
+
   def handle_event("select_conversation", %{"id" => id}, socket) do
     send(self(), {:chat_component_navigate, id})
     {:noreply, socket}
@@ -2450,6 +2506,31 @@ defmodule ConceptWeb.ChatComponent do
     |> assign(:page_labels, page_label_map(socket, conversations))
   end
 
+  # Rail search (R5): narrow the grouped rail by a case-insensitive substring
+  # match on a conversation's title OR its host label (so "q3" finds topics on
+  # the "Q3 Strategy" page). Empty query → the full rail. Filtering happens on
+  # the already-loaded list, then regroups, so groups stay adaptive.
+  defp filtered_rail_groups(assigns) do
+    query = (assigns[:rail_query] || "") |> String.trim() |> String.downcase()
+
+    case query do
+      "" ->
+        assigns[:rail_groups] || []
+
+      q ->
+        (assigns[:rail_conversations] || [])
+        |> Enum.filter(&rail_match?(&1, q, assigns))
+        |> Concept.Chat.RailModel.group_by_host()
+    end
+  end
+
+  defp rail_match?(conversation, query, assigns) do
+    title = rail_conversation_title(conversation)
+    host = host_group_label(%{host_type: host_type_of(conversation), host_id: host_id_of(conversation)}, assigns)
+    String.contains?(String.downcase(title), query) or
+      String.contains?(String.downcase(host || ""), query)
+  end
+
   # The rail has two projections. `:mine` (default, full-screen Channels) shows
   # every conversation the user participates in. `:host` (page peek) narrows to
   # the conversations of the mounted host, so the drawer only surfaces the
@@ -2504,6 +2585,10 @@ defmodule ConceptWeb.ChatComponent do
   defp host_type_of(%{host_type: t}), do: t
   defp host_type_of(%{"host_type" => t}), do: t
   defp host_type_of(_), do: :workspace
+
+  defp host_id_of(%{host_id: id}), do: id
+  defp host_id_of(%{"host_id" => id}), do: id
+  defp host_id_of(_), do: nil
 
   # Display sections in Hostable.types() order, each carrying its host groups.
   defp rail_sections(groups) do
