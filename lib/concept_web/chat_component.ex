@@ -290,10 +290,207 @@ defmodule ConceptWeb.ChatComponent do
     """
   end
 
+  # A single message in the stream (R1c). Purely presentational: a function
+  # component has its own assigns, so it CANNOT call the parent-assign-dependent
+  # helpers (mine?, identity, thread_for, reactions_for, …). The stateful
+  # component resolves all of those into a flat view-model and passes them in.
+  # Sub-element ids are rebuilt from `cid` (the component id) byte-for-byte so
+  # existing selectors/tests keep matching. Reused by the main stream today;
+  # the thread panel can adopt it next.
+  attr :dom_id, :string, required: true, doc: "the stream item dom id (carries the row)"
+  attr :cid, :string, required: true, doc: "the component id, for sub-element ids"
+  attr :target, :any, required: true, doc: "phx-target (@myself)"
+  attr :message, :map, required: true
+  attr :mode, :atom, required: true
+  attr :mine, :boolean, required: true
+  attr :starts_run, :boolean, required: true
+  attr :is_boundary, :boolean, default: false
+  attr :host_type, :atom, default: :workspace
+  attr :identity, :map, required: true, doc: "%{name, color, initial}"
+  attr :thread, :any, default: nil, doc: "the seeded child conversation, or nil"
+  attr :reactions, :list, default: [], doc: "reaction chips for this message"
+  attr :msg_link, :string, default: nil, doc: "copy-link target"
+  attr :emoji_pop_open, :boolean, default: false
+
+  defp message_row(assigns) do
+    ~H"""
+    <div
+      id={@dom_id}
+      data-render-mode={@mode}
+      data-starts-run={to_string(@starts_run)}
+      class={[
+        "ora-chat-row",
+        not @starts_run && "ora-chat-row--cont",
+        @is_boundary && "ora-chat-unread-boundary"
+      ]}
+    >
+      <%!-- Unread "New" divider (T2): a full-width flow rule above the boundary
+            message (NOT absolute — that trapped it inside the bubble's width).
+            Inside the stream item so re-streaming on mark_read removes it. --%>
+      <div :if={@is_boundary} id={"#{@cid}-unread-divider"} class="ora-chat-divider">
+        <span class="ora-chat-divider-line"></span>
+        <span>New</span>
+        <span class="ora-chat-divider-line"></span>
+      </div>
+      <div class={[
+        "ora-chat-message group/msg relative",
+        @mine && "ora-chat-message--mine",
+        (not @mine and @mode in [:human_row, :agent_row]) && "ora-chat-message--other",
+        @mode in [:host_seep, :host_note] && "ora-chat-message--seep"
+      ]}>
+        <%!-- Hover toolbar (T2): every message is a unit of work. --%>
+        <div
+          id={"#{@cid}-msg-toolbar-#{message_id_of(@message)}"}
+          class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-white border border-notion-divider rounded-lg shadow-sm px-0.5 py-0.5 z-10"
+        >
+          <button
+            type="button"
+            id={"#{@cid}-react-#{message_id_of(@message)}"}
+            phx-click="open_emoji_pop"
+            phx-value-message={message_id_of(@message)}
+            phx-target={@target}
+            class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
+            title="Add reaction"
+            aria-label="Add reaction"
+          >
+            <.icon name="hero-face-smile-micro" class="size-4" />
+          </button>
+          <button
+            type="button"
+            phx-click="open_thread"
+            phx-value-seed={message_id_of(@message)}
+            phx-target={@target}
+            class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
+            title="Reply in thread"
+            aria-label="Reply in thread"
+          >
+            <.icon name="hero-chat-bubble-left-right-micro" class="size-4" />
+          </button>
+          <button
+            type="button"
+            id={"#{@cid}-msg-copylink-#{message_id_of(@message)}"}
+            phx-hook="CopyToClipboard"
+            data-clipboard-text={@msg_link}
+            class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
+            title="Copy link to message"
+            aria-label="Copy link to message"
+          >
+            <.icon name="hero-link-micro" class="size-4" />
+          </button>
+        </div>
+        <%!-- Sender avatar (R1): only OTHER members get an avatar on the left; at
+              the START of a run only (R1b). Continuations get a same-width
+              spacer so bubbles stay aligned. My messages sit right, no avatar. --%>
+        <span
+          :if={not @mine and @starts_run and @mode in [:human_row, :agent_row]}
+          class="ora-chat-avatar text-white text-[11px] font-bold"
+          style={"background-color: #{@identity.color}"}
+          title={@identity.name}
+        >
+          <.icon :if={@mode == :agent_row} name="hero-cpu-chip-micro" class="size-4" />
+          <span :if={@mode == :human_row}>{@identity.initial}</span>
+        </span>
+        <span
+          :if={not @mine and not @starts_run and @mode in [:human_row, :agent_row]}
+          class="ora-chat-avatar-spacer"
+          aria-hidden="true"
+        >
+        </span>
+        <div class="flex flex-col gap-1 min-w-0 flex-1">
+          <%!-- Sender name line (R1): OTHER members, run start only (R1b). --%>
+          <div
+            :if={not @mine and @starts_run and @mode in [:human_row, :agent_row]}
+            class="flex items-center gap-1.5 text-xs"
+          >
+            <span class="font-medium text-notion-text">{@identity.name}</span>
+            <span :if={@mode == :agent_row} class="text-violet-500">agent</span>
+          </div>
+          <%!-- Host seep: a quiet "from this <host>" voice label. --%>
+          <div
+            :if={@mode in [:host_seep, :host_note]}
+            class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
+          >
+            <.icon name="hero-sparkles-micro" class="size-3" />
+            <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
+          </div>
+          <div :if={String.trim(@message.text || "") != ""} class="ora-chat-bubble">
+            {to_markdown(@message.text || "")}
+          </div>
+          <div :if={Concept.Chat.MessageKind.host?(@message)} class="mt-1">
+            <.why_this_answer message={@message} />
+          </div>
+          <%!-- Thread chip (T2): present iff this message seeded a child convo. --%>
+          <button
+            :if={@thread}
+            type="button"
+            id={"#{@cid}-thread-chip-#{message_id_of(@message)}"}
+            phx-click="open_thread"
+            phx-value-seed={message_id_of(@message)}
+            phx-target={@target}
+            class="mt-1 inline-flex items-center gap-1 text-xs text-notion-blue hover:underline"
+          >
+            <.icon name="hero-chat-bubble-left-right-micro" class="size-3.5" />
+            {thread_reply_count(@thread)}
+          </button>
+
+          <%!-- Reaction chips (T4): own-reaction outlined; click toggles. --%>
+          <div
+            :if={@reactions != []}
+            id={"#{@cid}-reactions-#{message_id_of(@message)}"}
+            class="mt-1 flex flex-wrap gap-1"
+          >
+            <button
+              :for={chip <- @reactions}
+              type="button"
+              phx-click="toggle_reaction"
+              phx-value-message={message_id_of(@message)}
+              phx-value-emoji={chip.emoji}
+              phx-target={@target}
+              class={[
+                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border",
+                chip.mine? && "border-notion-blue bg-notion-blue/10 text-notion-blue",
+                !chip.mine? && "border-notion-divider bg-notion-sidebar text-notion-text"
+              ]}
+            >
+              <span>{chip.emoji}</span>
+              <span>{chip.count}</span>
+            </button>
+          </div>
+
+          <%!-- Compact emoji picker opened from the toolbar react btn. --%>
+          <div
+            :if={@emoji_pop_open}
+            id={"#{@cid}-emoji-pop-#{message_id_of(@message)}"}
+            class="mt-1 inline-flex items-center gap-1 p-1 rounded-lg bg-white border border-notion-divider shadow-sm"
+          >
+            <button
+              :for={emoji <- reaction_palette()}
+              type="button"
+              phx-click="react"
+              phx-value-message={message_id_of(@message)}
+              phx-value-emoji={emoji}
+              phx-target={@target}
+              class="p-0.5 rounded hover:bg-notion-sidebar-hover text-base leading-none"
+              aria-label={"React " <> emoji}
+            >
+              {emoji}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
   @impl true
   def render(assigns) do
     # Resolve "my" participant once per render so the stream can split mine
     # (right) from other members (left) without re-deriving per message.
+    assigns =
+      assigns
+      |> assign(:my_participant_id, my_participant_id(assigns))
+      |> assign(:rail_groups, filtered_rail_groups(assigns))
+
     assigns =
       assigns
       |> assign(:my_participant_id, my_participant_id(assigns))
@@ -756,190 +953,23 @@ defmodule ConceptWeb.ChatComponent do
                     source of truth. Host replies SEEP in (fused continuation,
                     no avatar); humans/agents take a row. Raw tool plumbing never
                     renders in the stream — it lives behind "Why this answer?". --%>
-              <%= for {id, message} <- @streams.messages do %>
-                <% mode = Concept.Chat.MessageKind.render_mode(message) %>
-                <% mine = mine?(message, assigns) %>
-                <% starts_run = Map.get(@message_runs, message_id_of(message), true) %>
-                <% is_boundary = @unread_boundary_id && message_id_of(message) == @unread_boundary_id %>
-                <div
-                  id={id}
-                  data-render-mode={mode}
-                  data-starts-run={to_string(starts_run)}
-                  class={[
-                    "ora-chat-row",
-                    not starts_run && "ora-chat-row--cont",
-                    is_boundary && "ora-chat-unread-boundary"
-                  ]}
-                >
-                  <%!-- Unread "New" divider (T2): a full-width flow rule above the
-                      boundary message (NOT absolute — that trapped it inside the
-                      bubble's width). Inside the stream item so re-streaming on
-                      mark_read cleanly removes it. --%>
-                  <div :if={is_boundary} id={"#{@id}-unread-divider"} class="ora-chat-divider">
-                    <span class="ora-chat-divider-line"></span>
-                    <span>New</span>
-                    <span class="ora-chat-divider-line"></span>
-                  </div>
-                  <div class={[
-                    "ora-chat-message group/msg relative",
-                    mine && "ora-chat-message--mine",
-                    (not mine and mode in [:human_row, :agent_row]) && "ora-chat-message--other",
-                    mode in [:host_seep, :host_note] && "ora-chat-message--seep"
-                  ]}>
-                    <%!-- Hover toolbar (T2): every message is a unit of work. Reply
-                      in thread + copy link are real now; React (T4) and
-                      Crystallize-this-message (T6, once bodies are blocks) slot
-                      in here. No dead buttons — absent until real. --%>
-                    <div
-                      id={"#{@id}-msg-toolbar-#{message_id_of(message)}"}
-                      class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-white border border-notion-divider rounded-lg shadow-sm px-0.5 py-0.5 z-10"
-                    >
-                      <button
-                        type="button"
-                        id={"#{@id}-react-#{message_id_of(message)}"}
-                        phx-click="open_emoji_pop"
-                        phx-value-message={message_id_of(message)}
-                        phx-target={@myself}
-                        class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
-                        title="Add reaction"
-                        aria-label="Add reaction"
-                      >
-                        <.icon name="hero-face-smile-micro" class="size-4" />
-                      </button>
-                      <button
-                        type="button"
-                        phx-click="open_thread"
-                        phx-value-seed={message_id_of(message)}
-                        phx-target={@myself}
-                        class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
-                        title="Reply in thread"
-                        aria-label="Reply in thread"
-                      >
-                        <.icon name="hero-chat-bubble-left-right-micro" class="size-4" />
-                      </button>
-                      <button
-                        type="button"
-                        id={"#{@id}-msg-copylink-#{message_id_of(message)}"}
-                        phx-hook="CopyToClipboard"
-                        data-clipboard-text={message_link(assigns, message)}
-                        class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
-                        title="Copy link to message"
-                        aria-label="Copy link to message"
-                      >
-                        <.icon name="hero-link-micro" class="size-4" />
-                      </button>
-                    </div>
-                    <%!-- Sender avatar (R1): only OTHER members get an avatar on
-                        the left — a colored initial keyed to the sender, agents
-                        in violet with a chip glyph. My own messages need no
-                        avatar (they sit right, as bubbles). Within a run (R1b)
-                        only the FIRST message shows the avatar; continuations
-                        get a same-width spacer so bubbles stay aligned. --%>
-                    <span
-                      :if={not mine and starts_run and mode in [:human_row, :agent_row]}
-                      class="ora-chat-avatar text-white text-[11px] font-bold"
-                      style={"background-color: #{sender_color(message, assigns)}"}
-                      title={sender_display_name(message, assigns)}
-                    >
-                      <.icon :if={mode == :agent_row} name="hero-cpu-chip-micro" class="size-4" />
-                      <span :if={mode == :human_row}>{sender_initial(message, assigns)}</span>
-                    </span>
-                    <span
-                      :if={not mine and not starts_run and mode in [:human_row, :agent_row]}
-                      class="ora-chat-avatar-spacer"
-                      aria-hidden="true"
-                    >
-                    </span>
-                    <div class="flex flex-col gap-1 min-w-0 flex-1">
-                      <%!-- Sender name line (R1): shown for OTHER members at the
-                          START of a run only (R1b) — a channel reads as
-                          multi-party without repeating the name per message. --%>
-                      <div
-                        :if={not mine and starts_run and mode in [:human_row, :agent_row]}
-                        class="flex items-center gap-1.5 text-xs"
-                      >
-                        <span class="font-medium text-notion-text">
-                          {sender_display_name(message, assigns)}
-                        </span>
-                        <span :if={mode == :agent_row} class="text-violet-500">agent</span>
-                      </div>
-                      <%!-- Host seep: a quiet "from this <host>" voice label, not a
-                        person's name. The blue rail comes from --seep. --%>
-                      <div
-                        :if={mode in [:host_seep, :host_note]}
-                        class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
-                      >
-                        <.icon name="hero-sparkles-micro" class="size-3" />
-                        <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
-                      </div>
-                      <div :if={String.trim(message.text || "") != ""} class="ora-chat-bubble">
-                        {to_markdown(message.text || "")}
-                      </div>
-                      <div :if={Concept.Chat.MessageKind.host?(message)} class="mt-1">
-                        <.why_this_answer message={message} />
-                      </div>
-                      <%!-- Thread chip (T2): present iff this message seeded a child
-                        conversation. Makes seed_message_id visible. --%>
-                      <button
-                        :if={thread_for(assigns, message)}
-                        type="button"
-                        id={"#{@id}-thread-chip-#{message_id_of(message)}"}
-                        phx-click="open_thread"
-                        phx-value-seed={message_id_of(message)}
-                        phx-target={@myself}
-                        class="mt-1 inline-flex items-center gap-1 text-xs text-notion-blue hover:underline"
-                      >
-                        <.icon name="hero-chat-bubble-left-right-micro" class="size-3.5" />
-                        {thread_reply_count(thread_for(assigns, message))}
-                      </button>
-
-                      <%!-- Reaction chips (T4): own-reaction outlined; click toggles. --%>
-                      <div
-                        :if={reactions_for(assigns, message) != []}
-                        id={"#{@id}-reactions-#{message_id_of(message)}"}
-                        class="mt-1 flex flex-wrap gap-1"
-                      >
-                        <button
-                          :for={chip <- reactions_for(assigns, message)}
-                          type="button"
-                          phx-click="toggle_reaction"
-                          phx-value-message={message_id_of(message)}
-                          phx-value-emoji={chip.emoji}
-                          phx-target={@myself}
-                          class={[
-                            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border",
-                            chip.mine? && "border-notion-blue bg-notion-blue/10 text-notion-blue",
-                            !chip.mine? && "border-notion-divider bg-notion-sidebar text-notion-text"
-                          ]}
-                        >
-                          <span>{chip.emoji}</span>
-                          <span>{chip.count}</span>
-                        </button>
-                      </div>
-
-                      <%!-- Compact emoji picker opened from the toolbar react btn. --%>
-                      <div
-                        :if={@emoji_pop_for == message_id_of(message)}
-                        id={"#{@id}-emoji-pop-#{message_id_of(message)}"}
-                        class="mt-1 inline-flex items-center gap-1 p-1 rounded-lg bg-white border border-notion-divider shadow-sm"
-                      >
-                        <button
-                          :for={emoji <- reaction_palette()}
-                          type="button"
-                          phx-click="react"
-                          phx-value-message={message_id_of(message)}
-                          phx-value-emoji={emoji}
-                          phx-target={@myself}
-                          class="p-0.5 rounded hover:bg-notion-sidebar-hover text-base leading-none"
-                          aria-label={"React " <> emoji}
-                        >
-                          {emoji}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              <% end %>
+              <.message_row
+                :for={{id, message} <- @streams.messages}
+                dom_id={id}
+                cid={@id}
+                target={@myself}
+                message={message}
+                mode={Concept.Chat.MessageKind.render_mode(message)}
+                mine={mine?(message, assigns)}
+                starts_run={Map.get(@message_runs, message_id_of(message), true)}
+                is_boundary={@unread_boundary_id && message_id_of(message) == @unread_boundary_id}
+                host_type={@host_type}
+                identity={message_identity(message, assigns)}
+                thread={thread_for(assigns, message)}
+                reactions={reactions_for(assigns, message)}
+                msg_link={message_link(assigns, message)}
+                emoji_pop_open={@emoji_pop_for == message_id_of(message)}
+              />
             </div>
 
             <%!-- Human typing cue (T3) and host "is thinking" cue (R2) live INSIDE
@@ -2157,6 +2187,18 @@ defmodule ConceptWeb.ChatComponent do
     |> String.first()
     |> Kernel.||("?")
     |> String.upcase()
+  end
+
+  # A message's resolved sender identity as one value, so the presentational
+  # message_row/1 component takes a single struct instead of re-calling four
+  # parent-assign-dependent helpers (which it could not, having its own
+  # assigns). Resolution stays here, in the stateful component.
+  defp message_identity(message, assigns) do
+    %{
+      name: sender_display_name(message, assigns),
+      color: sender_color(message, assigns),
+      initial: sender_initial(message, assigns)
+    }
   end
 
   # Threads (T2): a thread is a child conversation seeded from a message. Load
