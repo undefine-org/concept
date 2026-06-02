@@ -103,6 +103,8 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:thread_dock, fn -> :overlay end)
         |> assign_new(:rail_query, fn -> "" end)
         |> assign_new(:pinned_ids, fn -> MapSet.new() end)
+        |> assign_new(:message_runs, fn -> %{} end)
+        |> assign_new(:last_sender_id, fn -> nil end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -757,11 +759,17 @@ defmodule ConceptWeb.ChatComponent do
               <%= for {id, message} <- @streams.messages do %>
                 <% mode = Concept.Chat.MessageKind.render_mode(message) %>
                 <% mine = mine?(message, assigns) %>
+                <% starts_run = Map.get(@message_runs, message_id_of(message), true) %>
                 <% is_boundary = @unread_boundary_id && message_id_of(message) == @unread_boundary_id %>
                 <div
                   id={id}
                   data-render-mode={mode}
-                  class={["ora-chat-row", is_boundary && "ora-chat-unread-boundary"]}
+                  data-starts-run={to_string(starts_run)}
+                  class={[
+                    "ora-chat-row",
+                    not starts_run && "ora-chat-row--cont",
+                    is_boundary && "ora-chat-unread-boundary"
+                  ]}
                 >
                   <%!-- Unread "New" divider (T2): a full-width flow rule above the
                       boundary message (NOT absolute — that trapped it inside the
@@ -824,9 +832,11 @@ defmodule ConceptWeb.ChatComponent do
                     <%!-- Sender avatar (R1): only OTHER members get an avatar on
                         the left — a colored initial keyed to the sender, agents
                         in violet with a chip glyph. My own messages need no
-                        avatar (they sit right, as bubbles). --%>
+                        avatar (they sit right, as bubbles). Within a run (R1b)
+                        only the FIRST message shows the avatar; continuations
+                        get a same-width spacer so bubbles stay aligned. --%>
                     <span
-                      :if={not mine and mode in [:human_row, :agent_row]}
+                      :if={not mine and starts_run and mode in [:human_row, :agent_row]}
                       class="ora-chat-avatar text-white text-[11px] font-bold"
                       style={"background-color: #{sender_color(message, assigns)}"}
                       title={sender_display_name(message, assigns)}
@@ -834,11 +844,18 @@ defmodule ConceptWeb.ChatComponent do
                       <.icon :if={mode == :agent_row} name="hero-cpu-chip-micro" class="size-4" />
                       <span :if={mode == :human_row}>{sender_initial(message, assigns)}</span>
                     </span>
+                    <span
+                      :if={not mine and not starts_run and mode in [:human_row, :agent_row]}
+                      class="ora-chat-avatar-spacer"
+                      aria-hidden="true"
+                    >
+                    </span>
                     <div class="flex flex-col gap-1 min-w-0 flex-1">
-                      <%!-- Sender name line (R1): shown for OTHER members so a
-                          channel reads as multi-party, not a monologue. --%>
+                      <%!-- Sender name line (R1): shown for OTHER members at the
+                          START of a run only (R1b) — a channel reads as
+                          multi-party without repeating the name per message. --%>
                       <div
-                        :if={not mine and mode in [:human_row, :agent_row]}
+                        :if={not mine and starts_run and mode in [:human_row, :agent_row]}
                         class="flex items-center gap-1.5 text-xs"
                       >
                         <span class="font-medium text-notion-text">
@@ -1833,6 +1850,7 @@ defmodule ConceptWeb.ChatComponent do
             |> assign(:agent_responding, true)
             |> assign(:has_messages, true)
             |> assign_message_form()
+            |> put_message_run(message)
             |> stream_insert(:messages, message, at: -1)
             |> then(&{:noreply, &1})
           else
@@ -1941,7 +1959,19 @@ defmodule ConceptWeb.ChatComponent do
       |> assign(:has_messages, messages != [])
       # message_history! sorts newest-first; the list renders top-anchored
       # (oldest → newest, newest at the bottom) so we reverse to natural order.
-      |> stream(:messages, Enum.reverse(messages), reset: true)
+      |> then(fn s ->
+        ordered = Enum.reverse(messages)
+
+        s
+        # Run grouping (R1b): annotate the natural-order list once, hold a
+        # {message_id => starts_run?} map so each stream row reads its trait
+        # without peeking at a sibling, and so a single-message re-stream
+        # (reactions/mark_read) preserves the trait rather than recomputing
+        # it against a stale neighbour.
+        |> assign(:message_runs, build_message_runs(ordered))
+        |> assign(:last_sender_id, ordered |> List.last() |> message_sender_id())
+        |> stream(:messages, ordered, reset: true)
+      end)
       |> assign_message_form()
     end
   end
@@ -2009,6 +2039,40 @@ defmodule ConceptWeb.ChatComponent do
       _ -> nil
     end
   end
+
+  # ── Run grouping (R1b) ───────────────────────────────────────────
+  # A {message_id => starts_run?} map for an oldest-first list. Held in assigns
+  # so each stream row reads its trait as a field (never a sibling lookup), and
+  # a single-message re-stream preserves it.
+  defp build_message_runs(ordered_messages) do
+    ordered_messages
+    |> Concept.Chat.MessageGroup.annotate()
+    |> Map.new(fn %{message: m, starts_run?: starts?} -> {message_id_of(m), starts?} end)
+  end
+
+  # Fold a newly-appended message into the runs map. `starts_run?` depends only
+  # on the predecessor's sender (held as :last_sender_id), which never changes
+  # under append — so this is correct without re-annotating the whole list.
+  defp put_message_run(socket, message) do
+    prev_sender = socket.assigns[:last_sender_id]
+
+    starts? =
+      Concept.Chat.MessageGroup.starts_run?(
+        prev_sender && %{sender_participant_id: prev_sender},
+        message
+      ) or Concept.Chat.MessageKind.host?(message)
+
+    runs = Map.put(socket.assigns[:message_runs] || %{}, message_id_of(message), starts?)
+
+    socket
+    |> assign(:message_runs, runs)
+    |> assign(:last_sender_id, message_sender_id(message))
+  end
+
+  defp message_sender_id(nil), do: nil
+  defp message_sender_id(%{sender_participant_id: id}), do: id
+  defp message_sender_id(%{"sender_participant_id" => id}), do: id
+  defp message_sender_id(_), do: nil
 
   # True when the active conversation is pinned by the current member.
   defp conversation_pinned?(assigns) do
@@ -2551,6 +2615,7 @@ defmodule ConceptWeb.ChatComponent do
         socket
         |> maybe_warn_tool_data(message)
         |> assign(:has_messages, true)
+        |> put_message_run(message)
         |> stream_insert(:messages, message, at: -1)
         |> update_agent_responding(message)
 

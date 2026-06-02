@@ -74,4 +74,34 @@ defmodule ConceptWeb.ChatIdentityTest do
     # The peer is named by their email-derived label.
     assert html =~ to_string(ctx.peer.email)
   end
+
+  test "consecutive same-sender messages group into one run (R1b)", ctx do
+    {:ok, m1} =
+      Chat.create_message(%{text: "first of run", addresses_host: false},
+        actor: ctx.peer,
+        tenant: ctx.ws.id
+      )
+
+    {:ok, _m2} =
+      Chat.create_message(%{text: "second of run", addresses_host: false},
+        actor: ctx.peer,
+        tenant: ctx.ws.id,
+        private_arguments: %{conversation_id: m1.conversation_id}
+      )
+
+    {:ok, view, _html} =
+      live(ctx.conn, ~p"/w/#{ctx.ws.slug}/channels/#{m1.conversation_id}")
+
+    # The first message of the run starts it; the second is a continuation.
+    assert has_element?(view, "[data-starts-run='true']")
+    assert has_element?(view, "[data-starts-run='false'].ora-chat-row--cont")
+    # The run head shows the sender name; the continuation row does not (the
+    # name lives only on the run-start row, not per message).
+    cont_row =
+      view
+      |> element("[data-starts-run='false'].ora-chat-row--cont")
+      |> render()
+
+    refute cont_row =~ to_string(ctx.peer.email)
+  end
 end
