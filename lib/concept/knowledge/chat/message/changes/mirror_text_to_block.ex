@@ -15,6 +15,16 @@ defmodule Concept.Knowledge.Chat.Message.Changes.MirrorTextToBlock do
   Skipped for host turns (the grounded voice streams `text` directly and has no
   composer) and for empty text. Best-effort: a mirror failure must not fail the
   send — the `text` fast-path remains the source of truth for rendering.
+
+  ## Scope (T6) & follow-ups
+
+  This activates the substrate (one mirrored block per message, typed via the
+  composer's block-type selector). Two clean FUPs build on it:
+
+    * a full in-composer lexical `/`-slash editor (multi-block message bodies),
+      replacing the single-type mirror; and
+    * crystallize-by-reparent (move blocks) as an alternative to the current
+      clone, now that message bodies carry real blocks.
   """
   use Ash.Resource.Change
 
