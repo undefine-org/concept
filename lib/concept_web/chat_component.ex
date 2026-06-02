@@ -87,6 +87,9 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:unread_boundary_id, fn -> nil end)
         |> assign_new(:latest_message_id, fn -> nil end)
         |> assign_new(:chat_presence, fn -> [] end)
+        |> assign_new(:reactions_map, fn -> %{} end)
+        |> assign_new(:my_membership_id, fn -> nil end)
+        |> assign_new(:emoji_pop_for, fn -> nil end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -405,6 +408,18 @@ defmodule ConceptWeb.ChatComponent do
                 >
                   <button
                     type="button"
+                    id={"#{@id}-react-#{message_id_of(message)}"}
+                    phx-click="open_emoji_pop"
+                    phx-value-message={message_id_of(message)}
+                    phx-target={@myself}
+                    class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
+                    title="Add reaction"
+                    aria-label="Add reaction"
+                  >
+                    <.icon name="hero-face-smile-micro" class="size-4" />
+                  </button>
+                  <button
+                    type="button"
                     phx-click="open_thread"
                     phx-value-seed={message_id_of(message)}
                     phx-target={@myself}
@@ -466,6 +481,50 @@ defmodule ConceptWeb.ChatComponent do
                     <.icon name="hero-chat-bubble-left-right-micro" class="size-3.5" />
                     {thread_reply_count(thread_for(assigns, message))}
                   </button>
+
+                  <%!-- Reaction chips (T4): own-reaction outlined; click toggles. --%>
+                  <div
+                    :if={reactions_for(assigns, message) != []}
+                    id={"#{@id}-reactions-#{message_id_of(message)}"}
+                    class="mt-1 flex flex-wrap gap-1"
+                  >
+                    <button
+                      :for={chip <- reactions_for(assigns, message)}
+                      type="button"
+                      phx-click="toggle_reaction"
+                      phx-value-message={message_id_of(message)}
+                      phx-value-emoji={chip.emoji}
+                      phx-target={@myself}
+                      class={[
+                        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border",
+                        chip.mine? && "border-notion-blue bg-notion-blue/10 text-notion-blue",
+                        !chip.mine? && "border-notion-divider bg-notion-sidebar text-notion-text"
+                      ]}
+                    >
+                      <span>{chip.emoji}</span>
+                      <span>{chip.count}</span>
+                    </button>
+                  </div>
+
+                  <%!-- Compact emoji picker opened from the toolbar react btn. --%>
+                  <div
+                    :if={@emoji_pop_for == message_id_of(message)}
+                    id={"#{@id}-emoji-pop-#{message_id_of(message)}"}
+                    class="mt-1 inline-flex items-center gap-1 p-1 rounded-lg bg-white border border-notion-divider shadow-sm"
+                  >
+                    <button
+                      :for={emoji <- reaction_palette()}
+                      type="button"
+                      phx-click="react"
+                      phx-value-message={message_id_of(message)}
+                      phx-value-emoji={emoji}
+                      phx-target={@myself}
+                      class="p-0.5 rounded hover:bg-notion-sidebar-hover text-base leading-none"
+                      aria-label={"React " <> emoji}
+                    >
+                      {emoji}
+                    </button>
+                  </div>
                 </div>
               </div>
             <% end %>
@@ -1092,6 +1151,36 @@ defmodule ConceptWeb.ChatComponent do
     start_conversation(socket, host_type, host_id, nil)
   end
 
+  def handle_event("open_emoji_pop", %{"message" => message_id}, socket) do
+    # Toggle the compact emoji picker for a message (one open at a time). The
+    # picker lives inside the streamed message item, so re-stream the affected
+    # message(s) for the toggle to take visual effect.
+    current = socket.assigns[:emoji_pop_for]
+    next = if current == message_id, do: nil, else: message_id
+
+    socket = assign(socket, :emoji_pop_for, next)
+    socket = restream_message(socket, message_id)
+    socket = if current && current != message_id, do: restream_message(socket, current), else: socket
+
+    {:noreply, socket}
+  end
+
+  def handle_event("react", %{"message" => message_id, "emoji" => emoji}, socket) do
+    do_react(socket, message_id, emoji)
+  end
+
+  def handle_event("toggle_reaction", %{"message" => message_id, "emoji" => emoji}, socket) do
+    # If I already reacted with this emoji, remove it; else add it.
+    chips = Map.get(socket.assigns[:reactions_map] || %{}, message_id, [])
+    mine? = Enum.any?(chips, &(&1.emoji == emoji and &1.mine?))
+
+    if mine? do
+      unreact_one(socket, message_id, emoji)
+    else
+      do_react(socket, message_id, emoji)
+    end
+  end
+
   def handle_event("mark_read", %{"message_id" => message_id}, socket) do
     # Advance my participant's read cursor to the viewed message (the unread
     # cursor that powers the divider and, later, the inbox). Idempotent-ish:
@@ -1394,6 +1483,9 @@ defmodule ConceptWeb.ChatComponent do
       |> assign(:host_type, conversation.host_type || :workspace)
       |> assign(:host_id, conversation.host_id)
       |> assign(:participants, load_participants(socket, conversation.id))
+      |> assign(:reactions_map, load_reactions_map(socket, conversation.id))
+      |> assign(:my_membership_id, my_membership_id(socket))
+      |> assign(:emoji_pop_for, nil)
       |> then(fn s ->
         # Reuse the participants just loaded (avoid a duplicate read for the
         # cursor); pass them into the unread-boundary computation.
@@ -1471,6 +1563,105 @@ defmodule ConceptWeb.ChatComponent do
     |> Map.new(fn thread -> {thread.seed_message_id, thread} end)
   rescue
     _ -> %{}
+  end
+
+  # ── Reactions (T4) ───────────────────────────────────────────────────
+  # A {message_id => [%{emoji, count, mine?}]} map for the open conversation,
+  # so the stream renders reaction chips per message (own-reaction highlighted).
+  defp load_reactions_map(socket, conversation_id) do
+    mine = my_membership_id(socket)
+
+    Concept.Knowledge.Chat.reactions_for_conversation!(conversation_id,
+      actor: socket.assigns.current_user,
+      tenant: socket.assigns[:workspace_id]
+    )
+    |> Enum.group_by(& &1.message_id)
+    |> Map.new(fn {message_id, reactions} ->
+      chips =
+        reactions
+        |> Enum.group_by(& &1.emoji)
+        |> Enum.map(fn {emoji, rs} ->
+          %{emoji: emoji, count: length(rs), mine?: Enum.any?(rs, &(&1.membership_id == mine))}
+        end)
+        |> Enum.sort_by(& &1.emoji)
+
+      {message_id, chips}
+    end)
+  rescue
+    _ -> %{}
+  end
+
+  # The current user's membership id in this workspace (the reactor identity).
+  defp my_membership_id(socket) do
+    with %_{} = user <- socket.assigns[:current_user],
+         ws when not is_nil(ws) <- socket.assigns[:workspace_id],
+         {:ok, %{id: id}} <- Concept.Accounts.get_membership(user.id, ws, actor: user) do
+      id
+    else
+      _ -> nil
+    end
+  end
+
+  defp reactions_for(assigns, message) do
+    Map.get(assigns[:reactions_map] || %{}, message_id_of(message), [])
+  end
+
+  # The quick-react palette shown in the compact popover.
+  defp reaction_palette, do: ["👍", "❤️", "🎉", "🚀", "👀", "😄"]
+
+  defp do_react(socket, message_id, emoji) do
+    with mid when not is_nil(mid) <- socket.assigns[:my_membership_id],
+         {:ok, _} <-
+           Concept.Knowledge.Chat.react(
+             %{
+               workspace_id: socket.assigns[:workspace_id],
+               message_id: message_id,
+               membership_id: mid,
+               emoji: emoji
+             },
+             actor: socket.assigns.current_user,
+             tenant: socket.assigns[:workspace_id]
+           ) do
+      {:noreply, socket |> assign(:emoji_pop_for, nil) |> refresh_reactions(message_id)}
+    else
+      _ -> {:noreply, assign(socket, :emoji_pop_for, nil)}
+    end
+  end
+
+  defp unreact_one(socket, message_id, emoji) do
+    # Find my reaction row for this emoji and destroy it.
+    mine = socket.assigns[:my_membership_id]
+
+    Concept.Knowledge.Chat.reactions_for_message!(message_id,
+      actor: socket.assigns.current_user,
+      tenant: socket.assigns[:workspace_id]
+    )
+    |> Enum.find(fn r -> r.membership_id == mine and r.emoji == emoji end)
+    |> case do
+      nil ->
+        {:noreply, socket}
+
+      reaction ->
+        Concept.Knowledge.Chat.unreact(reaction,
+          actor: socket.assigns.current_user,
+          tenant: socket.assigns[:workspace_id]
+        )
+
+        {:noreply, refresh_reactions(socket, message_id)}
+    end
+  end
+
+  # Recompute the reactions map and re-stream the affected message so its chips
+  # re-render (the chips live inside the streamed item).
+  defp refresh_reactions(socket, message_id) do
+    socket =
+      if conv = socket.assigns[:conversation] do
+        assign(socket, :reactions_map, load_reactions_map(socket, conv.id))
+      else
+        socket
+      end
+
+    restream_message(socket, message_id)
   end
 
   # ── Presence + typing (T3) ───────────────────────────────────────────────
@@ -1659,6 +1850,8 @@ defmodule ConceptWeb.ChatComponent do
     |> assign(:unread_boundary_id, nil)
     |> assign(:latest_message_id, nil)
     |> assign(:chat_presence, [])
+    |> assign(:reactions_map, %{})
+    |> assign(:emoji_pop_for, nil)
     |> stream(:messages, [], reset: true)
     |> assign_message_form()
   end
