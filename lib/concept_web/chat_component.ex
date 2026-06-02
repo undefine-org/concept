@@ -478,13 +478,23 @@ defmodule ConceptWeb.ChatComponent do
               </button>
             </div>
           </div>
+          <%!-- The scroll viewport (ScrollToBottom). Holds the stream PLUS the
+                transient thinking/typing cues, so those flow at the bottom of
+                the feed and scroll with it (R2) instead of sitting pinned
+                above the composer. The stream itself is the inner div, since
+                phx-update="stream" containers admit only stream children. --%>
+          <div
+            id={"#{@id}-scroll"}
+            phx-hook="ScrollToBottom"
+            class="ora-chat-messages"
+          >
           <div
             id={"#{@id}-message-container"}
             phx-update="stream"
-            phx-hook="ScrollToBottom MarkRead"
+            phx-hook="MarkRead"
             phx-target={@myself}
             data-latest-id={@unread_boundary_id && latest_message_id(assigns)}
-            class="ora-chat-messages"
+            class="flex flex-col gap-3"
           >
             <%!-- Dispatch on Concept.Chat.MessageKind.render_mode/1 — the single
                     source of truth. Host replies SEEP in (fused continuation,
@@ -661,6 +671,36 @@ defmodule ConceptWeb.ChatComponent do
             <% end %>
           </div>
 
+          <%!-- Human typing cue (T3) and host "is thinking" cue (R2) live INSIDE
+                the scroll viewport, after the stream, so they read as the live
+                tail of the feed and scroll with it. --%>
+          <div
+            :if={chat_typing_names(assigns) != []}
+            id={"#{@id}-typing-cue"}
+            class="py-1 text-xs text-notion-text-light flex items-center gap-1"
+          >
+            <span class="ora-typing" aria-hidden="true"><i></i><i></i><i></i></span>
+            {chat_typing_label(chat_typing_names(assigns))}
+          </div>
+
+          <%!-- Responding cue rendered AS a forming seep (blue rail + skeleton),
+                so a multi-second grounded answer reads as alive, not frozen. --%>
+          <div :if={@agent_responding} class="ora-chat-message ora-chat-message--seep">
+            <div class="flex flex-col gap-1 min-w-0 flex-1">
+              <div class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue">
+                <.icon name="hero-sparkles-micro" class="size-3" />
+                <span>{String.downcase(host_voice_name(@host_type || :workspace))} is thinking</span>
+                <span class="ora-typing" aria-hidden="true"><i></i><i></i><i></i></span>
+              </div>
+              <div class="space-y-1 mt-1" role="status" aria-label="Generating answer">
+                <div class="ora-skeleton ora-skeleton-line"></div>
+                <div class="ora-skeleton ora-skeleton-line"></div>
+                <div class="ora-skeleton ora-skeleton-line"></div>
+              </div>
+            </div>
+          </div>
+          </div>
+
           <%!-- Thread panel (T2): a docked overlay showing a child conversation
                 — the seed message pinned at top, the thread's replies below, its
                 own composer. A thread is just a Conversation with a parent. --%>
@@ -757,34 +797,6 @@ defmodule ConceptWeb.ChatComponent do
               {seen_by_initial(p)}
             </span>
           </span>
-        </div>
-
-        <%!-- Human typing cue (T3): "X is typing…" beside the host's "is
-              thinking" — people type, the host thinks. --%>
-        <div
-          :if={chat_typing_names(assigns) != []}
-          id={"#{@id}-typing-cue"}
-          class="px-4 py-1 text-xs text-notion-text-light flex items-center gap-1"
-        >
-          <span class="ora-typing" aria-hidden="true"><i></i><i></i><i></i></span>
-          {chat_typing_label(chat_typing_names(assigns))}
-        </div>
-
-        <%!-- Responding cue rendered AS a forming seep (blue rail + skeleton),
-              so a multi-second grounded answer reads as alive, not frozen. --%>
-        <div :if={@agent_responding} class="ora-chat-message ora-chat-message--seep">
-          <div class="flex flex-col gap-1 min-w-0 flex-1">
-            <div class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue">
-              <.icon name="hero-sparkles-micro" class="size-3" />
-              <span>{String.downcase(host_voice_name(@host_type || :workspace))} is thinking</span>
-              <span class="ora-typing" aria-hidden="true"><i></i><i></i><i></i></span>
-            </div>
-            <div class="space-y-1 mt-1" role="status" aria-label="Generating answer">
-              <div class="ora-skeleton ora-skeleton-line"></div>
-              <div class="ora-skeleton ora-skeleton-line"></div>
-              <div class="ora-skeleton ora-skeleton-line"></div>
-            </div>
-          </div>
         </div>
 
         <div
