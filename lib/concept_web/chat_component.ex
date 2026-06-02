@@ -86,6 +86,7 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:open_thread, fn -> nil end)
         |> assign_new(:unread_boundary_id, fn -> nil end)
         |> assign_new(:latest_message_id, fn -> nil end)
+        |> assign_new(:chat_presence, fn -> [] end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -291,6 +292,22 @@ defmodule ConceptWeb.ChatComponent do
             <p class="text-xs text-notion-text-light" id={"#{@id}-host-label"}>
               {host_label(assigns)}
             </p>
+          </div>
+          <%!-- Live presence (T3): online collaborator dots on this conversation,
+                reusing Phoenix.Presence. Excludes self. --%>
+          <div
+            :if={@conversation && chat_collaborators(assigns) != []}
+            id={"#{@id}-chat-presence"}
+            class="flex items-center -space-x-1 shrink-0"
+          >
+            <span
+              :for={c <- chat_collaborators(assigns)}
+              class="inline-flex items-center justify-center size-6 rounded-full text-[10px] font-bold text-white ring-2 ring-white"
+              style={"background-color: #{c.color}"}
+              title={c.display_name}
+            >
+              {c.display_name |> String.first() |> Kernel.||("?") |> String.upcase()}
+            </span>
           </div>
           <%!-- Conversation-level action lives in the header (B7), not injected
                 between messages. Only meaningful when the host IS a page. --%>
@@ -530,6 +547,17 @@ defmodule ConceptWeb.ChatComponent do
               </button>
             </form>
           </div>
+        </div>
+
+        <%!-- Human typing cue (T3): "X is typing…" beside the host's "is
+              thinking" — people type, the host thinks. --%>
+        <div
+          :if={chat_typing_names(assigns) != []}
+          id={"#{@id}-typing-cue"}
+          class="px-4 py-1 text-xs text-notion-text-light flex items-center gap-1"
+        >
+          <span class="ora-typing" aria-hidden="true"><i></i><i></i><i></i></span>
+          {chat_typing_label(chat_typing_names(assigns))}
         </div>
 
         <%!-- Responding cue rendered AS a forming seep (blue rail + skeleton),
@@ -907,6 +935,12 @@ defmodule ConceptWeb.ChatComponent do
     text = params["text"] || ""
 
     {mention_query, suggestions} = mention_state(text, socket)
+
+    # T3: reflect typing in presence so others see "X is typing". Only meaningful
+    # in an open conversation (a tracked presence topic exists).
+    if conv = socket.assigns[:conversation] do
+      track_chat_presence(socket, conv.id, String.trim(text) != "")
+    end
 
     {:noreply,
      socket
@@ -1318,10 +1352,12 @@ defmodule ConceptWeb.ChatComponent do
         )
 
       ConceptWeb.Endpoint.subscribe("chat:messages:#{conversation.id}")
+      track_chat_presence(socket, conversation.id, false)
 
       socket
       |> maybe_warn_tool_data(messages)
       |> assign(:conversation, conversation)
+      |> assign(:chat_presence, chat_presence_list(socket, conversation.id))
       # Reflect the loaded conversation's actual host (a page/thread convo keeps
       # its host voice + crystallize affordance), falling back to :workspace.
       |> assign(:host_type, conversation.host_type || :workspace)
@@ -1406,6 +1442,76 @@ defmodule ConceptWeb.ChatComponent do
     _ -> %{}
   end
 
+  # ── Presence + typing (T3) ───────────────────────────────────────────────
+  # Reuse Phoenix.Presence (the editor's mechanism) on a per-conversation topic.
+  defp chat_presence_topic(conversation_id), do: "chat:conversation:#{conversation_id}:presence"
+
+  # Track the current user on the conversation's presence topic. `typing?`
+  # carries the live composer state. Subscribes once so presence_diff flows in.
+  defp track_chat_presence(socket, conversation_id, typing?) do
+    user = socket.assigns[:current_user]
+    topic = chat_presence_topic(conversation_id)
+
+    if user do
+      ConceptWeb.Endpoint.subscribe(topic)
+      meta = %{
+        display_name: user.email |> to_string() |> String.split("@") |> hd(),
+        color: ConceptWeb.Colors.for_user_id(user.id),
+        online_at: System.system_time(:second),
+        typing: typing?
+      }
+
+      # update if already tracked (typing flips), else track.
+      case ConceptWeb.Presence.update(self(), topic, user.id, meta) do
+        {:error, _} -> ConceptWeb.Presence.track(self(), topic, user.id, meta)
+        _ -> :ok
+      end
+    end
+  end
+
+  # Presence entries for a conversation, as a list of %{id, display_name, color,
+  # typing} (one per present user), excluding nothing — the template filters self.
+  defp chat_presence_list(_socket, conversation_id) do
+    chat_presence_topic(conversation_id)
+    |> ConceptWeb.Presence.list()
+    |> Enum.map(fn {user_id, %{metas: metas}} ->
+      meta = List.first(metas) || %{}
+
+      %{
+        id: user_id,
+        display_name: Map.get(meta, :display_name, ""),
+        color: Map.get(meta, :color, "#9B9A97"),
+        typing: Enum.any?(metas, &Map.get(&1, :typing, false))
+      }
+    end)
+  end
+
+  defp untrack_chat_presence(socket, conversation_id) do
+    if user = socket.assigns[:current_user] do
+      ConceptWeb.Presence.untrack(self(), chat_presence_topic(conversation_id), user.id)
+      ConceptWeb.Endpoint.unsubscribe(chat_presence_topic(conversation_id))
+    end
+  end
+
+  # Online collaborators other than me (for the header dots).
+  defp chat_collaborators(assigns) do
+    me = assigns[:current_user] && assigns.current_user.id
+    (assigns[:chat_presence] || []) |> Enum.reject(&(&1.id == me))
+  end
+
+  # Humans (other than me) currently typing — the "X is typing" cue.
+  defp chat_typing_names(assigns) do
+    assigns
+    |> chat_collaborators()
+    |> Enum.filter(& &1.typing)
+    |> Enum.map(& &1.display_name)
+  end
+
+  defp chat_typing_label([name]), do: "#{name} is typing…"
+  defp chat_typing_label([a, b]), do: "#{a} and #{b} are typing…"
+  defp chat_typing_label(names) when length(names) > 2, do: "several people are typing…"
+  defp chat_typing_label(_), do: ""
+
   # A shareable link to a message: the workspace URL anchored on the message id.
   # A message is already addressable by id; the link is a pure client-side copy.
   defp message_link(assigns, message) do
@@ -1483,6 +1589,7 @@ defmodule ConceptWeb.ChatComponent do
   defp clear_conversation(socket) do
     if socket.assigns[:conversation] do
       ConceptWeb.Endpoint.unsubscribe("chat:messages:#{socket.assigns.conversation.id}")
+      untrack_chat_presence(socket, socket.assigns.conversation.id)
     end
 
     socket
@@ -1493,6 +1600,7 @@ defmodule ConceptWeb.ChatComponent do
     |> assign(:open_thread, nil)
     |> assign(:unread_boundary_id, nil)
     |> assign(:latest_message_id, nil)
+    |> assign(:chat_presence, [])
     |> stream(:messages, [], reset: true)
     |> assign_message_form()
   end
@@ -1586,6 +1694,20 @@ defmodule ConceptWeb.ChatComponent do
 
   defp get_current_conversation_id(socket) do
     if socket.assigns[:conversation], do: socket.assigns.conversation.id, else: nil
+  end
+
+  defp handle_broadcast(socket, %Phoenix.Socket.Broadcast{
+         event: "presence_diff",
+         topic: "chat:conversation:" <> rest
+       }) do
+    # Recompute presence for the open conversation (online dots + typing cue).
+    conversation_id = String.trim_trailing(rest, ":presence")
+
+    if socket.assigns[:conversation] && socket.assigns.conversation.id == conversation_id do
+      assign(socket, :chat_presence, chat_presence_list(socket, conversation_id))
+    else
+      socket
+    end
   end
 
   defp handle_broadcast(socket, %Phoenix.Socket.Broadcast{

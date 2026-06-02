@@ -288,6 +288,21 @@ defmodule ConceptWeb.WorkspaceLive do
 
   @impl true
   def handle_info(
+        %Phoenix.Socket.Broadcast{event: "presence_diff", topic: "chat:conversation:" <> _} =
+          broadcast,
+        socket
+      ) do
+    # Chat conversation presence (T3) belongs to the ChatComponent — forward it.
+    send_update(ConceptWeb.ChatComponent,
+      id: "chat-component-#{socket.assigns.workspace.id}",
+      broadcast: broadcast
+    )
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(
         %Phoenix.Socket.Broadcast{event: "presence_diff", payload: _payload},
         socket
       ) do
