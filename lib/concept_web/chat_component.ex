@@ -100,6 +100,7 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:composer_block_type, fn -> "paragraph" end)
         |> assign_new(:rail_scope, fn -> :mine end)
         |> assign_new(:member_names, fn -> %{} end)
+        |> assign_new(:thread_dock, fn -> :overlay end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -159,6 +160,130 @@ defmodule ConceptWeb.ChatComponent do
     if current_user do
       ConceptWeb.Endpoint.subscribe("chat:conversations:#{current_user.id}")
     end
+  end
+
+  # Thread panel (R4): a child conversation seeded from a message. Two
+  # variants of the SAME panel — `:overlay` (peek; absolute, covers the
+  # conversation) and `:rail` (full-screen Channels; an in-flow flex sibling
+  # that docks BESIDE the conversation, a split view with room). Replies carry
+  # full sender identity (avatar + name), like the main stream.
+  attr :id, :string, required: true
+  attr :myself, :any, required: true
+  attr :open_thread, :map, required: true
+  attr :host_type, :atom, default: :workspace
+  attr :participants, :list, default: []
+  attr :member_names, :map, default: %{}
+  attr :my_participant_id, :string, default: nil
+  attr :variant, :atom, default: :overlay
+
+  defp thread_panel(assigns) do
+    ~H"""
+    <div
+      id={"#{@id}-thread-panel"}
+      class={[
+        "bg-white flex flex-col",
+        @variant == :overlay &&
+          "absolute inset-y-0 right-0 w-80 max-w-[80%] border-l border-notion-divider shadow-xl z-10",
+        @variant == :rail && "w-[400px] shrink-0 border-l border-notion-divider"
+      ]}
+    >
+      <div class="flex items-center gap-2 px-3 py-2 border-b border-notion-divider">
+        <.icon name="hero-chat-bubble-left-right-micro" class="size-4 text-notion-blue" />
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium">Thread</p>
+          <p class="text-xs text-notion-text-light truncate">
+            {thread_reply_count(@open_thread.thread)} · in this conversation
+          </p>
+        </div>
+        <button
+          type="button"
+          phx-click="close_thread"
+          phx-target={@myself}
+          class="ora-btn ora-btn--ghost ora-btn--icon"
+          aria-label="Close thread"
+        >
+          <.icon name="hero-x-mark-micro" class="size-4" />
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+        <%!-- Seed message, pinned: the message this thread branched from. --%>
+        <div class="rounded-lg bg-notion-sidebar/60 border border-notion-divider p-2">
+          <p class="text-[10px] uppercase tracking-wide text-notion-text-light mb-1">
+            Seed message
+          </p>
+          <div class="text-sm">{to_markdown(@open_thread.seed_text || "")}</div>
+        </div>
+        <%!-- Replies (the child conversation), oldest first, with identity. --%>
+        <div
+          :for={reply <- @open_thread.replies}
+          class={[
+            "ora-chat-message",
+            mine?(reply, assigns) && "ora-chat-message--mine",
+            not mine?(reply, assigns) and not Concept.Chat.MessageKind.host?(reply) &&
+              "ora-chat-message--other",
+            Concept.Chat.MessageKind.host?(reply) && "ora-chat-message--seep"
+          ]}
+        >
+          <span
+            :if={
+              not mine?(reply, assigns) and
+                Concept.Chat.MessageKind.render_mode(reply) in [:human_row, :agent_row]
+            }
+            class="ora-chat-avatar text-white text-[11px] font-bold"
+            style={"background-color: #{sender_color(reply, assigns)}"}
+            title={sender_display_name(reply, assigns)}
+          >
+            <.icon
+              :if={Concept.Chat.MessageKind.render_mode(reply) == :agent_row}
+              name="hero-cpu-chip-micro"
+              class="size-4"
+            />
+            <span :if={Concept.Chat.MessageKind.render_mode(reply) == :human_row}>
+              {sender_initial(reply, assigns)}
+            </span>
+          </span>
+          <div class="flex flex-col gap-1 min-w-0 flex-1">
+            <div
+              :if={
+                not mine?(reply, assigns) and
+                  Concept.Chat.MessageKind.render_mode(reply) in [:human_row, :agent_row]
+              }
+              class="text-xs font-medium text-notion-text"
+            >
+              {sender_display_name(reply, assigns)}
+            </div>
+            <div
+              :if={Concept.Chat.MessageKind.host?(reply)}
+              class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
+            >
+              <.icon name="hero-sparkles-micro" class="size-3" />
+              <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
+            </div>
+            <div :if={String.trim(reply.text || "") != ""} class="ora-chat-bubble">
+              {to_markdown(reply.text || "")}
+            </div>
+          </div>
+        </div>
+      </div>
+      <form
+        id={"#{@id}-thread-reply-form"}
+        phx-submit="thread_reply"
+        phx-target={@myself}
+        class="flex items-center gap-2 p-3 border-t border-notion-divider"
+      >
+        <input
+          type="text"
+          name="form[text]"
+          placeholder="Reply in thread…"
+          autocomplete="off"
+          class="ora-input flex-1"
+        />
+        <button type="submit" class="ora-btn ora-btn--primary ora-btn--sm">
+          <.icon name="hero-paper-airplane-micro" class="size-4" />
+        </button>
+      </form>
+    </div>
+    """
   end
 
   @impl true
@@ -701,83 +826,20 @@ defmodule ConceptWeb.ChatComponent do
           </div>
           </div>
 
-          <%!-- Thread panel (T2): a docked overlay showing a child conversation
-                — the seed message pinned at top, the thread's replies below, its
-                own composer. A thread is just a Conversation with a parent. --%>
-          <div
-            :if={@open_thread}
-            id={"#{@id}-thread-panel"}
-            class="absolute inset-y-0 right-0 w-80 max-w-[80%] bg-white border-l border-notion-divider shadow-xl flex flex-col z-10"
-          >
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-notion-divider">
-              <.icon name="hero-chat-bubble-left-right-micro" class="size-4 text-notion-blue" />
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium">Thread</p>
-                <p class="text-xs text-notion-text-light truncate">
-                  {thread_reply_count(@open_thread.thread)} · in this conversation
-                </p>
-              </div>
-              <button
-                type="button"
-                phx-click="close_thread"
-                phx-target={@myself}
-                class="ora-btn ora-btn--ghost ora-btn--icon"
-                aria-label="Close thread"
-              >
-                <.icon name="hero-x-mark-micro" class="size-4" />
-              </button>
-            </div>
-            <div class="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
-              <%!-- Seed message, pinned. --%>
-              <div class="rounded-lg bg-notion-sidebar/60 border border-notion-divider p-2">
-                <p class="text-[10px] uppercase tracking-wide text-notion-text-light mb-1">
-                  Seed message
-                </p>
-                <div class="text-sm">{to_markdown(@open_thread.seed_text || "")}</div>
-              </div>
-              <%!-- The thread's replies (the child conversation), oldest first. --%>
-              <div
-                :for={reply <- @open_thread.replies}
-                class={[
-                  "ora-chat-message",
-                  mine?(reply, assigns) && "ora-chat-message--mine",
-                  not mine?(reply, assigns) and not Concept.Chat.MessageKind.host?(reply) &&
-                    "ora-chat-message--other",
-                  Concept.Chat.MessageKind.host?(reply) && "ora-chat-message--seep"
-                ]}
-              >
-                <div class="flex flex-col gap-1 min-w-0 flex-1">
-                  <div
-                    :if={Concept.Chat.MessageKind.host?(reply)}
-                    class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
-                  >
-                    <.icon name="hero-sparkles-micro" class="size-3" />
-                    <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
-                  </div>
-                  <div :if={String.trim(reply.text || "") != ""} class="ora-chat-bubble">
-                    {to_markdown(reply.text || "")}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <form
-              id={"#{@id}-thread-reply-form"}
-              phx-submit="thread_reply"
-              phx-target={@myself}
-              class="flex items-center gap-2 p-3 border-t border-notion-divider"
-            >
-              <input
-                type="text"
-                name="form[text]"
-                placeholder="Reply in thread…"
-                autocomplete="off"
-                class="ora-input flex-1"
-              />
-              <button type="submit" class="ora-btn ora-btn--primary ora-btn--sm">
-                <.icon name="hero-paper-airplane-micro" class="size-4" />
-              </button>
-            </form>
-          </div>
+          <%!-- Thread panel — OVERLAY variant (peek / narrow): covers the
+                conversation. The docked rail variant renders at root level
+                (a flex sibling) so it sits BESIDE the conversation. --%>
+          <.thread_panel
+            :if={@open_thread && @thread_dock == :overlay}
+            id={@id}
+            myself={@myself}
+            open_thread={@open_thread}
+            host_type={@host_type}
+            participants={@participants}
+            member_names={@member_names}
+            my_participant_id={@my_participant_id}
+            variant={:overlay}
+          />
         </div>
 
         <%!-- Seen-by (T3): read receipts — participants whose cursor reached the
@@ -1004,6 +1066,22 @@ defmodule ConceptWeb.ChatComponent do
           </.form>
         </div>
       </div>
+
+      <%!-- Thread panel — DOCKED RAIL variant (full-screen Channels): a flex
+            sibling of the conversation column, so the thread sits BESIDE the
+            conversation (a split view) with room to breathe, not an overlay
+            covering it. (R4) --%>
+      <.thread_panel
+        :if={@open_thread && @thread_dock == :rail}
+        id={@id}
+        myself={@myself}
+        open_thread={@open_thread}
+        host_type={@host_type}
+        participants={@participants}
+        member_names={@member_names}
+        my_participant_id={@my_participant_id}
+        variant={:rail}
+      />
 
       <%!-- Host-picker (T1): starting a conversation = choosing a host. Search
             across the workspace + page hosts; pick one (+ optional topic) to

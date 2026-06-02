@@ -154,6 +154,7 @@ defmodule ConceptWeb.ChannelsLive do
           workspace_id={@workspace.id}
           hide_sidebar={false}
           resume_host?={false}
+          thread_dock={:rail}
           message_scope={:workspace}
           message_profile={:default}
           conversation_id={@conversation_id}

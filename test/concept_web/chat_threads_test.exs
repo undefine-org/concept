@@ -117,4 +117,18 @@ defmodule ConceptWeb.ChatThreadsTest do
 
     refute has_element?(view, "[id$='-thread-chip-#{lone.id}']")
   end
+
+  test "in full-screen Channels the thread opens as a docked rail (R4)", ctx do
+    {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/channels/#{ctx.conversation_id}")
+
+    view |> element("[id$='-thread-chip-#{ctx.seed.id}']") |> render_click()
+    :timer.sleep(80)
+
+    # The docked rail variant is an in-flow fixed-width column (w-[400px]),
+    # not the absolute overlay the peek uses.
+    assert has_element?(view, "[id$='-thread-panel'].w-\\[400px\\]")
+    panel = view |> element("[id$='-thread-panel']") |> render()
+    assert panel =~ "Thread"
+    assert panel =~ "first thread reply"
+  end
 end
