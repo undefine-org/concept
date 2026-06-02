@@ -89,6 +89,40 @@ defmodule ConceptWeb.ChatPresenceTest do
     assert has_element?(view, "[id$='-chat-presence']")
   end
 
+  test "switching conversations untracks presence on the previous one", ctx do
+    # A second, DISTINCT conversation to switch to (explicit create so it is not
+    # the workspace find-or-create target of ctx.conversation_id).
+    {:ok, conv2} =
+      Chat.create_conversation(%{host_type: :workspace, host_id: nil, workspace_id: ctx.ws.id},
+        actor: ctx.user,
+        tenant: ctx.ws.id
+      )
+
+    {:ok, _m2} =
+      Chat.create_message(%{text: "second conversation", addresses_host: false},
+        actor: ctx.user,
+        tenant: ctx.ws.id,
+        private_arguments: %{conversation_id: conv2.id}
+      )
+
+    {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}")
+    open_conversation(view, ctx.conversation_id)
+
+    assert ConceptWeb.Presence.list("chat:conversation:#{ctx.conversation_id}:presence")
+           |> Map.has_key?(ctx.user.id)
+
+    # Switch directly to the second conversation (no close in between).
+    view |> element("button[phx-value-id='#{conv2.id}']") |> render_click()
+    :timer.sleep(120)
+
+    # No longer tracked on the first conversation; tracked on the second.
+    refute ConceptWeb.Presence.list("chat:conversation:#{ctx.conversation_id}:presence")
+           |> Map.has_key?(ctx.user.id)
+
+    assert ConceptWeb.Presence.list("chat:conversation:#{conv2.id}:presence")
+           |> Map.has_key?(ctx.user.id)
+  end
+
   test "a peer's typing renders a typing cue in my view (two sessions)", ctx do
     # Peer A (me) opens the conversation.
     {:ok, view_a, _} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}")
@@ -108,7 +142,12 @@ defmodule ConceptWeb.ChatPresenceTest do
       self(),
       "chat:conversation:#{ctx.conversation_id}:presence",
       peer.id,
-      %{display_name: "Devin", color: "#2383E2", online_at: System.system_time(:second), typing: true}
+      %{
+        display_name: "Devin",
+        color: "#2383E2",
+        online_at: System.system_time(:second),
+        typing: true
+      }
     )
 
     # Nudge peer A to recompute presence.

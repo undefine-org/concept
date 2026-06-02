@@ -1370,6 +1370,18 @@ defmodule ConceptWeb.ChatComponent do
           tenant: socket.assigns[:workspace_id]
         )
 
+      # Switching directly A→B (no clear in between): untrack/unsubscribe the
+      # previously-open conversation so we don't leak as a stale online/typing
+      # collaborator in A.
+      case socket.assigns[:conversation] do
+        %{id: prev_id} when prev_id != conversation.id ->
+          ConceptWeb.Endpoint.unsubscribe("chat:messages:#{prev_id}")
+          untrack_chat_presence(socket, prev_id)
+
+        _ ->
+          :ok
+      end
+
       ConceptWeb.Endpoint.subscribe("chat:messages:#{conversation.id}")
       track_chat_presence(socket, conversation.id, false)
 
@@ -1473,6 +1485,7 @@ defmodule ConceptWeb.ChatComponent do
 
     if user do
       ConceptWeb.Endpoint.subscribe(topic)
+
       meta = %{
         display_name: user.email |> to_string() |> String.split("@") |> hd(),
         color: ConceptWeb.Colors.for_user_id(user.id),
@@ -1549,7 +1562,8 @@ defmodule ConceptWeb.ChatComponent do
   defp seen_by_label(%{membership: %{display_name: n}}) when is_binary(n) and n != "", do: n
   defp seen_by_label(_), do: "Member"
 
-  defp seen_by_initial(p), do: p |> seen_by_label() |> String.first() |> Kernel.||("?") |> String.upcase()
+  defp seen_by_initial(p),
+    do: p |> seen_by_label() |> String.first() |> Kernel.||("?") |> String.upcase()
 
   defp chat_typing_label([name]), do: "#{name} is typing…"
   defp chat_typing_label([a, b]), do: "#{a} and #{b} are typing…"
