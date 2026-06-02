@@ -68,7 +68,7 @@ defmodule ConceptWeb.ChatAddPeopleTest do
     open_chat(view)
     # Select the seeded conversation so the participant rail renders.
     view
-    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{ctx.conversation_id}']")
+    |> element("[data-testid=\"rail-conversation\"][phx-value-id='#{ctx.conversation_id}']")
     |> render_click()
 
     :timer.sleep(80)
@@ -80,7 +80,7 @@ defmodule ConceptWeb.ChatAddPeopleTest do
     open_chat(view)
 
     view
-    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{ctx.conversation_id}']")
+    |> element("[data-testid=\"rail-conversation\"][phx-value-id='#{ctx.conversation_id}']")
     |> render_click()
 
     :timer.sleep(80)
@@ -97,7 +97,7 @@ defmodule ConceptWeb.ChatAddPeopleTest do
     open_chat(view)
 
     view
-    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{ctx.conversation_id}']")
+    |> element("[data-testid=\"rail-conversation\"][phx-value-id='#{ctx.conversation_id}']")
     |> render_click()
 
     :timer.sleep(80)

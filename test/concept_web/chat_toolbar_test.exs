@@ -54,7 +54,7 @@ defmodule ConceptWeb.ChatToolbarTest do
     :timer.sleep(80)
 
     view
-    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{conversation_id}']")
+    |> element("[data-testid=\"rail-conversation\"][phx-value-id='#{conversation_id}']")
     |> render_click()
 
     :timer.sleep(100)

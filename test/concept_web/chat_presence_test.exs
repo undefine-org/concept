@@ -53,7 +53,7 @@ defmodule ConceptWeb.ChatPresenceTest do
     :timer.sleep(80)
 
     view
-    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{conversation_id}']")
+    |> element("[data-testid=\"rail-conversation\"][phx-value-id='#{conversation_id}']")
     |> render_click()
 
     :timer.sleep(120)
@@ -117,7 +117,7 @@ defmodule ConceptWeb.ChatPresenceTest do
 
     # Switch directly to the second conversation (no close in between).
     view
-    |> element("button[phx-click=\"select_conversation\"][phx-value-id='#{conv2.id}']")
+    |> element("[data-testid=\"rail-conversation\"][phx-value-id='#{conv2.id}']")
     |> render_click()
 
     :timer.sleep(120)

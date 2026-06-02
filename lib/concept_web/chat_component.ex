@@ -376,6 +376,7 @@ defmodule ConceptWeb.ChatComponent do
                   phx-click="select_conversation"
                   phx-target={@myself}
                   phx-value-id={conversation.id}
+                  data-testid="pinned-conversation"
                   class="flex-1 min-w-0 text-left text-sm truncate text-notion-text"
                 >
                   {rail_conversation_title(conversation)}
@@ -385,6 +386,7 @@ defmodule ConceptWeb.ChatComponent do
                   phx-click="unpin_conversation"
                   phx-value-id={conversation.id}
                   phx-target={@myself}
+                  data-testid="pin-toggle"
                   class="opacity-0 group-hover/pin:opacity-100 transition shrink-0 text-notion-blue"
                   title="Unpin"
                   aria-label="Unpin conversation"
@@ -442,6 +444,7 @@ defmodule ConceptWeb.ChatComponent do
                         phx-click="select_conversation"
                         phx-target={@myself}
                         phx-value-id={conversation.id}
+                        data-testid="rail-conversation"
                         class={[
                           "block w-full text-left py-1 px-2 rounded text-sm truncate transition",
                           conv_selected?(@conversation, conversation) &&
@@ -460,6 +463,7 @@ defmodule ConceptWeb.ChatComponent do
                     phx-click="select_conversation"
                     phx-target={@myself}
                     phx-value-id={conversation.id}
+                    data-testid="rail-conversation"
                     class={[
                       "group/inline flex flex-col px-2 py-1 rounded text-left transition",
                       conv_selected?(@conversation, conversation) && "bg-notion-sidebar-hover",
@@ -550,6 +554,7 @@ defmodule ConceptWeb.ChatComponent do
             }
             phx-value-id={@conversation && @conversation.id}
             phx-target={@myself}
+            data-testid="pin-toggle"
             class={[
               "shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs",
               conversation_pinned?(assigns) && "bg-notion-blue/10 text-notion-blue",
@@ -670,6 +675,7 @@ defmodule ConceptWeb.ChatComponent do
                 phx-click="select_conversation"
                 phx-value-id={conversation.id}
                 phx-target={@myself}
+                data-testid="recent-conversation"
                 class="ora-chat-home-row group/recent"
               >
                 <.icon
