@@ -92,6 +92,40 @@ defmodule Concept.Knowledge.Chat.ReactionTest do
     assert reactions == []
   end
 
+  test "a member cannot unreact another member's reaction", ctx do
+    {:ok, other} =
+      Concept.Accounts.User
+      |> Ash.Changeset.for_create(:register_with_password, %{
+        email: "other#{System.unique_integer([:positive])}@example.com",
+        password: "passw0rd!",
+        password_confirmation: "passw0rd!"
+      })
+      |> Ash.create(authorize?: false)
+
+    Repo.update_all(
+      from(u in Concept.Accounts.User, where: u.id == ^other.id),
+      set: [confirmed_at: DateTime.utc_now()]
+    )
+
+    {:ok, _} = Accounts.add_member(ctx.ws.id, to_string(other.email), actor: ctx.user)
+    {:ok, other_membership} = Accounts.get_membership(other.id, ctx.ws.id, actor: ctx.user)
+
+    {:ok, other_reaction} =
+      Chat.react(
+        %{
+          workspace_id: ctx.ws.id,
+          message_id: ctx.msg.id,
+          membership_id: other_membership.id,
+          emoji: "\u{1F44D}"
+        },
+        actor: other,
+        tenant: ctx.ws.id
+      )
+
+    assert {:error, _} = Chat.unreact(other_reaction, actor: ctx.user, tenant: ctx.ws.id)
+    assert :ok = Chat.unreact(other_reaction, actor: other, tenant: ctx.ws.id)
+  end
+
   test "reactions_for_conversation lists reactions across the conversation", ctx do
     {:ok, _} = react(ctx, "🚀")
 

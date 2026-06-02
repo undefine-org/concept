@@ -6,8 +6,9 @@ defmodule Concept.Knowledge.Chat.Reaction do
   and reusable by agents (an agent member can 👍 a message via MCP).
 
   One reaction per (message, membership, emoji): re-reacting is idempotent
-  (upsert), and `unreact` removes it. Real-time over the per-conversation chat
-  topic (the same fabric messages already broadcast on).
+  (upsert), and `unreact` removes it (owner-scoped). Cross-user real-time sync
+  is deferred — the chat UI refreshes reactions locally on react/unreact; a
+  PubSub broadcast on the per-conversation topic is a follow-up.
   """
   use Concept.Resources.WorkspaceTenanted,
     otp_app: :concept,
@@ -85,10 +86,18 @@ defmodule Concept.Knowledge.Chat.Reaction do
   end
 
   policies do
-    # Read floor from WorkspaceTenanted (workspace membership). Reacting /
-    # unreacting are workspace-member actions.
-    policy action_type([:create, :destroy]) do
+    # Read floor from WorkspaceTenanted (workspace membership). Reacting is a
+    # workspace-member action.
+    policy action_type(:create) do
       authorize_if Concept.Pages.Checks.WorkspaceMemberCreate
+    end
+
+    # Unreacting (destroy) requires OWNERSHIP: you may only remove your own
+    # reaction, not another member's. The workspace-member floor alone would let
+    # any member destroy any reaction via the parity-exposed unreact tool; the
+    # ownership filter ties the row's membership to the acting user.
+    policy action_type(:destroy) do
+      authorize_if expr(membership.user_id == ^actor(:id))
     end
   end
 

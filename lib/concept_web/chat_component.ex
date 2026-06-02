@@ -1160,7 +1160,9 @@ defmodule ConceptWeb.ChatComponent do
 
     socket = assign(socket, :emoji_pop_for, next)
     socket = restream_message(socket, message_id)
-    socket = if current && current != message_id, do: restream_message(socket, current), else: socket
+
+    socket =
+      if current && current != message_id, do: restream_message(socket, current), else: socket
 
     {:noreply, socket}
   end
@@ -1483,8 +1485,15 @@ defmodule ConceptWeb.ChatComponent do
       |> assign(:host_type, conversation.host_type || :workspace)
       |> assign(:host_id, conversation.host_id)
       |> assign(:participants, load_participants(socket, conversation.id))
-      |> assign(:reactions_map, load_reactions_map(socket, conversation.id))
-      |> assign(:my_membership_id, my_membership_id(socket))
+      |> then(fn s ->
+        # Resolve my membership once; reuse for both the reactions map (mine?)
+        # and the :my_membership_id assign (avoid a duplicate get_membership).
+        mine = my_membership_id(s)
+
+        s
+        |> assign(:my_membership_id, mine)
+        |> assign(:reactions_map, load_reactions_map(s, conversation.id, mine))
+      end)
       |> assign(:emoji_pop_for, nil)
       |> then(fn s ->
         # Reuse the participants just loaded (avoid a duplicate read for the
@@ -1568,8 +1577,8 @@ defmodule ConceptWeb.ChatComponent do
   # ── Reactions (T4) ───────────────────────────────────────────────────
   # A {message_id => [%{emoji, count, mine?}]} map for the open conversation,
   # so the stream renders reaction chips per message (own-reaction highlighted).
-  defp load_reactions_map(socket, conversation_id) do
-    mine = my_membership_id(socket)
+  defp load_reactions_map(socket, conversation_id, mine \\ :__resolve__) do
+    mine = if mine == :__resolve__, do: my_membership_id(socket), else: mine
 
     Concept.Knowledge.Chat.reactions_for_conversation!(conversation_id,
       actor: socket.assigns.current_user,
