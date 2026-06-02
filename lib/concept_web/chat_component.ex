@@ -79,6 +79,7 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:host_picker_open, fn -> false end)
         |> assign_new(:host_picker_query, fn -> "" end)
         |> assign_new(:host_picker_pages, fn -> [] end)
+        |> assign_new(:host_picker_people, fn -> [] end)
         |> assign_new(:add_people_open, fn -> false end)
         |> assign_new(:member_picks, fn -> MapSet.new() end)
         |> assign_new(:addable_members, fn -> [] end)
@@ -910,8 +911,28 @@ defmodule ConceptWeb.ChatComponent do
               </button>
             </div>
 
+            <%!-- People (T5): a DM is a conversation hosted by a user. --%>
+            <div :if={@host_picker_people != []}>
+              <div class="px-1 mb-1 text-[11px] font-semibold uppercase tracking-wide text-notion-text-light">
+                Direct messages
+              </div>
+              <button
+                :for={person <- @host_picker_people}
+                type="button"
+                phx-click="start_conversation"
+                phx-value-host-type="user"
+                phx-value-host-id={person.id}
+                phx-target={@myself}
+                class="flex items-center gap-2 w-full text-left px-2 py-2 rounded hover:bg-notion-sidebar-hover text-sm"
+              >
+                <.icon name={Concept.Chat.RailModel.glyph(:user)} class="size-4 text-notion-text-light" />
+                <span class="flex-1 truncate">{person.label}</span>
+                <span class="text-xs text-notion-text-light">direct message</span>
+              </button>
+            </div>
+
             <p
-              :if={@host_picker_query != "" and @host_picker_pages == []}
+              :if={@host_picker_query != "" and @host_picker_pages == [] and @host_picker_people == []}
               class="px-1 text-sm text-notion-text-light"
             >
               No pages match “{@host_picker_query}”. The Workspace host is always available.
@@ -1127,7 +1148,8 @@ defmodule ConceptWeb.ChatComponent do
          socket
          |> assign(:host_picker_open, true)
          |> assign(:host_picker_query, "")
-         |> assign(:host_picker_pages, host_picker_pages(socket, ""))}
+         |> assign(:host_picker_pages, host_picker_pages(socket, ""))
+         |> assign(:host_picker_people, host_picker_people(socket, ""))}
     end
   end
 
@@ -1139,7 +1161,8 @@ defmodule ConceptWeb.ChatComponent do
     {:noreply,
      socket
      |> assign(:host_picker_query, q)
-     |> assign(:host_picker_pages, host_picker_pages(socket, q))}
+     |> assign(:host_picker_pages, host_picker_pages(socket, q))
+     |> assign(:host_picker_people, host_picker_people(socket, q))}
   end
 
   def handle_event("start_conversation", params, socket) do
@@ -2153,6 +2176,24 @@ defmodule ConceptWeb.ChatComponent do
 
   defp member_initial(member) do
     member |> member_label() |> String.first() |> Kernel.||("?") |> String.upcase()
+  end
+
+  # People (workspace members except self) offered as DM hosts in the picker.
+  defp host_picker_people(socket, query) do
+    q = String.downcase(query || "")
+    me = socket.assigns[:current_user] && socket.assigns.current_user.id
+
+    with %_{} = user <- socket.assigns[:current_user],
+         ws when not is_nil(ws) <- socket.assigns[:workspace_id],
+         {:ok, members} <- Concept.Accounts.list_members(ws, actor: user) do
+      members
+      |> Enum.reject(&(&1.user_id == me))
+      |> Enum.map(fn m -> %{id: m.user_id, label: member_label(m)} end)
+      |> Enum.filter(fn p -> q == "" or String.contains?(String.downcase(p.label), q) end)
+      |> Enum.take(20)
+    else
+      _ -> []
+    end
   end
 
   # Create (or route to) a conversation about the chosen host, then navigate to

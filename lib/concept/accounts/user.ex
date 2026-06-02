@@ -6,6 +6,12 @@ defmodule Concept.Accounts.User do
     authorizers: [Ash.Policy.Authorizer],
     extensions: [AshAuthentication]
 
+  # A User is conversable: a DM is a conversation hosted by a person (PLAN-010
+  # §15). One stanza → :user joins Hostable.types(), so the rail, host-picker,
+  # and add-people pick up DMs with no further wiring. Scope is :workspace (a DM
+  # grounds in shared workspace context; there is no user-private subgraph).
+  use Concept.Hostable, type: :user, scope: :workspace, persona: "this person"
+
   authentication do
     add_ons do
       log_out_everywhere do

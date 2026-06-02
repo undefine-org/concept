@@ -153,7 +153,8 @@ config :concept, :block_types, [
 ]
 
 config :concept, :hostables, [
-  Concept.Pages.Page
+  Concept.Pages.Page,
+  Concept.Accounts.User
 ]
 
 config :concept, :containables, [
