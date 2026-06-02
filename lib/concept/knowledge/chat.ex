@@ -14,6 +14,8 @@ defmodule Concept.Knowledge.Chat do
       define :decrement_budget, action: :decrement_budget
       define :replenish_budget, action: :replenish_budget
       define :mark_crystallized, action: :mark_crystallized
+      define :decide_conversation, action: :decide
+      define :reopen_conversation, action: :reopen
 
       define :crystallize_conversation,
         action: :crystallize,

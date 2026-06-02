@@ -79,6 +79,18 @@ defmodule Concept.Knowledge.Chat.Conversation do
       accept [:crystallized_page_id]
     end
 
+    update :decide do
+      description "Mark this conversation as decided — a concluded discussion whose outcome is settled (PLAN-010 §20). A decided conversation that is also crystallized is a first-class, searchable decision record."
+      accept []
+      change set_attribute(:state, :decided)
+    end
+
+    update :reopen do
+      description "Reopen a decided conversation for further discussion."
+      accept []
+      change set_attribute(:state, :open)
+    end
+
     action :crystallize, {:array, :uuid} do
       description "Crystallize this conversation into a durable page: clone its message blocks onto the page with provenance links, then mark it crystallized."
 
@@ -254,6 +266,18 @@ defmodule Concept.Knowledge.Chat.Conversation do
       default 5
 
       description "Remaining automatic agent/host turns before a human must re-engage. Replenished when a human posts."
+    end
+
+    # A conversation's lifecycle (PLAN-010 §20): :open while live, :decided once
+    # its outcome is settled. The task engine and the conversation engine are the
+    # same engine — a decided conversation is a first-class decision record.
+    attribute :state, :atom do
+      public? true
+      allow_nil? false
+      default :open
+      constraints one_of: [:open, :decided]
+
+      description "Conversation lifecycle state: :open (live) or :decided (outcome settled)."
     end
 
     timestamps()

@@ -278,7 +278,7 @@ Hybrid vector+graph search over the workspace's pages and blocks.
 
 ---
 ## Concept.Knowledge.Chat
-### Tools (18)
+### Tools (20)
 
 #### `conversation_create`
 
@@ -304,6 +304,14 @@ Crystallize this conversation into a durable page: clone its message blocks onto
   - `conversation_id` (`UUID`, required) — The conversation to crystallize.
   - `target_page_id` (`UUID`, required) — The page to crystallize the conversation into.
   - `workspace_id` (`UUID`, required) — Workspace tenant.
+
+
+#### `conversation_decide`
+
+Mark this conversation as decided — a concluded discussion whose outcome is settled (PLAN-010 §20). A decided conversation that is also crystallized is a first-class, searchable decision record.
+
+- **Resource**: `Concept.Knowledge.Chat.Conversation`
+- **Action**: `:decide` (update)
 
 
 #### `conversation_decrement_budget`
@@ -361,6 +369,14 @@ List the actor's chat conversations in the workspace, most recent first.
 
 - **Resource**: `Concept.Knowledge.Chat.Conversation`
 - **Action**: `:my_conversations` (read)
+
+
+#### `conversation_reopen`
+
+Reopen a decided conversation for further discussion.
+
+- **Resource**: `Concept.Knowledge.Chat.Conversation`
+- **Action**: `:reopen` (update)
 
 
 #### `conversation_replenish_budget`

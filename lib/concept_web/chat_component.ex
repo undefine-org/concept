@@ -326,6 +326,38 @@ defmodule ConceptWeb.ChatComponent do
           >
             <.icon name="hero-sparkles-micro" class="size-3" /> Crystallize
           </button>
+
+          <%!-- Decisions (T5): a conversation has a lifecycle. Decide marks the
+                outcome settled; a decided convo shows a badge and can reopen. --%>
+          <span
+            :if={@conversation && conversation_state(@conversation) == :decided}
+            id={"#{@id}-decided-badge"}
+            class="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-notion-blue/10 text-notion-blue"
+          >
+            <.icon name="hero-check-badge-micro" class="size-3" /> Decided
+          </span>
+          <button
+            :if={@conversation && conversation_state(@conversation) == :open}
+            type="button"
+            id={"#{@id}-decide-btn"}
+            phx-click="decide"
+            phx-target={@myself}
+            class="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-notion-sidebar text-notion-text hover:bg-notion-sidebar-hover"
+            title="Mark this conversation as decided"
+          >
+            <.icon name="hero-check-circle-micro" class="size-3" /> Decide
+          </button>
+          <button
+            :if={@conversation && conversation_state(@conversation) == :decided}
+            type="button"
+            id={"#{@id}-reopen-btn"}
+            phx-click="reopen"
+            phx-target={@myself}
+            class="shrink-0 text-xs text-notion-text-light hover:text-notion-text"
+            title="Reopen this conversation"
+          >
+            Reopen
+          </button>
         </div>
 
         <div class="ora-chat-body flex-1">
@@ -1088,6 +1120,14 @@ defmodule ConceptWeb.ChatComponent do
   end
 
   @impl true
+  def handle_event("decide", _params, socket) do
+    transition_conversation_state(socket, &Concept.Knowledge.Chat.decide_conversation/3)
+  end
+
+  def handle_event("reopen", _params, socket) do
+    transition_conversation_state(socket, &Concept.Knowledge.Chat.reopen_conversation/3)
+  end
+
   def handle_event("crystallize", _params, socket) do
     # Talk → document: clone the conversation's message blocks onto the host page
     # (copy + provenance, idempotent — BUG-068). Page-hosted only; target = host.
@@ -1595,6 +1635,25 @@ defmodule ConceptWeb.ChatComponent do
     |> Map.new(fn thread -> {thread.seed_message_id, thread} end)
   rescue
     _ -> %{}
+  end
+
+  # ── Decisions (T5) ───────────────────────────────────────────────────
+  defp conversation_state(%{state: s}), do: s
+  defp conversation_state(_), do: :open
+
+  # Apply a decide/reopen transition (a 1-arg-record code-interface fn) and
+  # refresh the held conversation so the header badge/button updates.
+  defp transition_conversation_state(socket, fun) do
+    with %{} = conversation <- socket.assigns[:conversation],
+         {:ok, updated} <-
+           fun.(conversation, %{},
+             actor: socket.assigns.current_user,
+             tenant: socket.assigns[:workspace_id]
+           ) do
+      {:noreply, assign(socket, :conversation, updated)}
+    else
+      _ -> {:noreply, socket}
+    end
   end
 
   # ── Reactions (T4) ───────────────────────────────────────────────────
