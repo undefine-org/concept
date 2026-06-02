@@ -40,7 +40,8 @@ defmodule ConceptWeb.InboxLive do
            workspace: ws,
            pages: pages,
            page_title: "Inbox",
-           inbox_count: length(conversations)
+           inbox_count: length(conversations),
+           unread_count: Concept.Knowledge.Chat.unread_count(actor: user, tenant: ws.id)
          )
          |> stream(:conversations, conversations)}
 
@@ -98,6 +99,7 @@ defmodule ConceptWeb.InboxLive do
       workspace={@workspace}
       pages={@pages}
       current_user={@current_user}
+      unread_count={@unread_count}
     >
       <div class="max-w-3xl mx-auto p-6">
         <div class="mb-6 flex items-center justify-between">

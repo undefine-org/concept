@@ -44,7 +44,8 @@ defmodule ConceptWeb.ChannelsLive do
            workspace: ws,
            pages: pages,
            page_title: "Channels",
-           conversation_id: nil
+           conversation_id: nil,
+           unread_count: Concept.Knowledge.Chat.unread_count(actor: user, tenant: ws.id)
          )}
 
       _ ->
@@ -105,8 +106,11 @@ defmodule ConceptWeb.ChannelsLive do
   # refresh the rail; without this a chat broadcast would crash the LiveView.
   def handle_info(%Phoenix.Socket.Broadcast{topic: "chat:" <> _} = broadcast, socket) do
     send_update(ConceptWeb.ChatComponent, id: chat_id(socket), broadcast: broadcast)
-    {:noreply, socket}
+    {:noreply, refresh_unread(socket)}
   end
+
+  # The chat component advanced a read cursor — refresh the sidebar badge.
+  def handle_info(:chat_unread_changed, socket), do: {:noreply, refresh_unread(socket)}
 
   def handle_info(_msg, socket), do: {:noreply, socket}
 
@@ -119,6 +123,17 @@ defmodule ConceptWeb.ChannelsLive do
 
   defp chat_id(socket), do: "channels-chat-#{socket.assigns.workspace.id}"
 
+  defp refresh_unread(socket) do
+    assign(
+      socket,
+      :unread_count,
+      Concept.Knowledge.Chat.unread_count(
+        actor: socket.assigns.current_user,
+        tenant: socket.assigns.workspace.id
+      )
+    )
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -129,6 +144,7 @@ defmodule ConceptWeb.ChannelsLive do
       workspace={@workspace}
       pages={@pages}
       current_user={@current_user}
+      unread_count={@unread_count}
     >
       <div class="h-full max-h-full overflow-hidden">
         <.live_component
@@ -137,6 +153,7 @@ defmodule ConceptWeb.ChannelsLive do
           current_user={@current_user}
           workspace_id={@workspace.id}
           hide_sidebar={false}
+          resume_host?={false}
           message_scope={:workspace}
           message_profile={:default}
           conversation_id={@conversation_id}

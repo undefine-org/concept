@@ -39,6 +39,7 @@ defmodule ConceptWeb.ObjectBoardLive do
         {:ok,
          socket
          |> assign(:workspace, ws)
+         |> assign(:unread_count, Concept.Knowledge.Chat.unread_count(actor: user, tenant: ws.id))
          |> assign(:pages, pages)
          |> assign(:type_id, params["type_id"])
          |> assign(:new_title, "")
@@ -200,6 +201,7 @@ defmodule ConceptWeb.ObjectBoardLive do
       workspace={@workspace}
       pages={@pages}
       current_user={@current_user}
+      unread_count={@unread_count}
     >
       <div id="tasks-root" class="p-6">
         <div class="flex items-center justify-between mb-6">

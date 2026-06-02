@@ -7,6 +7,7 @@ defmodule ConceptWeb.Components.Sidebar do
   attr :current_page, :map, default: nil
   attr :current_user, :map, required: true
   attr :live_rail_show, :boolean, default: false
+  attr :unread_count, :integer, default: 0
 
   def sidebar(assigns) do
     ~H"""
@@ -41,6 +42,14 @@ defmodule ConceptWeb.Components.Sidebar do
       >
         <.icon name="hero-chat-bubble-left-right-micro" class="size-4" />
         <span class="flex-1 text-left">Channels</span>
+        <span
+          :if={@unread_count > 0}
+          id="sidebar-unread-badge"
+          class="ora-unread-badge"
+          title={"#{@unread_count} unread"}
+        >
+          {min(@unread_count, 99)}
+        </span>
       </.link>
 
       <.link

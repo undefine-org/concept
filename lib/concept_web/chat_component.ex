@@ -55,9 +55,15 @@ defmodule ConceptWeb.ChatComponent do
         # the SAME {host_type, host_id} should show the live thread, not lose
         # it. We only auto-resume when the caller hasn't pinned an explicit
         # conversation_id (e.g. navigating to a specific thread).
+        # The peek auto-resumes its host's conversation (a focused window). The
+        # full-screen Channels projection lands on the home overview instead
+        # (resume_host?: false) so nothing is auto-selected.
         resumed_id =
           socket.assigns[:conversation_id] ||
-            resume_host_conversation_id(socket)
+            if(Map.get(socket.assigns, :resume_host?, true),
+              do: resume_host_conversation_id(socket),
+              else: nil
+            )
 
         socket
         |> assign(:conversation_id, resumed_id)
@@ -363,38 +369,109 @@ defmodule ConceptWeb.ChatComponent do
         </div>
 
         <div class="ora-chat-body flex-1">
-          <div
-            :if={!@has_messages}
-            class="p-4 space-y-2"
-          >
-            <p class="text-xs uppercase tracking-wide text-notion-text-light">Try asking</p>
-            <button
-              type="button"
-              class="block w-full text-left p-2 rounded hover:bg-notion-sidebar-hover text-sm text-notion-text"
-              phx-click="seed_prompt"
-              phx-value-prompt="Summarize this workspace"
-              phx-target={@myself}
-            >
-              💡 Summarize this workspace
-            </button>
-            <button
-              type="button"
-              class="block w-full text-left p-2 rounded hover:bg-notion-sidebar-hover text-sm text-notion-text"
-              phx-click="seed_prompt"
-              phx-value-prompt="What pages mention"
-              phx-target={@myself}
-            >
-              🔍 What pages mention …?
-            </button>
-            <button
-              type="button"
-              class="block w-full text-left p-2 rounded hover:bg-notion-sidebar-hover text-sm text-notion-text"
-              phx-click="seed_prompt"
-              phx-value-prompt="Outline a roadmap based on my notes"
-              phx-target={@myself}
-            >
-              🗺 Outline a roadmap based on my notes
-            </button>
+          <%!-- Channels home: the calm landing overview shown when no
+                conversation is selected. Stats + "jump back in" + "needs a
+                decision" are pure projections of the rail's conversation list
+                (Concept.Chat.RailModel.stats/1) — no extra queries. The
+                "Try asking" prompts remain as a secondary affordance. --%>
+          <div :if={!@has_messages} class="ora-chat-home" id={"#{@id}-home"}>
+            <div class="ora-chat-home-head">
+              <h2 class="text-xl font-semibold text-notion-text">Channels</h2>
+              <p class="text-sm text-notion-text-light">
+                Your team's conversations, threads, and decisions.
+              </p>
+            </div>
+
+            <div :if={@rail_conversations != []} class="ora-stat-grid">
+              <div class="ora-stat-card">
+                <span class="ora-stat-num">{@rail_stats.conversations}</span>
+                <span class="ora-stat-label">
+                  {ngettext("Conversation", "Conversations", @rail_stats.conversations)}
+                </span>
+              </div>
+              <div class="ora-stat-card">
+                <span class="ora-stat-num">{@rail_stats.hosts}</span>
+                <span class="ora-stat-label">
+                  {ngettext("Channel", "Channels", @rail_stats.hosts)}
+                </span>
+              </div>
+              <div class="ora-stat-card">
+                <span class="ora-stat-num">{@rail_stats.threads}</span>
+                <span class="ora-stat-label">
+                  {ngettext("Thread", "Threads", @rail_stats.threads)}
+                </span>
+              </div>
+              <div class="ora-stat-card">
+                <span class="ora-stat-num">{@rail_stats.decisions}</span>
+                <span class="ora-stat-label">
+                  {ngettext("Decision", "Decisions", @rail_stats.decisions)}
+                </span>
+              </div>
+            </div>
+
+            <div :if={@rail_recents != []} class="ora-chat-home-section">
+              <p class="ora-chat-home-section-title">Jump back in</p>
+              <button
+                :for={conversation <- @rail_recents}
+                type="button"
+                phx-click="select_conversation"
+                phx-value-id={conversation.id}
+                phx-target={@myself}
+                class="ora-chat-home-row group/recent"
+              >
+                <.icon
+                  name={Concept.Chat.RailModel.glyph(host_type_of(conversation))}
+                  class="size-4 shrink-0 text-notion-text-light"
+                />
+                <span class="flex-1 min-w-0 truncate text-sm text-notion-text">
+                  {rail_conversation_title(conversation)}
+                </span>
+                <span
+                  :if={conversation_state(conversation) == :decided}
+                  class="shrink-0 text-[10px] uppercase tracking-wide text-notion-blue"
+                >
+                  Decided
+                </span>
+              </button>
+            </div>
+
+            <div class="ora-chat-home-section">
+              <p class="ora-chat-home-section-title">Try asking</p>
+              <button
+                type="button"
+                class="ora-chat-home-row"
+                phx-click="seed_prompt"
+                phx-value-prompt="Summarize this workspace"
+                phx-target={@myself}
+              >
+                <span>💡</span>
+                <span class="flex-1 text-left text-sm text-notion-text">
+                  Summarize this workspace
+                </span>
+              </button>
+              <button
+                type="button"
+                class="ora-chat-home-row"
+                phx-click="seed_prompt"
+                phx-value-prompt="What pages mention"
+                phx-target={@myself}
+              >
+                <span>🔍</span>
+                <span class="flex-1 text-left text-sm text-notion-text">What pages mention …?</span>
+              </button>
+              <button
+                type="button"
+                class="ora-chat-home-row"
+                phx-click="seed_prompt"
+                phx-value-prompt="Outline a roadmap based on my notes"
+                phx-target={@myself}
+              >
+                <span>🗺</span>
+                <span class="flex-1 text-left text-sm text-notion-text">
+                  Outline a roadmap based on my notes
+                </span>
+              </button>
+            </div>
           </div>
           <div
             id={"#{@id}-message-container"}
@@ -414,151 +491,150 @@ defmodule ConceptWeb.ChatComponent do
               <div
                 id={id}
                 data-render-mode={mode}
-                class={[
+                class={["ora-chat-row", is_boundary && "ora-chat-unread-boundary"]}
+              >
+                <%!-- Unread "New" divider (T2): a full-width flow rule above the
+                      boundary message (NOT absolute — that trapped it inside the
+                      bubble's width). Inside the stream item so re-streaming on
+                      mark_read cleanly removes it. --%>
+                <div :if={is_boundary} id={"#{@id}-unread-divider"} class="ora-chat-divider">
+                  <span class="ora-chat-divider-line"></span>
+                  <span>New</span>
+                  <span class="ora-chat-divider-line"></span>
+                </div>
+                <div class={[
                   "ora-chat-message group/msg relative",
-                  is_boundary && "ora-chat-unread-boundary",
                   mode == :human_row && "ora-chat-message--user",
                   mode == :agent_row && "ora-chat-message--agent",
                   mode in [:host_seep, :host_note] && "ora-chat-message--seep"
-                ]}
-              >
-                <%!-- Unread "New" divider (T2): rendered INSIDE the boundary
-                      message's stream item so re-streaming it (on mark_read)
-                      cleanly removes the divider. --%>
-                <div
-                  :if={is_boundary}
-                  id={"#{@id}-unread-divider"}
-                  class="absolute -top-2 left-0 right-0 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-rose-500"
-                >
-                  <span class="h-px flex-1 bg-rose-200"></span>
-                  New <span class="h-px flex-1 bg-rose-200"></span>
-                </div>
-                <%!-- Hover toolbar (T2): every message is a unit of work. Reply
+                ]}>
+                  <%!-- Hover toolbar (T2): every message is a unit of work. Reply
                       in thread + copy link are real now; React (T4) and
                       Crystallize-this-message (T6, once bodies are blocks) slot
                       in here. No dead buttons — absent until real. --%>
-                <div
-                  id={"#{@id}-msg-toolbar-#{message_id_of(message)}"}
-                  class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-white border border-notion-divider rounded-lg shadow-sm px-0.5 py-0.5 z-10"
-                >
-                  <button
-                    type="button"
-                    id={"#{@id}-react-#{message_id_of(message)}"}
-                    phx-click="open_emoji_pop"
-                    phx-value-message={message_id_of(message)}
-                    phx-target={@myself}
-                    class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
-                    title="Add reaction"
-                    aria-label="Add reaction"
+                  <div
+                    id={"#{@id}-msg-toolbar-#{message_id_of(message)}"}
+                    class="absolute -top-3 right-2 hidden group-hover/msg:flex items-center gap-0.5 bg-white border border-notion-divider rounded-lg shadow-sm px-0.5 py-0.5 z-10"
                   >
-                    <.icon name="hero-face-smile-micro" class="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    phx-click="open_thread"
-                    phx-value-seed={message_id_of(message)}
-                    phx-target={@myself}
-                    class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
-                    title="Reply in thread"
-                    aria-label="Reply in thread"
+                    <button
+                      type="button"
+                      id={"#{@id}-react-#{message_id_of(message)}"}
+                      phx-click="open_emoji_pop"
+                      phx-value-message={message_id_of(message)}
+                      phx-target={@myself}
+                      class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
+                      title="Add reaction"
+                      aria-label="Add reaction"
+                    >
+                      <.icon name="hero-face-smile-micro" class="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="open_thread"
+                      phx-value-seed={message_id_of(message)}
+                      phx-target={@myself}
+                      class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
+                      title="Reply in thread"
+                      aria-label="Reply in thread"
+                    >
+                      <.icon name="hero-chat-bubble-left-right-micro" class="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      id={"#{@id}-msg-copylink-#{message_id_of(message)}"}
+                      phx-hook="CopyToClipboard"
+                      data-clipboard-text={message_link(assigns, message)}
+                      class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
+                      title="Copy link to message"
+                      aria-label="Copy link to message"
+                    >
+                      <.icon name="hero-link-micro" class="size-4" />
+                    </button>
+                  </div>
+                  <span :if={mode == :human_row} class="ora-chat-avatar">
+                    <.icon name="hero-user-micro" class="size-4 text-notion-text-light" />
+                  </span>
+                  <span
+                    :if={mode == :agent_row}
+                    class="ora-chat-avatar"
+                    title={sender_label(message, assigns)}
                   >
-                    <.icon name="hero-chat-bubble-left-right-micro" class="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    id={"#{@id}-msg-copylink-#{message_id_of(message)}"}
-                    phx-hook="CopyToClipboard"
-                    data-clipboard-text={message_link(assigns, message)}
-                    class="p-1 rounded hover:bg-notion-sidebar-hover text-notion-text-light hover:text-notion-text"
-                    title="Copy link to message"
-                    aria-label="Copy link to message"
-                  >
-                    <.icon name="hero-link-micro" class="size-4" />
-                  </button>
-                </div>
-                <span :if={mode == :human_row} class="ora-chat-avatar">
-                  <.icon name="hero-user-micro" class="size-4 text-notion-text-light" />
-                </span>
-                <span
-                  :if={mode == :agent_row}
-                  class="ora-chat-avatar"
-                  title={sender_label(message, assigns)}
-                >
-                  <.icon name="hero-cpu-chip-micro" class="size-4 text-violet-500" />
-                </span>
-                <div class="flex flex-col gap-1 min-w-0 flex-1">
-                  <%!-- Host seep: a quiet "from this <host>" voice label, not a
+                    <.icon name="hero-cpu-chip-micro" class="size-4 text-violet-500" />
+                  </span>
+                  <div class="flex flex-col gap-1 min-w-0 flex-1">
+                    <%!-- Host seep: a quiet "from this <host>" voice label, not a
                         person's name. The blue rail comes from --seep. --%>
-                  <div
-                    :if={mode in [:host_seep, :host_note]}
-                    class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
-                  >
-                    <.icon name="hero-sparkles-micro" class="size-3" />
-                    <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
-                  </div>
-                  <div :if={String.trim(message.text || "") != ""} class="ora-chat-bubble">
-                    {to_markdown(message.text || "")}
-                  </div>
-                  <div :if={Concept.Chat.MessageKind.host?(message)} class="mt-1">
-                    <.why_this_answer message={message} />
-                  </div>
-                  <%!-- Thread chip (T2): present iff this message seeded a child
+                    <div
+                      :if={mode in [:host_seep, :host_note]}
+                      class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
+                    >
+                      <.icon name="hero-sparkles-micro" class="size-3" />
+                      <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
+                    </div>
+                    <div :if={String.trim(message.text || "") != ""} class="ora-chat-bubble">
+                      {to_markdown(message.text || "")}
+                    </div>
+                    <div :if={Concept.Chat.MessageKind.host?(message)} class="mt-1">
+                      <.why_this_answer message={message} />
+                    </div>
+                    <%!-- Thread chip (T2): present iff this message seeded a child
                         conversation. Makes seed_message_id visible. --%>
-                  <button
-                    :if={thread_for(assigns, message)}
-                    type="button"
-                    id={"#{@id}-thread-chip-#{message_id_of(message)}"}
-                    phx-click="open_thread"
-                    phx-value-seed={message_id_of(message)}
-                    phx-target={@myself}
-                    class="mt-1 inline-flex items-center gap-1 text-xs text-notion-blue hover:underline"
-                  >
-                    <.icon name="hero-chat-bubble-left-right-micro" class="size-3.5" />
-                    {thread_reply_count(thread_for(assigns, message))}
-                  </button>
-
-                  <%!-- Reaction chips (T4): own-reaction outlined; click toggles. --%>
-                  <div
-                    :if={reactions_for(assigns, message) != []}
-                    id={"#{@id}-reactions-#{message_id_of(message)}"}
-                    class="mt-1 flex flex-wrap gap-1"
-                  >
                     <button
-                      :for={chip <- reactions_for(assigns, message)}
+                      :if={thread_for(assigns, message)}
                       type="button"
-                      phx-click="toggle_reaction"
-                      phx-value-message={message_id_of(message)}
-                      phx-value-emoji={chip.emoji}
+                      id={"#{@id}-thread-chip-#{message_id_of(message)}"}
+                      phx-click="open_thread"
+                      phx-value-seed={message_id_of(message)}
                       phx-target={@myself}
-                      class={[
-                        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border",
-                        chip.mine? && "border-notion-blue bg-notion-blue/10 text-notion-blue",
-                        !chip.mine? && "border-notion-divider bg-notion-sidebar text-notion-text"
-                      ]}
+                      class="mt-1 inline-flex items-center gap-1 text-xs text-notion-blue hover:underline"
                     >
-                      <span>{chip.emoji}</span>
-                      <span>{chip.count}</span>
+                      <.icon name="hero-chat-bubble-left-right-micro" class="size-3.5" />
+                      {thread_reply_count(thread_for(assigns, message))}
                     </button>
-                  </div>
 
-                  <%!-- Compact emoji picker opened from the toolbar react btn. --%>
-                  <div
-                    :if={@emoji_pop_for == message_id_of(message)}
-                    id={"#{@id}-emoji-pop-#{message_id_of(message)}"}
-                    class="mt-1 inline-flex items-center gap-1 p-1 rounded-lg bg-white border border-notion-divider shadow-sm"
-                  >
-                    <button
-                      :for={emoji <- reaction_palette()}
-                      type="button"
-                      phx-click="react"
-                      phx-value-message={message_id_of(message)}
-                      phx-value-emoji={emoji}
-                      phx-target={@myself}
-                      class="p-0.5 rounded hover:bg-notion-sidebar-hover text-base leading-none"
-                      aria-label={"React " <> emoji}
+                    <%!-- Reaction chips (T4): own-reaction outlined; click toggles. --%>
+                    <div
+                      :if={reactions_for(assigns, message) != []}
+                      id={"#{@id}-reactions-#{message_id_of(message)}"}
+                      class="mt-1 flex flex-wrap gap-1"
                     >
-                      {emoji}
-                    </button>
+                      <button
+                        :for={chip <- reactions_for(assigns, message)}
+                        type="button"
+                        phx-click="toggle_reaction"
+                        phx-value-message={message_id_of(message)}
+                        phx-value-emoji={chip.emoji}
+                        phx-target={@myself}
+                        class={[
+                          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border",
+                          chip.mine? && "border-notion-blue bg-notion-blue/10 text-notion-blue",
+                          !chip.mine? && "border-notion-divider bg-notion-sidebar text-notion-text"
+                        ]}
+                      >
+                        <span>{chip.emoji}</span>
+                        <span>{chip.count}</span>
+                      </button>
+                    </div>
+
+                    <%!-- Compact emoji picker opened from the toolbar react btn. --%>
+                    <div
+                      :if={@emoji_pop_for == message_id_of(message)}
+                      id={"#{@id}-emoji-pop-#{message_id_of(message)}"}
+                      class="mt-1 inline-flex items-center gap-1 p-1 rounded-lg bg-white border border-notion-divider shadow-sm"
+                    >
+                      <button
+                        :for={emoji <- reaction_palette()}
+                        type="button"
+                        phx-click="react"
+                        phx-value-message={message_id_of(message)}
+                        phx-value-emoji={emoji}
+                        phx-target={@myself}
+                        class="p-0.5 rounded hover:bg-notion-sidebar-hover text-base leading-none"
+                        aria-label={"React " <> emoji}
+                      >
+                        {emoji}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1305,6 +1381,10 @@ defmodule ConceptWeb.ChatComponent do
         socket
         |> assign(:unread_boundary_id, nil)
         |> restream_message(boundary)
+
+      # Tell the host LiveView its unread badge may have dropped (the component
+      # runs in the parent's process, so send(self()) reaches the LiveView).
+      send(self(), :chat_unread_changed)
 
       {:noreply, socket}
     else
@@ -2163,6 +2243,8 @@ defmodule ConceptWeb.ChatComponent do
     socket
     |> assign(:rail_conversations, conversations)
     |> assign(:rail_groups, Concept.Chat.RailModel.group_by_host(conversations))
+    |> assign(:rail_stats, Concept.Chat.RailModel.stats(conversations))
+    |> assign(:rail_recents, Enum.take(conversations, 5))
     |> assign(:page_labels, page_label_map(socket, conversations))
   end
 

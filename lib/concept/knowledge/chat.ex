@@ -36,6 +36,7 @@ defmodule Concept.Knowledge.Chat do
       define :join_conversation, action: :join
       define :participants_for_conversation, action: :for_conversation, args: [:conversation_id]
       define :mark_participant_read, action: :mark_read
+      define :my_unread_participants, action: :my_unread
     end
 
     resource Concept.Knowledge.Chat.Reaction do
@@ -43,6 +44,21 @@ defmodule Concept.Knowledge.Chat do
       define :unreact, action: :unreact
       define :reactions_for_message, action: :for_message, args: [:message_id]
       define :reactions_for_conversation, action: :for_conversation, args: [:conversation_id]
+    end
+  end
+
+  @doc """
+  Count the actor's unread conversations (a single COUNT over the `:my_unread`
+  participant read). Powers the sidebar "Channels" badge. Best-effort: any read
+  failure (policy/tenant) returns 0 rather than crashing the shell.
+  """
+  @spec unread_count(keyword()) :: non_neg_integer()
+  def unread_count(opts) do
+    case Concept.Knowledge.Chat.Participant
+         |> Ash.Query.for_read(:my_unread, %{}, opts)
+         |> Ash.count(opts) do
+      {:ok, n} -> n
+      _ -> 0
     end
   end
 end

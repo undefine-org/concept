@@ -278,7 +278,7 @@ Hybrid vector+graph search over the workspace's pages and blocks.
 
 ---
 ## Concept.Knowledge.Chat
-### Tools (20)
+### Tools (21)
 
 #### `conversation_create`
 
@@ -446,6 +446,14 @@ Advance this participant's unread cursor to a message they've now seen.
 
 - **Resource**: `Concept.Knowledge.Chat.Participant`
 - **Action**: `:mark_read` (update)
+
+
+#### `participant_my_unread`
+
+List the actor's participant rows with unread messages — the conversation has a latest message the participant's cursor has not reached. One row per unread conversation; count them for an unread badge.
+
+- **Resource**: `Concept.Knowledge.Chat.Participant`
+- **Action**: `:my_unread` (read)
 
 
 #### `reaction_for_conversation`

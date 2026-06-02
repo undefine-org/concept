@@ -42,6 +42,7 @@ defmodule ConceptWeb.WorkLive do
          |> assign(:workspace, ws)
          |> assign(:pages, pages)
          |> assign(:page_title, "My work")
+         |> assign(:unread_count, Concept.Knowledge.Chat.unread_count(actor: user, tenant: ws.id))
          |> load_work()}
 
       _ ->
@@ -130,6 +131,7 @@ defmodule ConceptWeb.WorkLive do
       workspace={@workspace}
       pages={@pages}
       current_user={@current_user}
+      unread_count={@unread_count}
     >
       <div id="work-root" class="mx-auto max-w-5xl p-6">
         <div class="mb-6 flex items-center justify-between">

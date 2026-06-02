@@ -111,6 +111,7 @@ defmodule ConceptWeb.Layouts do
   attr :pages, :list, default: []
   attr :current_page, :map, default: nil
   attr :live_rail_show, :boolean, default: false
+  attr :unread_count, :integer, default: 0
   attr :id, :string, default: "workspace-root"
 
   attr :hook, :string,
@@ -161,6 +162,7 @@ defmodule ConceptWeb.Layouts do
             current_page={@current_page}
             current_user={@current_user}
             live_rail_show={@live_rail_show}
+            unread_count={@unread_count}
           />
         </div>
 

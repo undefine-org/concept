@@ -327,4 +327,12 @@ defmodule Concept.Knowledge.Chat.Conversation do
                   )
     end
   end
+
+  aggregates do
+    # The most recent message's id, for the unread projection: a participant
+    # whose cursor (`last_read_message_id`) differs from this has unread.
+    first :latest_message_id, :messages, :id do
+      sort inserted_at: :desc
+    end
+  end
 end

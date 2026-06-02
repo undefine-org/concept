@@ -124,4 +124,39 @@ defmodule Concept.Chat.RailModelTest do
     defp slot_uuid(:b), do: "00000000-0000-0000-0000-0000000000b2"
     defp slot_uuid(:c), do: "00000000-0000-0000-0000-0000000000c3"
   end
+
+  describe "stats/1" do
+    test "empty list → all zero" do
+      assert RailModel.stats([]) == %{conversations: 0, hosts: 0, decisions: 0, threads: 0}
+    end
+
+    test "counts conversations, distinct hosts, decisions, and threads" do
+      convs = [
+        %{host_type: :workspace, host_id: nil, state: :open},
+        %{host_type: :workspace, host_id: nil, state: :decided},
+        %{host_type: :page, host_id: "p1", state: :open},
+        %{host_type: :page, host_id: "p1", parent_conversation_id: "c0", state: :open}
+      ]
+
+      stats = RailModel.stats(convs)
+      assert stats.conversations == 4
+      # distinct {host_type, host_id}: {workspace,nil} and {page,p1} → 2
+      assert stats.hosts == 2
+      assert stats.decisions == 1
+      assert stats.threads == 1
+    end
+
+    test "is shape-tolerant (string keys, string state)" do
+      convs = [
+        %{"host_type" => :page, "host_id" => "p1", "state" => "decided"},
+        %{"host_type" => :page, "host_id" => "p2", "parent_conversation_id" => "c0"}
+      ]
+
+      stats = RailModel.stats(convs)
+      assert stats.conversations == 2
+      assert stats.hosts == 2
+      assert stats.decisions == 1
+      assert stats.threads == 1
+    end
+  end
 end

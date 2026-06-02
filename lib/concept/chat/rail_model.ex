@@ -95,6 +95,45 @@ defmodule Concept.Chat.RailModel do
   def glyph(_), do: "hero-cube-micro"
 
   # ── shape-tolerant field access (struct- or string-keyed) ────────────────
+  @typedoc "At-a-glance counts for the Channels home, derived from one list."
+  @type stats :: %{
+          conversations: non_neg_integer(),
+          hosts: non_neg_integer(),
+          decisions: non_neg_integer(),
+          threads: non_neg_integer()
+        }
+
+  @doc """
+  At-a-glance stats for the Channels home, derived purely from the conversation
+  list already loaded for the rail (no extra queries). Counts:
+
+    * `conversations` — total the actor participates in;
+    * `hosts` — distinct channels (host = a place, e.g. a page/workspace/DM);
+    * `decisions` — conversations whose lifecycle `state` is `:decided`;
+    * `threads` — child conversations (have a `parent_conversation_id`).
+
+  Shape-tolerant (atom- or string-keyed) so it works on Ash structs and on
+  streamed/serialized maps alike.
+  """
+  @spec stats([map()]) :: stats()
+  def stats(conversations) when is_list(conversations) do
+    %{
+      conversations: length(conversations),
+      hosts: conversations |> Enum.map(&{host_type(&1), host_id(&1)}) |> Enum.uniq() |> length(),
+      decisions: Enum.count(conversations, &(conversation_state(&1) == :decided)),
+      threads: Enum.count(conversations, &(not is_nil(parent_id(&1))))
+    }
+  end
+
+  defp conversation_state(%{state: s}), do: s
+  defp conversation_state(%{"state" => s}) when is_binary(s), do: String.to_existing_atom(s)
+  defp conversation_state(%{"state" => s}), do: s
+  defp conversation_state(_), do: :open
+
+  defp parent_id(%{parent_conversation_id: id}), do: id
+  defp parent_id(%{"parent_conversation_id" => id}), do: id
+  defp parent_id(_), do: nil
+
   defp host_type(%{host_type: t}), do: t
   defp host_type(%{"host_type" => t}), do: t
   defp host_type(_), do: :workspace

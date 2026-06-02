@@ -81,6 +81,17 @@ defmodule Concept.Knowledge.Chat.Participant do
 
       filter expr(conversation_id == ^arg(:conversation_id))
     end
+
+    read :my_unread do
+      description "List the actor's participant rows with unread messages — the conversation has a latest message the participant's cursor has not reached. One row per unread conversation; count them for an unread badge."
+
+      filter expr(
+               membership.user_id == ^actor(:id) and
+                 not is_nil(conversation.latest_message_id) and
+                 (is_nil(last_read_message_id) or
+                    last_read_message_id != conversation.latest_message_id)
+             )
+    end
   end
 
   policies do

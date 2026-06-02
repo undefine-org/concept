@@ -64,7 +64,8 @@ defmodule ConceptWeb.WorkspaceLive do
            link_modal_state: nil,
            live_rail_results: [],
            live_rail_show: false,
-           live_rail_debounce_ref: nil
+           live_rail_debounce_ref: nil,
+           unread_count: Concept.Knowledge.Chat.unread_count(actor: user, tenant: ws.id)
          )}
 
       {:error, _} ->
@@ -105,7 +106,8 @@ defmodule ConceptWeb.WorkspaceLive do
                link_modal_state: nil,
                live_rail_results: [],
                live_rail_show: false,
-               live_rail_debounce_ref: nil
+               live_rail_debounce_ref: nil,
+               unread_count: Concept.Knowledge.Chat.unread_count(actor: user, tenant: ws.id)
              )}
 
           _ ->
@@ -206,6 +208,19 @@ defmodule ConceptWeb.WorkspaceLive do
 
   def handle_info(:close_chat_panel, socket) do
     {:noreply, put_chat_open(socket, false)}
+  end
+
+  # The chat component advanced a read cursor — refresh the sidebar badge.
+  def handle_info(:chat_unread_changed, socket) do
+    {:noreply,
+     assign(
+       socket,
+       :unread_count,
+       Concept.Knowledge.Chat.unread_count(
+         actor: socket.assigns.current_user,
+         tenant: socket.assigns.workspace.id
+       )
+     )}
   end
 
   @impl true
@@ -345,7 +360,15 @@ defmodule ConceptWeb.WorkspaceLive do
       broadcast: broadcast
     )
 
-    {:noreply, socket}
+    {:noreply,
+     assign(
+       socket,
+       :unread_count,
+       Concept.Knowledge.Chat.unread_count(
+         actor: socket.assigns.current_user,
+         tenant: socket.assigns.workspace.id
+       )
+     )}
   end
 
   @impl true
@@ -624,6 +647,7 @@ defmodule ConceptWeb.WorkspaceLive do
       current_page={@current_page}
       current_user={@current_user}
       live_rail_show={@live_rail_show}
+      unread_count={@unread_count}
       hook="GlobalKeys LiveCitationRail"
     >
       <%= if @current_page == nil do %>

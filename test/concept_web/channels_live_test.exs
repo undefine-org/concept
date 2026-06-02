@@ -71,4 +71,32 @@ defmodule ConceptWeb.ChannelsLiveTest do
     assert has_element?(view, "#channels-shell")
     assert render(view) =~ "deep link target"
   end
+
+  test "the channels home shows stat cards when nothing is selected", ctx do
+    # A conversation exists, but the full-screen view lands on the home (it does
+    # not auto-resume), so the stat overview renders.
+    {:ok, _msg} =
+      Chat.create_message(%{text: "seed", addresses_host: true},
+        actor: ctx.user,
+        tenant: ctx.ws.id
+      )
+
+    {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/channels")
+
+    assert has_element?(view, "[id$='-home']")
+    assert has_element?(view, ".ora-stat-card")
+    assert render(view) =~ "Jump back in"
+  end
+
+  test "the sidebar Channels link shows an unread badge", ctx do
+    # A fresh conversation the actor authored: cursor nil → unread → badge shows.
+    {:ok, _msg} =
+      Chat.create_message(%{text: "unread one", addresses_host: false},
+        actor: ctx.user,
+        tenant: ctx.ws.id
+      )
+
+    {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/channels")
+    assert has_element?(view, "#sidebar-unread-badge")
+  end
 end
