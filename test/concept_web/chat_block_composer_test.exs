@@ -68,6 +68,21 @@ defmodule ConceptWeb.ChatBlockComposerTest do
     assert hd(blocks).type == :heading_1
   end
 
+  test "a heading message mirrors a tagged heading block (renders correctly)", ctx do
+    {:ok, msg} =
+      Chat.create_message(
+        %{text: "My Heading", addresses_host: false, block_type: :heading_2},
+        actor: ctx.user,
+        tenant: ctx.ws.id
+      )
+
+    [b | _] = Pages.list_for_message!(msg.id, actor: %{system?: true}, tenant: ctx.ws.id)
+    assert b.type == :heading_2
+    # The lexical node carries the tag so HTML/markdown render as a heading.
+    assert Concept.Lexical.to_html(b.content) =~ "<h2>"
+    assert Concept.Lexical.to_markdown(b.content) =~ "## My Heading"
+  end
+
   test "the composer exposes a block-type selector", ctx do
     {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}")
     view |> element("#workspace-root") |> render_hook("toggle_chat", %{})

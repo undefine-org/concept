@@ -33,7 +33,7 @@ defmodule Concept.Knowledge.Chat.Message.Changes.MirrorTextToBlock do
   defp maybe_mirror(%{source: :user, text: text} = message, block_type)
        when is_binary(text) do
     if String.trim(text) != "" do
-      content = Concept.Lexical.from_plain_text(text, lexical_type(block_type))
+      content = mirror_content(text, block_type)
 
       opts = [actor: %{system?: true}, authorize?: false, tenant: message.workspace_id]
 
@@ -57,10 +57,44 @@ defmodule Concept.Knowledge.Chat.Message.Changes.MirrorTextToBlock do
 
   defp maybe_mirror(_message, _block_type), do: :ok
 
-  # Map a Concept block type to the lexical node type from_plain_text expects.
-  defp lexical_type(:heading_1), do: "heading"
-  defp lexical_type(:heading_2), do: "heading"
-  defp lexical_type(:heading_3), do: "heading"
-  defp lexical_type(:quote), do: "quote"
-  defp lexical_type(_), do: "paragraph"
+  # Build the lexical content for the mirrored block. Headings require a `tag`
+  # (h1/h2/h3) on the node — Lexical's HeadingNode.importJSON and
+  # Concept.Lexical.to_html/to_markdown all match on it; a bare "heading" type
+  # renders/serializes malformed. Other types use the plain paragraph/quote node.
+  defp mirror_content(text, bt) when bt in [:heading_1, :heading_2, :heading_3] do
+    tag = "h" <> (bt |> Atom.to_string() |> String.replace_prefix("heading_", ""))
+
+    inject_text(Concept.Lexical.empty_heading(heading_level(bt)), text)
+    |> ensure_tag(tag)
+  end
+
+  defp mirror_content(text, :quote), do: Concept.Lexical.from_plain_text(text, "quote")
+  defp mirror_content(text, _), do: Concept.Lexical.from_plain_text(text, "paragraph")
+
+  defp heading_level(:heading_1), do: 1
+  defp heading_level(:heading_2), do: 2
+  defp heading_level(:heading_3), do: 3
+
+  # Put the message text into the (empty) heading node's first child.
+  defp inject_text(%{"root" => %{"children" => [node | rest]} = root} = doc, text) do
+    text_node = %{
+      "type" => "text",
+      "text" => text,
+      "format" => 0,
+      "detail" => 0,
+      "mode" => "normal",
+      "style" => "",
+      "version" => 1
+    }
+
+    %{doc | "root" => %{root | "children" => [Map.put(node, "children", [text_node]) | rest]}}
+  end
+
+  defp inject_text(doc, _text), do: doc
+
+  defp ensure_tag(%{"root" => %{"children" => [node | rest]} = root} = doc, tag) do
+    %{doc | "root" => %{root | "children" => [Map.put(node, "tag", tag) | rest]}}
+  end
+
+  defp ensure_tag(doc, _tag), do: doc
 end
