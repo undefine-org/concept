@@ -217,7 +217,10 @@ defmodule ConceptWeb.ChatComponent do
           </p>
           <div class="text-sm">{to_markdown(@open_thread.seed_text || "")}</div>
         </div>
-        <%!-- Replies (the child conversation), oldest first, with identity. --%>
+        <%!-- Replies (the child conversation), oldest first, with identity.
+              Each reply is standalone (no run grouping in a thread), so
+              message_body renders avatar + name + bubble via its run-head path
+              (starts_run defaults true). --%>
         <div
           :for={reply <- @open_thread.replies}
           class={[
@@ -228,45 +231,13 @@ defmodule ConceptWeb.ChatComponent do
             Concept.Chat.MessageKind.host?(reply) && "ora-chat-message--seep"
           ]}
         >
-          <span
-            :if={
-              not mine?(reply, assigns) and
-                Concept.Chat.MessageKind.render_mode(reply) in [:human_row, :agent_row]
-            }
-            class="ora-chat-avatar text-white text-[11px] font-bold"
-            style={"background-color: #{sender_color(reply, assigns)}"}
-            title={sender_display_name(reply, assigns)}
-          >
-            <.icon
-              :if={Concept.Chat.MessageKind.render_mode(reply) == :agent_row}
-              name="hero-cpu-chip-micro"
-              class="size-4"
-            />
-            <span :if={Concept.Chat.MessageKind.render_mode(reply) == :human_row}>
-              {sender_initial(reply, assigns)}
-            </span>
-          </span>
-          <div class="flex flex-col gap-1 min-w-0 flex-1">
-            <div
-              :if={
-                not mine?(reply, assigns) and
-                  Concept.Chat.MessageKind.render_mode(reply) in [:human_row, :agent_row]
-              }
-              class="text-xs font-medium text-notion-text"
-            >
-              {sender_display_name(reply, assigns)}
-            </div>
-            <div
-              :if={Concept.Chat.MessageKind.host?(reply)}
-              class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
-            >
-              <.icon name="hero-sparkles-micro" class="size-3" />
-              <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
-            </div>
-            <div :if={String.trim(reply.text || "") != ""} class="ora-chat-bubble">
-              {to_markdown(reply.text || "")}
-            </div>
-          </div>
+          <.message_body
+            mine={mine?(reply, assigns)}
+            mode={Concept.Chat.MessageKind.render_mode(reply)}
+            identity={message_identity(reply, assigns)}
+            message={reply}
+            host_type={@host_type}
+          />
         </div>
       </div>
       <form
@@ -286,6 +257,70 @@ defmodule ConceptWeb.ChatComponent do
           <.icon name="hero-paper-airplane-micro" class="size-4" />
         </button>
       </form>
+    </div>
+    """
+  end
+
+  # The shared inner core of a rendered message (R4): the sender avatar (or an
+  # alignment spacer for run continuations), the name/agent line, the host
+  # "seep" voice label, and the bubble — then a trailing slot for caller-
+  # specific extras (the stream adds why-this-answer + thread chip + reactions +
+  # emoji pop; the thread panel adds nothing). Purely presentational: the
+  # stateful component resolves `identity`/`mine`/`mode` and passes them in.
+  #
+  # `starts_run` unifies avatar placement across both projections: the stream
+  # passes the R1b run trait (avatar only at a run head, spacer on
+  # continuations); the thread panel passes `true` (every reply is standalone,
+  # so always its own avatar, never a spacer).
+  attr :mine, :boolean, required: true
+  attr :mode, :atom, required: true
+  attr :starts_run, :boolean, default: true, doc: "avatar at run head; spacer otherwise"
+  attr :identity, :map, required: true, doc: "%{name, color, initial}"
+  attr :message, :map, required: true
+  attr :host_type, :atom, default: :workspace
+  slot :inner_block, doc: "caller-specific trailing content under the bubble"
+
+  defp message_body(assigns) do
+    ~H"""
+    <%!-- Sender avatar (R1): only OTHER members get an avatar on the left; at
+          the START of a run only (R1b). Continuations get a same-width spacer
+          so bubbles stay aligned. My messages sit right, no avatar. --%>
+    <span
+      :if={not @mine and @starts_run and @mode in [:human_row, :agent_row]}
+      class="ora-chat-avatar text-white text-[11px] font-bold"
+      style={"background-color: #{@identity.color}"}
+      title={@identity.name}
+    >
+      <.icon :if={@mode == :agent_row} name="hero-cpu-chip-micro" class="size-4" />
+      <span :if={@mode == :human_row}>{@identity.initial}</span>
+    </span>
+    <span
+      :if={not @mine and not @starts_run and @mode in [:human_row, :agent_row]}
+      class="ora-chat-avatar-spacer"
+      aria-hidden="true"
+    >
+    </span>
+    <div class="flex flex-col gap-1 min-w-0 flex-1">
+      <%!-- Sender name line (R1): OTHER members, run start only (R1b). --%>
+      <div
+        :if={not @mine and @starts_run and @mode in [:human_row, :agent_row]}
+        class="flex items-center gap-1.5 text-xs"
+      >
+        <span class="font-medium text-notion-text">{@identity.name}</span>
+        <span :if={@mode == :agent_row} class="text-violet-500">agent</span>
+      </div>
+      <%!-- Host seep: a quiet "from this <host>" voice label. --%>
+      <div
+        :if={@mode in [:host_seep, :host_note]}
+        class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
+      >
+        <.icon name="hero-sparkles-micro" class="size-3" />
+        <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
+      </div>
+      <div :if={String.trim(@message.text || "") != ""} class="ora-chat-bubble">
+        {to_markdown(@message.text || "")}
+      </div>
+      {render_slot(@inner_block)}
     </div>
     """
   end
@@ -378,44 +413,14 @@ defmodule ConceptWeb.ChatComponent do
             <.icon name="hero-link-micro" class="size-4" />
           </button>
         </div>
-        <%!-- Sender avatar (R1): only OTHER members get an avatar on the left; at
-              the START of a run only (R1b). Continuations get a same-width
-              spacer so bubbles stay aligned. My messages sit right, no avatar. --%>
-        <span
-          :if={not @mine and @starts_run and @mode in [:human_row, :agent_row]}
-          class="ora-chat-avatar text-white text-[11px] font-bold"
-          style={"background-color: #{@identity.color}"}
-          title={@identity.name}
+        <.message_body
+          mine={@mine}
+          mode={@mode}
+          starts_run={@starts_run}
+          identity={@identity}
+          message={@message}
+          host_type={@host_type}
         >
-          <.icon :if={@mode == :agent_row} name="hero-cpu-chip-micro" class="size-4" />
-          <span :if={@mode == :human_row}>{@identity.initial}</span>
-        </span>
-        <span
-          :if={not @mine and not @starts_run and @mode in [:human_row, :agent_row]}
-          class="ora-chat-avatar-spacer"
-          aria-hidden="true"
-        >
-        </span>
-        <div class="flex flex-col gap-1 min-w-0 flex-1">
-          <%!-- Sender name line (R1): OTHER members, run start only (R1b). --%>
-          <div
-            :if={not @mine and @starts_run and @mode in [:human_row, :agent_row]}
-            class="flex items-center gap-1.5 text-xs"
-          >
-            <span class="font-medium text-notion-text">{@identity.name}</span>
-            <span :if={@mode == :agent_row} class="text-violet-500">agent</span>
-          </div>
-          <%!-- Host seep: a quiet "from this <host>" voice label. --%>
-          <div
-            :if={@mode in [:host_seep, :host_note]}
-            class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
-          >
-            <.icon name="hero-sparkles-micro" class="size-3" />
-            <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
-          </div>
-          <div :if={String.trim(@message.text || "") != ""} class="ora-chat-bubble">
-            {to_markdown(@message.text || "")}
-          </div>
           <div :if={Concept.Chat.MessageKind.host?(@message)} class="mt-1">
             <.why_this_answer message={@message} />
           </div>
@@ -476,7 +481,7 @@ defmodule ConceptWeb.ChatComponent do
               {emoji}
             </button>
           </div>
-        </div>
+        </.message_body>
       </div>
     </div>
     """
