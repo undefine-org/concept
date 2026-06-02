@@ -317,6 +317,23 @@ defmodule ConceptWeb.WorkspaceLive do
   end
 
   @impl true
+  def handle_info(
+        %Phoenix.Socket.Broadcast{topic: "chat:" <> _} = broadcast,
+        socket
+      ) do
+    # Chat message/conversation broadcasts are subscribed by the ChatComponent
+    # (which lives in this LiveView process). Forward them to the component so
+    # it can stream new messages / refresh the rail. Without this, a chat
+    # broadcast (e.g. a thread reply landing) would crash the LiveView.
+    send_update(ConceptWeb.ChatComponent,
+      id: "chat-component-#{socket.assigns.workspace.id}",
+      broadcast: broadcast
+    )
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:focus_block, _block_id, text, page_id}, socket) do
     # Cancel previous debounce if exists
     if socket.assigns.live_rail_debounce_ref do

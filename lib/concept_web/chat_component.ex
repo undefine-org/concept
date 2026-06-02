@@ -82,6 +82,8 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:add_people_open, fn -> false end)
         |> assign_new(:member_picks, fn -> MapSet.new() end)
         |> assign_new(:addable_members, fn -> [] end)
+        |> assign_new(:thread_map, fn -> %{} end)
+        |> assign_new(:open_thread, fn -> nil end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -271,7 +273,7 @@ defmodule ConceptWeb.ChatComponent do
         </div>
       </div>
 
-      <div class="flex-1 flex flex-col min-w-0">
+      <div class="relative flex-1 flex flex-col min-w-0">
         <.flash kind={:info} flash={@flash} />
         <.flash kind={:error} flash={@flash} />
         <.flash kind={:warning} flash={@flash} />
@@ -385,9 +387,99 @@ defmodule ConceptWeb.ChatComponent do
                   <div :if={Concept.Chat.MessageKind.host?(message)} class="mt-1">
                     <.why_this_answer message={message} />
                   </div>
+                  <%!-- Thread chip (T2): present iff this message seeded a child
+                        conversation. Makes seed_message_id visible. --%>
+                  <button
+                    :if={thread_for(assigns, message)}
+                    type="button"
+                    id={"#{@id}-thread-chip-#{message_id_of(message)}"}
+                    phx-click="open_thread"
+                    phx-value-seed={message_id_of(message)}
+                    phx-target={@myself}
+                    class="mt-1 inline-flex items-center gap-1 text-xs text-notion-blue hover:underline"
+                  >
+                    <.icon name="hero-chat-bubble-left-right-micro" class="size-3.5" />
+                    {thread_reply_count(thread_for(assigns, message))}
+                  </button>
                 </div>
               </div>
             <% end %>
+          </div>
+
+          <%!-- Thread panel (T2): a docked overlay showing a child conversation
+                — the seed message pinned at top, the thread's replies below, its
+                own composer. A thread is just a Conversation with a parent. --%>
+          <div
+            :if={@open_thread}
+            id={"#{@id}-thread-panel"}
+            class="absolute inset-y-0 right-0 w-80 max-w-[80%] bg-white border-l border-notion-divider shadow-xl flex flex-col z-10"
+          >
+            <div class="flex items-center gap-2 px-3 py-2 border-b border-notion-divider">
+              <.icon name="hero-chat-bubble-left-right-micro" class="size-4 text-notion-blue" />
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium">Thread</p>
+                <p class="text-xs text-notion-text-light truncate">
+                  {thread_reply_count(@open_thread.thread)} · in this conversation
+                </p>
+              </div>
+              <button
+                type="button"
+                phx-click="close_thread"
+                phx-target={@myself}
+                class="ora-btn ora-btn--ghost ora-btn--icon"
+                aria-label="Close thread"
+              >
+                <.icon name="hero-x-mark-micro" class="size-4" />
+              </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+              <%!-- Seed message, pinned. --%>
+              <div class="rounded-lg bg-notion-sidebar/60 border border-notion-divider p-2">
+                <p class="text-[10px] uppercase tracking-wide text-notion-text-light mb-1">
+                  Seed message
+                </p>
+                <div class="text-sm">{to_markdown(@open_thread.seed_text || "")}</div>
+              </div>
+              <%!-- The thread's replies (the child conversation), oldest first. --%>
+              <div
+                :for={reply <- @open_thread.replies}
+                class={[
+                  "ora-chat-message",
+                  Concept.Chat.MessageKind.render_mode(reply) == :human_row && "ora-chat-message--user",
+                  Concept.Chat.MessageKind.host?(reply) && "ora-chat-message--seep"
+                ]}
+              >
+                <div class="flex flex-col gap-1 min-w-0 flex-1">
+                  <div
+                    :if={Concept.Chat.MessageKind.host?(reply)}
+                    class="ora-chat-seep-label flex items-center gap-1 text-xs text-notion-blue"
+                  >
+                    <.icon name="hero-sparkles-micro" class="size-3" />
+                    <span>from {String.downcase(host_voice_name(@host_type || :workspace))}</span>
+                  </div>
+                  <div :if={String.trim(reply.text || "") != ""} class="ora-chat-bubble">
+                    {to_markdown(reply.text || "")}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <form
+              id={"#{@id}-thread-reply-form"}
+              phx-submit="thread_reply"
+              phx-target={@myself}
+              class="flex items-center gap-2 p-3 border-t border-notion-divider"
+            >
+              <input
+                type="text"
+                name="form[text]"
+                placeholder="Reply in thread…"
+                autocomplete="off"
+                class="ora-input flex-1"
+              />
+              <button type="submit" class="ora-btn ora-btn--primary ora-btn--sm">
+                <.icon name="hero-paper-airplane-micro" class="size-4" />
+              </button>
+            </form>
           </div>
         </div>
 
@@ -898,6 +990,70 @@ defmodule ConceptWeb.ChatComponent do
     start_conversation(socket, host_type, host_id, nil)
   end
 
+  def handle_event("open_thread", %{"seed" => seed_id}, socket) do
+    thread_map = socket.assigns[:thread_map] || %{}
+
+    case Map.get(thread_map, seed_id) do
+      nil ->
+        {:noreply, socket}
+
+      thread ->
+        seed_text = seed_message_text(socket, seed_id)
+        replies = Enum.sort_by(thread.messages || [], & &1.inserted_at, DateTime)
+
+        # Subscribe to the child conversation so thread replies stream live.
+        ConceptWeb.Endpoint.subscribe("chat:messages:#{thread.id}")
+
+        {:noreply,
+         assign(socket, :open_thread, %{
+           seed_id: seed_id,
+           seed_text: seed_text,
+           thread: thread,
+           replies: replies
+         })}
+    end
+  end
+
+  def handle_event("close_thread", _params, socket) do
+    if ot = socket.assigns[:open_thread] do
+      ConceptWeb.Endpoint.unsubscribe("chat:messages:#{ot.thread.id}")
+    end
+
+    {:noreply, assign(socket, :open_thread, nil)}
+  end
+
+  def handle_event("thread_reply", %{"form" => %{"text" => text}}, socket) do
+    open_thread = socket.assigns[:open_thread]
+
+    cond do
+      is_nil(socket.assigns[:current_user]) ->
+        {:noreply, put_flash(socket, :error, "You must sign in to reply")}
+
+      is_nil(open_thread) or String.trim(text || "") == "" ->
+        {:noreply, socket}
+
+      true ->
+        # A thread reply is a message posted into the child conversation. Pass
+        # reply_to_message_id (the seed) so the action routes to the same thread
+        # rather than spawning a new one.
+        case Concept.Knowledge.Chat.create_message(
+               %{
+                 text: text,
+                 addresses_host: false,
+                 reply_to_message_id: open_thread.seed_id
+               },
+               actor: socket.assigns.current_user,
+               tenant: socket.assigns[:workspace_id]
+             ) do
+          {:ok, _message} ->
+            {:noreply, refresh_open_thread(socket)}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, "Could not post the reply.")}
+        end
+    end
+  end
+
   def handle_event("open_add_people", _params, socket) do
     {:noreply,
      socket
@@ -1086,12 +1242,76 @@ defmodule ConceptWeb.ChatComponent do
       |> assign(:host_type, conversation.host_type || :workspace)
       |> assign(:host_id, conversation.host_id)
       |> assign(:participants, load_participants(socket, conversation.id))
+      |> assign(:thread_map, load_thread_map(socket, conversation.id))
+      |> assign(:open_thread, nil)
       |> assign(:agent_responding, agent_response_pending?(messages))
       |> assign(:has_messages, messages != [])
       # message_history! sorts newest-first; the list renders top-anchored
       # (oldest → newest, newest at the bottom) so we reverse to natural order.
       |> stream(:messages, Enum.reverse(messages), reset: true)
       |> assign_message_form()
+    end
+  end
+
+  # Threads (T2): a thread is a child conversation seeded from a message. Load
+  # the parent conversation's threads (with their messages) into a map keyed by
+  # seed_message_id, so the stream can render a "N replies" chip under exactly
+  # the messages that seeded one. The seed_message_id is the visible primitive.
+  defp load_thread_map(socket, conversation_id) do
+    Concept.Knowledge.Chat.get_conversation!(conversation_id,
+      actor: socket.assigns.current_user,
+      tenant: socket.assigns[:workspace_id],
+      load: [threads: [:messages]]
+    ).threads
+    |> Enum.filter(& &1.seed_message_id)
+    |> Map.new(fn thread -> {thread.seed_message_id, thread} end)
+  rescue
+    _ -> %{}
+  end
+
+  # The thread seeded from this message, if any (nil otherwise).
+  defp thread_for(assigns, message) do
+    Map.get(assigns[:thread_map] || %{}, message_id_of(message))
+  end
+
+  defp thread_reply_count(nil), do: "0 replies"
+
+  defp thread_reply_count(thread) do
+    n = length(thread.messages || [])
+    "#{n} #{ngettext("reply", "replies", n)}"
+  end
+
+  defp message_id_of(%{id: id}), do: id
+  defp message_id_of(%{"id" => id}), do: id
+  defp message_id_of(_), do: nil
+
+  # The seed message's text, read from the current stream-backing thread_map's
+  # parent conversation. We refetch the single message to render the seed pinned.
+  defp seed_message_text(socket, seed_id) do
+    case Concept.Knowledge.Chat.get_message(seed_id,
+           actor: socket.assigns.current_user,
+           tenant: socket.assigns[:workspace_id]
+         ) do
+      {:ok, %{text: text}} -> text
+      _ -> ""
+    end
+  end
+
+  # Re-load the open thread's replies + the thread_map after a reply lands.
+  defp refresh_open_thread(socket) do
+    conversation = socket.assigns[:conversation]
+    ot = socket.assigns[:open_thread]
+
+    if conversation && ot do
+      thread_map = load_thread_map(socket, conversation.id)
+      thread = Map.get(thread_map, ot.seed_id, ot.thread)
+      replies = Enum.sort_by(thread.messages || [], & &1.inserted_at, DateTime)
+
+      socket
+      |> assign(:thread_map, thread_map)
+      |> assign(:open_thread, %{ot | thread: thread, replies: replies})
+    else
+      socket
     end
   end
 
@@ -1104,6 +1324,8 @@ defmodule ConceptWeb.ChatComponent do
     |> assign(:conversation, nil)
     |> assign(:agent_responding, false)
     |> assign(:has_messages, false)
+    |> assign(:thread_map, %{})
+    |> assign(:open_thread, nil)
     |> stream(:messages, [], reset: true)
     |> assign_message_form()
   end
