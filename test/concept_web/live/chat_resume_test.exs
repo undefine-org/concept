@@ -141,8 +141,10 @@ defmodule ConceptWeb.ChatResumeTest do
 
     html = render(view)
 
-    # The container drives auto-scroll via the ScrollToBottom hook (B7).
-    assert html =~ ~s(phx-hook="ScrollToBottom"),
+    # The container drives auto-scroll via the ScrollToBottom hook (B7). It now
+    # also carries MarkRead (T2 unread cursor); assert the hook is present
+    # within the (possibly multi-hook) phx-hook attribute.
+    assert html =~ "ScrollToBottom" and html =~ ~s(phx-hook="),
            "expected the message container to carry the ScrollToBottom hook"
 
     # Natural reading order: oldest message appears BEFORE the newest in the DOM
