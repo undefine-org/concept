@@ -264,11 +264,11 @@ ora-workspace-graph {
   .ora-chat-divider { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #e11d48; }
   .ora-chat-divider-line { height: 1px; flex: 1; background: #fecdd3; }
   .ora-chat-message { display: flex; gap: 8px; max-width: 90%; }
-  .ora-chat-message--user { align-self: flex-end; flex-direction: row-reverse; }
-  .ora-chat-message--agent { align-self: flex-start; }
+  .ora-chat-message--mine { align-self: flex-end; flex-direction: row-reverse; }
+  .ora-chat-message--other { align-self: flex-start; }
   .ora-chat-bubble { padding: 8px 12px; border-radius: 12px; font-size: 14px; line-height: 1.5; word-break: break-word; }
-  .ora-chat-message--user .ora-chat-bubble { background: var(--color-notion-text); color: #FFFFFF; }
-  .ora-chat-message--agent .ora-chat-bubble { background: var(--color-notion-hover); color: var(--color-notion-text); }
+  .ora-chat-message--mine .ora-chat-bubble { background: var(--color-notion-text); color: #FFFFFF; border-bottom-right-radius: 4px; }
+  .ora-chat-message--other .ora-chat-bubble { background: var(--color-notion-hover); color: var(--color-notion-text); border-bottom-left-radius: 4px; }
   /* Host seep — a grounded continuation, not a bubble in the timeline. Fused
      under the message it answers: indented, blue accent rail, no avatar. */
   .ora-chat-message--seep { align-self: stretch; max-width: 100%; margin-left: 36px; padding-left: 12px; border-left: 2px solid var(--color-notion-blue); }

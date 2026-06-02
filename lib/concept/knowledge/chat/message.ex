@@ -114,6 +114,7 @@ defmodule Concept.Knowledge.Chat.Message do
       end
 
       change Concept.Knowledge.Chat.Message.Changes.CreateConversationIfNotProvided
+      change Concept.Knowledge.Chat.Message.Changes.StampSenderParticipant
       change Concept.Knowledge.Chat.Message.Changes.MirrorTextToBlock
       change Concept.Knowledge.Chat.Message.Changes.JoinSenderAsParticipant
       change Concept.Knowledge.Chat.Message.Changes.BroadcastInbox

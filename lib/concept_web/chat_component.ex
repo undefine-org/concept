@@ -99,6 +99,7 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:emoji_pop_for, fn -> nil end)
         |> assign_new(:composer_block_type, fn -> "paragraph" end)
         |> assign_new(:rail_scope, fn -> :mine end)
+        |> assign_new(:member_names, fn -> %{} end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -162,6 +163,10 @@ defmodule ConceptWeb.ChatComponent do
 
   @impl true
   def render(assigns) do
+    # Resolve "my" participant once per render so the stream can split mine
+    # (right) from other members (left) without re-deriving per message.
+    assigns = assign(assigns, :my_participant_id, my_participant_id(assigns))
+
     ~H"""
     <div id={@id} class="flex bg-white min-h-full max-h-full">
       <div
@@ -487,6 +492,7 @@ defmodule ConceptWeb.ChatComponent do
                     renders in the stream — it lives behind "Why this answer?". --%>
             <%= for {id, message} <- @streams.messages do %>
               <% mode = Concept.Chat.MessageKind.render_mode(message) %>
+              <% mine = mine?(message, assigns) %>
               <% is_boundary = @unread_boundary_id && message_id_of(message) == @unread_boundary_id %>
               <div
                 id={id}
@@ -504,8 +510,8 @@ defmodule ConceptWeb.ChatComponent do
                 </div>
                 <div class={[
                   "ora-chat-message group/msg relative",
-                  mode == :human_row && "ora-chat-message--user",
-                  mode == :agent_row && "ora-chat-message--agent",
+                  mine && "ora-chat-message--mine",
+                  not mine and mode in [:human_row, :agent_row] && "ora-chat-message--other",
                   mode in [:host_seep, :host_note] && "ora-chat-message--seep"
                 ]}>
                   <%!-- Hover toolbar (T2): every message is a unit of work. Reply
@@ -551,17 +557,31 @@ defmodule ConceptWeb.ChatComponent do
                       <.icon name="hero-link-micro" class="size-4" />
                     </button>
                   </div>
-                  <span :if={mode == :human_row} class="ora-chat-avatar">
-                    <.icon name="hero-user-micro" class="size-4 text-notion-text-light" />
-                  </span>
+                  <%!-- Sender avatar (R1): only OTHER members get an avatar on
+                        the left — a colored initial keyed to the sender, agents
+                        in violet with a chip glyph. My own messages need no
+                        avatar (they sit right, as bubbles). --%>
                   <span
-                    :if={mode == :agent_row}
-                    class="ora-chat-avatar"
-                    title={sender_label(message, assigns)}
+                    :if={not mine and mode in [:human_row, :agent_row]}
+                    class="ora-chat-avatar text-white text-[11px] font-bold"
+                    style={"background-color: #{sender_color(message, assigns)}"}
+                    title={sender_display_name(message, assigns)}
                   >
-                    <.icon name="hero-cpu-chip-micro" class="size-4 text-violet-500" />
+                    <.icon :if={mode == :agent_row} name="hero-cpu-chip-micro" class="size-4" />
+                    <span :if={mode == :human_row}>{sender_initial(message, assigns)}</span>
                   </span>
                   <div class="flex flex-col gap-1 min-w-0 flex-1">
+                    <%!-- Sender name line (R1): shown for OTHER members so a
+                          channel reads as multi-party, not a monologue. --%>
+                    <div
+                      :if={not mine and mode in [:human_row, :agent_row]}
+                      class="flex items-center gap-1.5 text-xs"
+                    >
+                      <span class="font-medium text-notion-text">
+                        {sender_display_name(message, assigns)}
+                      </span>
+                      <span :if={mode == :agent_row} class="text-violet-500">agent</span>
+                    </div>
                     <%!-- Host seep: a quiet "from this <host>" voice label, not a
                         person's name. The blue rail comes from --seep. --%>
                     <div
@@ -680,8 +700,9 @@ defmodule ConceptWeb.ChatComponent do
                 :for={reply <- @open_thread.replies}
                 class={[
                   "ora-chat-message",
-                  Concept.Chat.MessageKind.render_mode(reply) == :human_row &&
-                    "ora-chat-message--user",
+                  mine?(reply, assigns) && "ora-chat-message--mine",
+                  not mine?(reply, assigns) and not Concept.Chat.MessageKind.host?(reply) &&
+                    "ora-chat-message--other",
                   Concept.Chat.MessageKind.host?(reply) && "ora-chat-message--seep"
                 ]}
               >
@@ -1504,6 +1525,7 @@ defmodule ConceptWeb.ChatComponent do
         |> assign(:add_people_open, false)
         |> assign(:member_picks, MapSet.new())
         |> assign(:participants, load_participants(socket, conversation.id))
+        |> assign(:member_names, load_member_names(socket))
 
       # A silent partial failure is easy to miss — surface it (mirrors
       # start_conversation's error branch).
@@ -1659,6 +1681,7 @@ defmodule ConceptWeb.ChatComponent do
       |> assign(:host_type, conversation.host_type || :workspace)
       |> assign(:host_id, conversation.host_id)
       |> assign(:participants, load_participants(socket, conversation.id))
+      |> assign(:member_names, load_member_names(socket))
       |> then(fn s ->
         # Resolve my membership once; reuse for both the reactions map (mine?)
         # and the :my_membership_id assign (avoid a duplicate get_membership).
@@ -1730,6 +1753,81 @@ defmodule ConceptWeb.ChatComponent do
     else
       _ -> nil
     end
+  end
+
+  # ── Sender identity (R1) ──────────────────────────────────────────────
+  # My participant id in the active conversation, from the loaded participant
+  # list. The key that distinguishes "me" from another member in the stream.
+  defp my_participant_id(assigns) do
+    user = assigns[:current_user]
+
+    with %_{} <- user,
+         list when is_list(list) <- assigns[:participants],
+         %{id: id} <-
+           Enum.find(list, fn p ->
+             match?(%{membership: %{user_id: uid}} when uid == user.id, p)
+           end) do
+      id
+    else
+      _ -> nil
+    end
+  end
+
+  # True when this message was sent by the current user (their participant).
+  # A human message with no resolvable sender is NOT mine — it renders as an
+  # unattributed member (left), never falsely as me (right).
+  defp mine?(message, assigns) do
+    pid = sender_participant_id(message)
+    not is_nil(pid) and pid == assigns[:my_participant_id]
+  end
+
+  # Display name for a message's sender. Resolves sender_participant_id →
+  # membership_id → a name from the workspace member map (built via
+  # list_members, which loads user emails under authorize?: false — the
+  # member's own `membership.user` read is policy-forbidden). Falls back to the
+  # source-kind label.
+  defp sender_display_name(message, assigns) do
+    pid = sender_participant_id(message)
+    parts = assigns[:participants] || []
+    names = assigns[:member_names] || %{}
+
+    with pid when not is_nil(pid) <- pid,
+         %{membership_id: mid} <- Enum.find(parts, &(&1.id == pid)),
+         name when is_binary(name) and name != "" <- Map.get(names, mid) do
+      name
+    else
+      _ ->
+        # No resolvable identity. For an agent, its kind label; for a human we
+        # cannot name, a neutral "Member" (never "You" — these are others).
+        case Concept.Chat.MessageKind.render_mode(message) do
+          :agent_row -> sender_label(message, assigns)
+          _ -> "Member"
+        end
+    end
+  end
+
+  # A deterministic avatar color for a sender, keyed by participant id (stable
+  # across renders). Agents get a fixed violet to read as non-human.
+  defp sender_color(message, _assigns) do
+    case Concept.Chat.MessageKind.render_mode(message) do
+      :agent_row ->
+        "#7c3aed"
+
+      _ ->
+        case sender_participant_id(message) do
+          nil -> "#9b9a97"
+          pid -> ConceptWeb.Colors.for_user_id(pid)
+        end
+    end
+  end
+
+  # The single-letter avatar glyph for a sender (first letter of display name).
+  defp sender_initial(message, assigns) do
+    message
+    |> sender_display_name(assigns)
+    |> String.first()
+    |> Kernel.||("?")
+    |> String.upcase()
   end
 
   # Threads (T2): a thread is a child conversation seeded from a message. Load
@@ -2129,6 +2227,20 @@ defmodule ConceptWeb.ChatComponent do
     )
   rescue
     _ -> []
+  end
+
+  # A {membership_id => display name} map for the workspace, used to attribute
+  # messages to their sender by name. `list_members` loads user emails under
+  # `authorize?: false` (the per-member `membership.user` read is policy-
+  # forbidden), so this is the one safe place to resolve other members' names.
+  defp load_member_names(socket) do
+    with %_{} = user <- socket.assigns[:current_user],
+         ws when not is_nil(ws) <- socket.assigns[:workspace_id],
+         {:ok, members} <- Concept.Accounts.list_members(ws, actor: user) do
+      Map.new(members, fn m -> {m.id, member_label(m)} end)
+    else
+      _ -> %{}
+    end
   end
 
   defp participant_name(%{membership: %{display_name: name}}) when is_binary(name) and name != "",
