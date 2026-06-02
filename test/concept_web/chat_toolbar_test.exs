@@ -66,6 +66,7 @@ defmodule ConceptWeb.ChatToolbarTest do
              view,
              "[phx-click='open_thread'][phx-value-seed='#{ctx.msg.id}']"
            )
+
     # Copy-link action present (client-side clipboard).
     assert has_element?(view, "[id$='-msg-copylink-#{ctx.msg.id}']")
   end
@@ -83,6 +84,23 @@ defmodule ConceptWeb.ChatToolbarTest do
     panel = view |> element("[id$='-thread-panel']") |> render()
     assert panel =~ "Thread"
     assert panel =~ "a message to act on"
+  end
+
+  test "closing a toolbar-opened (threadless) panel does not crash", ctx do
+    {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}")
+    open_conversation(view, ctx.conversation_id)
+
+    # Open a thread on a message with NO replies (thread: nil in open_thread).
+    view
+    |> element("[id$='-msg-toolbar-#{ctx.msg.id}'] [phx-click='open_thread']")
+    |> render_click()
+
+    :timer.sleep(60)
+    # Closing must not raise on the nil thread (regression: ot.thread.id).
+    view |> element("[id$='-thread-panel'] [phx-click='close_thread']") |> render_click()
+    :timer.sleep(60)
+
+    refute has_element?(view, "[id$='-thread-panel']")
   end
 
   test "replying via the toolbar-opened panel spawns the thread", ctx do

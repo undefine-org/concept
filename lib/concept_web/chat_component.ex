@@ -376,8 +376,7 @@ defmodule ConceptWeb.ChatComponent do
                   class="absolute -top-2 left-0 right-0 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-rose-500"
                 >
                   <span class="h-px flex-1 bg-rose-200"></span>
-                  New
-                  <span class="h-px flex-1 bg-rose-200"></span>
+                  New <span class="h-px flex-1 bg-rose-200"></span>
                 </div>
                 <%!-- Hover toolbar (T2): every message is a unit of work. Reply
                       in thread + copy link are real now; React (T4) and
@@ -494,7 +493,8 @@ defmodule ConceptWeb.ChatComponent do
                 :for={reply <- @open_thread.replies}
                 class={[
                   "ora-chat-message",
-                  Concept.Chat.MessageKind.render_mode(reply) == :human_row && "ora-chat-message--user",
+                  Concept.Chat.MessageKind.render_mode(reply) == :human_row &&
+                    "ora-chat-message--user",
                   Concept.Chat.MessageKind.host?(reply) && "ora-chat-message--seep"
                 ]}
               >
@@ -1081,7 +1081,9 @@ defmodule ConceptWeb.ChatComponent do
     # conversation. If it exists, load + subscribe to its messages.
     thread = Map.get(socket.assigns[:thread_map] || %{}, seed_id)
     seed_text = seed_message_text(socket, seed_id)
-    replies = if thread, do: Enum.sort_by(thread.messages || [], & &1.inserted_at, DateTime), else: []
+
+    replies =
+      if thread, do: Enum.sort_by(thread.messages || [], & &1.inserted_at, DateTime), else: []
 
     if thread, do: ConceptWeb.Endpoint.subscribe("chat:messages:#{thread.id}")
 
@@ -1095,8 +1097,11 @@ defmodule ConceptWeb.ChatComponent do
   end
 
   def handle_event("close_thread", _params, socket) do
-    if ot = socket.assigns[:open_thread] do
-      ConceptWeb.Endpoint.unsubscribe("chat:messages:#{ot.thread.id}")
+    # ot.thread is nil for a toolbar-opened panel with no replies yet — only
+    # unsubscribe when a child conversation actually exists (was subscribed).
+    case socket.assigns[:open_thread] do
+      %{thread: %{id: tid}} -> ConceptWeb.Endpoint.unsubscribe("chat:messages:#{tid}")
+      _ -> :ok
     end
 
     {:noreply, assign(socket, :open_thread, nil)}
@@ -1322,9 +1327,13 @@ defmodule ConceptWeb.ChatComponent do
       |> assign(:host_type, conversation.host_type || :workspace)
       |> assign(:host_id, conversation.host_id)
       |> assign(:participants, load_participants(socket, conversation.id))
+      |> then(fn s ->
+        # Reuse the participants just loaded (avoid a duplicate read for the
+        # cursor); pass them into the unread-boundary computation.
+        assign(s, :unread_boundary_id, unread_boundary(s, s.assigns.participants, messages))
+      end)
       |> assign(:thread_map, load_thread_map(socket, conversation.id))
       |> assign(:open_thread, nil)
-      |> assign(:unread_boundary_id, unread_boundary(socket, conversation.id, messages))
       |> assign(:latest_message_id, messages |> Enum.at(0) |> message_id_of())
       |> assign(:agent_responding, agent_response_pending?(messages))
       |> assign(:has_messages, messages != [])
@@ -1339,15 +1348,19 @@ defmodule ConceptWeb.ChatComponent do
   # last_read_message_id cursor — the stream renders a "New" divider before it.
   # nil when nothing is unread (cursor at/after the latest message). `messages`
   # is newest-first (message_history! order).
-  defp unread_boundary(socket, conversation_id, messages) do
-    cursor = my_read_cursor(socket, conversation_id)
+  defp unread_boundary(socket, participants, messages) do
+    cursor = my_read_cursor(socket, participants)
     # natural (oldest→newest) order to find the first unread
     ordered = Enum.reverse(messages)
 
     cond do
-      ordered == [] -> nil
+      ordered == [] ->
+        nil
+
       # No cursor → everything is unread; boundary is the first message.
-      is_nil(cursor) -> ordered |> Enum.at(0) |> message_id_of()
+      is_nil(cursor) ->
+        ordered |> Enum.at(0) |> message_id_of()
+
       true ->
         # First message whose id sorts after the cursor (uuid_v7 ids are
         # time-ordered, so string compare = chronological).
@@ -1360,15 +1373,15 @@ defmodule ConceptWeb.ChatComponent do
     end
   end
 
-  # My participant's read cursor for this conversation (nil if none / not joined).
-  defp my_read_cursor(socket, conversation_id) do
+  # My participant's read cursor, from an already-loaded participant list (nil
+  # if none / not joined).
+  defp my_read_cursor(socket, participants) do
     user = socket.assigns[:current_user]
 
     with %_{} <- user,
-         participants when is_list(participants) <-
-           load_participants(socket, conversation_id),
+         list when is_list(list) <- participants,
          %{} = mine <-
-           Enum.find(participants, fn p ->
+           Enum.find(list, fn p ->
              match?(%{membership: %{user_id: uid}} when uid == user.id, p)
            end) do
       mine.last_read_message_id
@@ -1579,14 +1592,24 @@ defmodule ConceptWeb.ChatComponent do
          topic: "chat:messages:" <> conversation_id,
          payload: message
        }) do
-    if socket.assigns.conversation && socket.assigns.conversation.id == conversation_id do
-      socket
-      |> maybe_warn_tool_data(message)
-      |> assign(:has_messages, true)
-      |> stream_insert(:messages, message, at: -1)
-      |> update_agent_responding(message)
-    else
-      socket
+    open_thread = socket.assigns[:open_thread]
+
+    cond do
+      socket.assigns.conversation && socket.assigns.conversation.id == conversation_id ->
+        socket
+        |> maybe_warn_tool_data(message)
+        |> assign(:has_messages, true)
+        |> stream_insert(:messages, message, at: -1)
+        |> update_agent_responding(message)
+
+      # A reply landed on the OPEN thread's child conversation (another
+      # participant, or a grounded host reply) — refresh the panel so it appears
+      # live, not only on reopen.
+      match?(%{thread: %{id: ^conversation_id}}, open_thread) ->
+        refresh_open_thread(socket)
+
+      true ->
+        socket
     end
   end
 
