@@ -43,7 +43,10 @@ defmodule ConceptWeb.ChatThinkingTest do
 
   test "the message stream sits inside a scroll viewport that also holds the cues", ctx do
     {:ok, m} =
-      Chat.create_message(%{text: "hi", addresses_host: false}, actor: ctx.user, tenant: ctx.ws.id)
+      Chat.create_message(%{text: "hi", addresses_host: false},
+        actor: ctx.user,
+        tenant: ctx.ws.id
+      )
 
     {:ok, view, _html} = live(ctx.conn, ~p"/w/#{ctx.ws.slug}/channels/#{m.conversation_id}")
 
