@@ -301,3 +301,27 @@ an MCP tool** the moment it ships: `react`, `reply_in_thread`
 participates in a team thread — reacts, replies, resolves — through the exact
 actions a human drives from the LiveView. The team-comms surface is, by
 construction, also the agent-collaboration surface. That is the whole point.
+
+---
+
+## Build log — waves shipped (T1–T6)
+
+All six waves delivered behind the 5-layer gate (compile · unit/component ·
+interaction · live puppeteer · `mix precommit`) with per-item screenshot proofs
+in `docs/ux/live/T*.png` and a reviewer pass per wave.
+
+| Wave | Features | Net-new schema |
+|---|---|---|
+| T1 | adaptive rail · host-picker `+` · add-people modal | none (RailModel projection; Participant.join) |
+| T2 | threads (chip+panel+reply) · hover toolbar · unread divider+cursor | none |
+| T3 | human presence/typing · seen-by receipts | none (Phoenix.Presence) |
+| T4 | reactions (chips + emoji picker) | **1 table** (Reaction) |
+| T5 | DMs (User Hostable) · decisions (open/decided) | 1 stanza · 1 column |
+| T6 | message-blocks substrate + composer block-type | activates Message.blocks |
+
+Final gate: `mix precommit` exit 0 — 9 properties, 779 tests, 0 failures.
+Parity dividend: react/unreact/decide/discuss/mark_read/join are all live MCP
+tools — the team-comms surface is, by construction, the agent-collaboration
+surface. One pre-existing `LockIndicator` presence flake (passes isolated; not
+in this work). Deferred FUPs: full in-composer lexical `/`-slash editor;
+cross-user real-time reaction sync.
