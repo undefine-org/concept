@@ -35,15 +35,13 @@ defmodule ConceptWeb.Components.Sidebar do
         <span class="flex-1 text-left">New page</span>
       </button>
 
-      <button
-        type="button"
-        phx-click="toggle_chat"
-        class="ora-sidebar-row mb-1 text-notion-text-light flex items-center gap-2"
+      <.link
+        navigate={~p"/w/#{@workspace.slug}/channels"}
+        class="ora-sidebar-row mb-1 text-notion-text-light flex items-center gap-2 no-underline"
       >
         <.icon name="hero-chat-bubble-left-right-micro" class="size-4" />
-        <span class="flex-1 text-left">Chat</span>
-        <span class="text-xs text-notion-text-light">⌘J</span>
-      </button>
+        <span class="flex-1 text-left">Channels</span>
+      </.link>
 
       <.link
         navigate={~p"/w/#{@workspace.slug}/graph"}

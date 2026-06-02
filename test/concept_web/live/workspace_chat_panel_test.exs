@@ -4,7 +4,6 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
 
   alias Concept.Accounts
   alias Concept.Knowledge.Chat
-  alias Concept.Knowledge.Profiles
   alias Concept.Repo
   import Ecto.Query
 
@@ -83,38 +82,20 @@ defmodule ConceptWeb.WorkspaceChatPanelTest do
     refute render(view) =~ "ora-chat-panel--open"
   end
 
-  test "scope dropdown renders 3 scope buttons", %{conn: conn, ws: ws} do
+  test "the peek exposes an Open-in-Channels deep-link, not scope/profile knobs",
+       %{conn: conn, ws: ws} do
     {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}")
 
-    # Open chat panel (toggle_chat is synchronous).
+    # Open chat peek (toggle_chat is synchronous).
     view
     |> element("#workspace-root")
     |> render_hook("toggle_chat", %{})
 
-    # Assert on the actual scope buttons (phx-value-scope), not leaky generic
-    # text like "workspace"/"page" which the layout/URLs render regardless.
-    for scope <- ~w(workspace page subtree) do
-      assert has_element?(
-               view,
-               ~s{button[phx-click="set_scope"][phx-value-scope="#{scope}"]}
-             ),
-             "expected a scope button for #{scope}"
-    end
-  end
-
-  test "profile dropdown renders all profile names", %{conn: conn, ws: ws} do
-    {:ok, view, _html} = live(conn, ~p"/w/#{ws.slug}")
-
-    # Open chat panel (toggle_chat is synchronous).
-    view
-    |> element("#workspace-root")
-    |> render_hook("toggle_chat", %{})
-
-    html = render(view)
-
-    for profile <- Profiles.list() do
-      assert html =~ to_string(profile.name)
-    end
+    # The peek is lean: scope follows the host (no manual scope/profile knobs),
+    # and the route to the full-screen team-comms home is one click away.
+    assert has_element?(view, "#peek-open-in-channels")
+    assert has_element?(view, ~s{a[href="/w/#{ws.slug}/channels"]})
+    refute has_element?(view, ~s{button[phx-click="set_scope"]})
   end
 
   test "PubSub palette_ask opens panel and seeds prompt", %{conn: conn, ws: ws} do

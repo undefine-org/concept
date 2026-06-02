@@ -115,8 +115,8 @@ defmodule ConceptWeb.AskSelectionTest do
     assert html =~ "Tell me more about this excerpt"
     assert html =~ "test excerpt"
 
-    # Scope should be set to subtree (check for active button)
-    assert html =~ "subtree"
+    # Scope follows the host now (the peek is page-scoped); the seeded prompt
+    # and an open panel are the observable outcome.
   end
 
   test "empty text in ask_selection still broadcasts", %{

@@ -92,6 +92,7 @@ defmodule ConceptWeb.ChatComponent do
         |> assign_new(:my_membership_id, fn -> nil end)
         |> assign_new(:emoji_pop_for, fn -> nil end)
         |> assign_new(:composer_block_type, fn -> "paragraph" end)
+        |> assign_new(:rail_scope, fn -> :mine end)
         |> assign_rail()
         |> stream(:messages, [])
         |> assign_message_form()
@@ -2157,20 +2158,37 @@ defmodule ConceptWeb.ChatComponent do
   # group the whole set (streams aren't enumerable). We hold the raw list for
   # re-derivation and a {page_id => title} label map for inline/category labels.
   defp assign_rail(socket) do
-    conversations =
-      if is_nil(socket.assigns[:current_user]) or is_nil(socket.assigns[:workspace_id]) do
-        []
-      else
-        Concept.Knowledge.Chat.my_conversations!(
-          actor: socket.assigns.current_user,
-          tenant: socket.assigns.workspace_id
-        )
-      end
+    conversations = rail_conversations(socket)
 
     socket
     |> assign(:rail_conversations, conversations)
     |> assign(:rail_groups, Concept.Chat.RailModel.group_by_host(conversations))
     |> assign(:page_labels, page_label_map(socket, conversations))
+  end
+
+  # The rail has two projections. `:mine` (default, full-screen Channels) shows
+  # every conversation the user participates in. `:host` (page peek) narrows to
+  # the conversations of the mounted host, so the drawer only surfaces the
+  # current page's topics. Falls back to `:mine` when no host is bound.
+  defp rail_conversations(socket) do
+    cond do
+      is_nil(socket.assigns[:current_user]) or is_nil(socket.assigns[:workspace_id]) ->
+        []
+
+      socket.assigns[:rail_scope] == :host and not is_nil(socket.assigns[:host_id]) ->
+        Concept.Knowledge.Chat.conversations_for_host!(
+          socket.assigns.host_type,
+          socket.assigns.host_id,
+          actor: socket.assigns.current_user,
+          tenant: socket.assigns.workspace_id
+        )
+
+      true ->
+        Concept.Knowledge.Chat.my_conversations!(
+          actor: socket.assigns.current_user,
+          tenant: socket.assigns.workspace_id
+        )
+    end
   end
 
   # Resolve page-host titles once (a single list_tree read), keyed by page id.

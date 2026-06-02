@@ -694,7 +694,17 @@ defmodule ConceptWeb.WorkspaceLive do
           current_page_id={@current_page && @current_page.id}
         />
 
-        <div class="fixed bottom-4 right-4 z-30">
+        <div class="fixed bottom-4 right-4 z-30 flex items-center gap-2">
+          <button
+            type="button"
+            id="open-chat-peek"
+            phx-click="toggle_chat"
+            class="ora-fab"
+            aria-label="Open chat"
+            title="Chat about this page (J)"
+          >
+            <.icon name="hero-chat-bubble-left-right" class="size-5" />
+          </button>
           <.indexing_pill
             state={
               if @indexing_state.failed?,

@@ -57,6 +57,8 @@ defmodule ConceptWeb.Router do
       live "/w/:workspace_slug/tasks", ObjectBoardLive, :tasks
       live "/w/:workspace_slug/o/:type_id", ObjectBoardLive, :board
       live "/w/:workspace_slug/work", WorkLive
+      live "/w/:workspace_slug/channels", ChannelsLive, :index
+      live "/w/:workspace_slug/channels/:conversation_id", ChannelsLive, :conversation
       live "/w/:workspace_slug/inbox", InboxLive, :index
       live "/w/:workspace_slug/settings", WorkspaceSettingsLive, :index
       live "/w/:workspace_slug/types", ObjectTypeEditorLive, :index
