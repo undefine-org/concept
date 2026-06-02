@@ -183,10 +183,18 @@ defmodule ConceptWeb.ChatComponent do
                       class="flex items-center gap-1 flex-1 min-w-0 text-left text-sm font-medium text-notion-text"
                     >
                       <.icon
-                        name={if(collapsed, do: "hero-chevron-right-micro", else: "hero-chevron-down-micro")}
+                        name={
+                          if(collapsed,
+                            do: "hero-chevron-right-micro",
+                            else: "hero-chevron-down-micro"
+                          )
+                        }
                         class="size-3.5 text-notion-text-light shrink-0"
                       />
-                      <.icon name={Concept.Chat.RailModel.glyph(group.host_type)} class="size-4 shrink-0 text-notion-text-light" />
+                      <.icon
+                        name={Concept.Chat.RailModel.glyph(group.host_type)}
+                        class="size-4 shrink-0 text-notion-text-light"
+                      />
                       <span class="truncate">{host_group_label(group, assigns)}</span>
                     </button>
                     <button
@@ -233,7 +241,10 @@ defmodule ConceptWeb.ChatComponent do
                     ]}
                   >
                     <span class="flex items-center gap-1.5 min-w-0">
-                      <.icon name={Concept.Chat.RailModel.glyph(group.host_type)} class="size-4 shrink-0 text-notion-text-light" />
+                      <.icon
+                        name={Concept.Chat.RailModel.glyph(group.host_type)}
+                        class="size-4 shrink-0 text-notion-text-light"
+                      />
                       <span class={[
                         "truncate text-sm",
                         conv_selected?(@conversation, conversation) && "font-medium text-notion-text",
@@ -618,11 +629,13 @@ defmodule ConceptWeb.ChatComponent do
                 type="button"
                 phx-click="start_conversation"
                 phx-value-host-type="workspace"
-                phx-value-q={@host_picker_query}
                 phx-target={@myself}
                 class="flex items-center gap-2 w-full text-left px-2 py-2 rounded hover:bg-notion-sidebar-hover text-sm"
               >
-                <.icon name={Concept.Chat.RailModel.glyph(:workspace)} class="size-4 text-notion-blue" />
+                <.icon
+                  name={Concept.Chat.RailModel.glyph(:workspace)}
+                  class="size-4 text-notion-blue"
+                />
                 <span class="flex-1">Workspace</span>
                 <span class="text-xs text-notion-text-light">the whole workspace</span>
               </button>
@@ -638,11 +651,13 @@ defmodule ConceptWeb.ChatComponent do
                 phx-click="start_conversation"
                 phx-value-host-type="page"
                 phx-value-host-id={page.id}
-                phx-value-q={@host_picker_query}
                 phx-target={@myself}
                 class="flex items-center gap-2 w-full text-left px-2 py-2 rounded hover:bg-notion-sidebar-hover text-sm"
               >
-                <.icon name={Concept.Chat.RailModel.glyph(:page)} class="size-4 text-notion-text-light" />
+                <.icon
+                  name={Concept.Chat.RailModel.glyph(:page)}
+                  class="size-4 text-notion-text-light"
+                />
                 <span class="flex-1 truncate">{page.title}</span>
                 <span class="text-xs text-notion-text-light">about this page</span>
               </button>
@@ -689,10 +704,15 @@ defmodule ConceptWeb.ChatComponent do
             >
               <span class={[
                 "inline-flex items-center justify-center size-4 rounded border",
-                MapSet.member?(@member_picks, member.id) && "bg-notion-blue border-notion-blue text-white",
+                MapSet.member?(@member_picks, member.id) &&
+                  "bg-notion-blue border-notion-blue text-white",
                 !MapSet.member?(@member_picks, member.id) && "border-notion-divider"
               ]}>
-                <.icon :if={MapSet.member?(@member_picks, member.id)} name="hero-check-micro" class="size-3" />
+                <.icon
+                  :if={MapSet.member?(@member_picks, member.id)}
+                  name="hero-check-micro"
+                  class="size-3"
+                />
               </span>
               <span class="inline-flex items-center justify-center size-5 rounded-full bg-notion-blue text-white text-[10px] font-semibold shrink-0">
                 {member_initial(member)}
@@ -870,11 +890,12 @@ defmodule ConceptWeb.ChatComponent do
   end
 
   def handle_event("start_conversation", params, socket) do
+    # The picker's search box filters the host list; it is NOT the topic. Leave
+    # the title nil so the generate_name trigger auto-titles once messages
+    # accrue (an explicit topic field can be added later if wanted).
     host_type = String.to_existing_atom(params["host-type"] || "workspace")
     host_id = params["host-id"]
-    topic = params["topic"] || params["q"]
-    topic = if is_binary(topic) and String.trim(topic) != "", do: String.trim(topic), else: nil
-    start_conversation(socket, host_type, host_id, topic)
+    start_conversation(socket, host_type, host_id, nil)
   end
 
   def handle_event("open_add_people", _params, socket) do
@@ -903,23 +924,36 @@ defmodule ConceptWeb.ChatComponent do
     picks = socket.assigns[:member_picks] || MapSet.new()
 
     if conversation && MapSet.size(picks) > 0 do
-      for membership_id <- picks do
-        Concept.Knowledge.Chat.join_conversation(
-          %{
-            workspace_id: socket.assigns[:workspace_id],
-            conversation_id: conversation.id,
-            membership_id: membership_id
-          },
-          actor: socket.assigns.current_user,
-          tenant: socket.assigns[:workspace_id]
-        )
-      end
+      failures =
+        Enum.count(picks, fn membership_id ->
+          match?(
+            {:error, _},
+            Concept.Knowledge.Chat.join_conversation(
+              %{
+                workspace_id: socket.assigns[:workspace_id],
+                conversation_id: conversation.id,
+                membership_id: membership_id
+              },
+              actor: socket.assigns.current_user,
+              tenant: socket.assigns[:workspace_id]
+            )
+          )
+        end)
 
-      {:noreply,
-       socket
-       |> assign(:add_people_open, false)
-       |> assign(:member_picks, MapSet.new())
-       |> assign(:participants, load_participants(socket, conversation.id))}
+      socket =
+        socket
+        |> assign(:add_people_open, false)
+        |> assign(:member_picks, MapSet.new())
+        |> assign(:participants, load_participants(socket, conversation.id))
+
+      # A silent partial failure is easy to miss — surface it (mirrors
+      # start_conversation's error branch).
+      socket =
+        if failures > 0,
+          do: put_flash(socket, :error, "Could not add #{failures} member(s)."),
+          else: socket
+
+      {:noreply, socket}
     else
       {:noreply, assign(socket, :add_people_open, false)}
     end
@@ -1191,12 +1225,31 @@ defmodule ConceptWeb.ChatComponent do
         socket
       end
 
-    # A new/renamed conversation may flip a host inline→category, so re-derive
-    # the whole rail rather than splicing one item (the rail is a projection).
-    assign_rail(socket)
+    # Only re-derive the rail when grouping can actually change: a new
+    # conversation, or a changed title/host. The chat:conversations topic also
+    # fires on every budget tick (decrement/replenish), which can't affect
+    # grouping — re-projecting (2 DB reads) on those would be wasteful.
+    if rail_grouping_changed?(socket, conversation),
+      do: assign_rail(socket),
+      else: socket
   end
 
   defp handle_broadcast(socket, _), do: socket
+
+  # True iff this broadcast could change the rail's host grouping: a conversation
+  # not yet in the rail, or one whose title/host differs from the held copy.
+  # Budget-only updates (same id, title, host) return false — no DB re-read.
+  defp rail_grouping_changed?(socket, conversation) do
+    case Enum.find(socket.assigns[:rail_conversations] || [], &(&1.id == conversation.id)) do
+      nil ->
+        true
+
+      existing ->
+        Map.get(existing, :title) != Map.get(conversation, :title) or
+          Map.get(existing, :host_type) != Map.get(conversation, :host_type) or
+          Map.get(existing, :host_id) != Map.get(conversation, :host_id)
+    end
+  end
 
   def build_conversation_title_string(title) do
     cond do
