@@ -549,6 +549,25 @@ defmodule ConceptWeb.ChatComponent do
           </div>
         </div>
 
+        <%!-- Seen-by (T3): read receipts — participants whose cursor reached the
+              latest message, as stacked avatars. --%>
+        <div
+          :if={@conversation && seen_by(assigns) != []}
+          id={"#{@id}-seen-by"}
+          class="px-4 py-1 flex items-center gap-1 text-xs text-notion-text-light"
+        >
+          <span class="mr-1">Seen by</span>
+          <span class="flex items-center -space-x-1">
+            <span
+              :for={p <- seen_by(assigns)}
+              class="inline-flex items-center justify-center size-4 rounded-full bg-notion-text-light text-white text-[9px] font-semibold ring-1 ring-white"
+              title={seen_by_label(p)}
+            >
+              {seen_by_initial(p)}
+            </span>
+          </span>
+        </div>
+
         <%!-- Human typing cue (T3): "X is typing…" beside the host's "is
               thinking" — people type, the host thinks. --%>
         <div
@@ -1506,6 +1525,31 @@ defmodule ConceptWeb.ChatComponent do
     |> Enum.filter(& &1.typing)
     |> Enum.map(& &1.display_name)
   end
+
+  # Seen-by (T3): participants (other than me) whose read cursor has reached the
+  # latest message — the read-receipt trust signal. Derived from
+  # last_read_message_id; nil latest → nobody.
+  defp seen_by(assigns) do
+    latest = assigns[:latest_message_id]
+    me = assigns[:current_user] && assigns.current_user.id
+
+    if latest do
+      for p <- assigns[:participants] || [],
+          p.last_read_message_id == latest,
+          membership_user_id(p) != me,
+          do: p
+    else
+      []
+    end
+  end
+
+  defp membership_user_id(%{membership: %{user_id: id}}), do: id
+  defp membership_user_id(_), do: nil
+
+  defp seen_by_label(%{membership: %{display_name: n}}) when is_binary(n) and n != "", do: n
+  defp seen_by_label(_), do: "Member"
+
+  defp seen_by_initial(p), do: p |> seen_by_label() |> String.first() |> Kernel.||("?") |> String.upcase()
 
   defp chat_typing_label([name]), do: "#{name} is typing…"
   defp chat_typing_label([a, b]), do: "#{a} and #{b} are typing…"
