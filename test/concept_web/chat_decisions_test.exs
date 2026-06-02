@@ -79,6 +79,8 @@ defmodule ConceptWeb.ChatDecisionsTest do
 
     # Badge appears; the conversation is decided.
     assert has_element?(view, "[id$='-decided-badge']")
+    # R3: Reopen is a real pill button (padded, filled), not bare text.
+    assert has_element?(view, "button[id$='-reopen-btn'].rounded-full.bg-notion-sidebar")
 
     conv = Chat.get_conversation!(ctx.conversation_id, actor: ctx.user, tenant: ctx.ws.id)
     assert conv.state == :decided

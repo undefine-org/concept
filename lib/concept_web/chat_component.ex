@@ -366,10 +366,10 @@ defmodule ConceptWeb.ChatComponent do
             id={"#{@id}-reopen-btn"}
             phx-click="reopen"
             phx-target={@myself}
-            class="shrink-0 text-xs text-notion-text-light hover:text-notion-text"
+            class="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-notion-sidebar text-notion-text hover:bg-notion-sidebar-hover"
             title="Reopen this conversation"
           >
-            Reopen
+            <.icon name="hero-arrow-uturn-left-micro" class="size-3" /> Reopen
           </button>
         </div>
 
